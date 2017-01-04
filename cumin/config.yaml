@@ -1,0 +1,15 @@
+backend: puppetdb  # Default backend to use, can be overriden by command line arguments
+transport: clustershell  # Default transport to use, can be overriden by command line arguments
+log_file: logs/cumin.log  # Absolute or relative path for the log file
+
+# Backend-specific configuration
+puppetdb:
+    host: puppetdb.local
+    port: 443
+
+# Transport-specific configuration
+clustershell:
+    environment:
+        ENV_VARIABLE: env_value
+    ssh_options:
+        - 'some_option'

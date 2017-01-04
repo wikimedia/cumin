@@ -1,0 +1,8 @@
+/.eggs
+/.tox
+/*.egg-info
+/.coverage
+/setup.cfg
+/.venv
+/logs
+*.pyc

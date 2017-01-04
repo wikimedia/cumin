@@ -1,0 +1,33 @@
+# Valid grammars
+*
+F:key1 = value
+not F:key1 = value
+hostname
+host-name
+host_name.domain
+not hostname
+hostname and host_name.domain.tld
+host1 or host2
+host1 and host2
+host1 and not host2
+host1 or not host2
+host01*
+host10[10-20,30-50]
+F:a.b_c-3 >= 3.5-c
+F:a.b_c-3 ~ "(complex string 3.5-c with symbols = > and parentheses)"
+F:key1 < 5 and hostname
+R:key1
+R:key1%param = 'some value'
+R:key1@tag ~ 'some [r]egex'
+F:key1 < 5 or hostname and F:key2 = value
+not F:key1 < 5 or not hostname and F:key2 = value
+(F:key1 = value)
+(hostname.domain.tld)
+(F:key1 < 5 and hostname)
+(F:key1 < 5 and (hostname or F:key2 = value))
+F:key1 = value or (F:key2 < 5 and (hostname or F:key3 = value))
+(F:key2 < 5 and (hostname or F:key3 = value)) and F:key4 = value
+F:key1 = value or (F:key2 < 5 and (hostname or F:key3 = value)) and F:key4 = value
+not F:key1 = value or not ( not F:key2 < 5 and not (not hostname or not F:key3 = value)) and not F:key4 = value
+not F:key1 or not ( not F:key2 < 5 and not (not hostname or not F:key3)) and not F:key4 = value
+(F:key1 = value and F:key2 = "another value") or (F:key3 = Value and F:key4 > 8.1)

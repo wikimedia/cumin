@@ -1,0 +1,6 @@
+clustershell==1.7.3
+colorama
+pyparsing==2.1.10
+pyyaml
+requests
+tqdm
