@@ -1,8 +1,8 @@
 Cumin - An automation and orchestration framework
 =======================
 
-[![Build Status](https://travis-ci.org/wikimedia/operations-software-cumin.svg?branch=master)](https://travis-ci.org/wikimedia/operations-software-cumin)
-[![Coverage Status](https://coveralls.io/repos/github/wikimedia/operations-software-cumin/badge.svg?branch=master)](https://coveralls.io/github/wikimedia/operations-software-cumin?branch=master)
+[![Build Status](https://travis-ci.org/wikimedia/cumin.svg?branch=master)](https://travis-ci.org/wikimedia/cumin)
+[![Coverage Status](https://coveralls.io/repos/github/wikimedia/cumin/badge.svg?branch=master)](https://coveralls.io/github/wikimedia/cumin)
 
 Summary
 -------
