@@ -1,0 +1,26 @@
+Source: cumin
+Section: python
+Priority: optional
+Maintainer: Riccardo Coccioli <rcoccioli@wikimedia.org>
+Standards-Version: 3.9.6
+Build-Depends: debhelper (>= 9), dh-python, python-all (>= 2.7),
+  python-setuptools, python-tqdm
+Homepage: https://github.com/wikimedia/cumin
+X-Python-Version: >= 2.7
+
+Package: cumin
+Architecture: any
+Depends: ${python:Depends}, ${misc:Depends}
+Description: Automation and orchestration framework written in Python
+ Cumin provides a flexible and scalable automation framework to
+ execute multiple commands on multiple targets in parallel.
+ .
+ It allows one to easily perform complex selections of hosts through
+ a user-friendly query language which can interface with different
+ backend modules.
+ .
+ The transport layer can also be selected, providing multiple
+ execution strategies.
+ .
+ It can be used both via its command line interface (CLI) and as a
+ Python library.
