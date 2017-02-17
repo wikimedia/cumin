@@ -9,7 +9,7 @@ puppetdb:
 
 # Transport-specific configuration
 clustershell:
-    environment:
+    environment: # Environment variables that will be defined [optional]
         ENV_VARIABLE: env_value
-    ssh_options:
+    ssh_options:  # SSH options passed to ClusterShell [optional]
         - 'some_option'

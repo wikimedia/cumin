@@ -9,7 +9,7 @@ from cumin import cli
 # Environment variables
 _ENV = {'USER': 'root', 'SUDO_USER': 'user'}
 # Command line arguments
-_ARGV = ['-c', 'cumin/config.yaml', '-d', '-m', 'sync', 'host', 'command1', 'command2']
+_ARGV = ['-c', 'doc/examples/config.yaml', '-d', '-m', 'sync', 'host', 'command1', 'command2']
 
 
 class TestCLI(unittest.TestCase):
@@ -18,7 +18,7 @@ class TestCLI(unittest.TestCase):
     def _validate_parsed_args(self, args):
         """Validate that the parsed args have the proper values"""
         self.assertTrue(args.debug)
-        self.assertEqual(args.config, 'cumin/config.yaml')
+        self.assertEqual(args.config, 'doc/examples/config.yaml')
         self.assertEqual(args.hosts, 'host')
         self.assertEqual(args.commands, ['command1', 'command2'])
 
@@ -61,7 +61,7 @@ class TestCLI(unittest.TestCase):
 
     def test_parse_config(self):
         """The configuration file is properly parsed and accessible"""
-        config = cli.parse_config('cumin/config.yaml')
+        config = cli.parse_config('doc/examples/config.yaml')
         self.assertTrue('log_file' in config)
 
     @mock.patch('cumin.cli.stderr')
