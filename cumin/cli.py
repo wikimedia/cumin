@@ -38,8 +38,9 @@ def parse_args(argv=None):
     async_mode = 'async'
 
     # Get the list of existing backends and transports
-    backends = [name for _, name, _ in pkgutil.iter_modules([os.path.join('cumin', 'backends')])]
-    transports = [name for _, name, _ in pkgutil.iter_modules([os.path.join('cumin', 'transports')])]
+    abs_path = os.path.dirname(os.path.abspath(__file__))
+    backends = [name for _, name, _ in pkgutil.iter_modules([os.path.join(abs_path, 'backends')])]
+    transports = [name for _, name, _ in pkgutil.iter_modules([os.path.join(abs_path, 'transports')])]
 
     parser = argparse.ArgumentParser(
         description='Cumin CLI - An automation and orchestration tool',
@@ -58,12 +59,12 @@ def parse_args(argv=None):
                                'mode and there are multiple COMMANDS. [default: 100]')))
     parser.add_argument('--force', action='store_true',
                         help='force the execution without confirmation of the affected hosts')
-    parser.add_argument('--backend', choices=backends, default='puppetdb',
+    parser.add_argument('--backend', choices=backends,
                         help=('backend to be used for hosts selection. The backend configuration must be present in '
-                              'the configuration file. [default: puppetdb]'))
-    parser.add_argument('--transport', choices=transports, default='clustershell',
+                              'the configuration file.'))
+    parser.add_argument('--transport', choices=transports,
                         help=('transport to be used for commands execution. The transport configuration must be '
-                              'in the configuration file. [default: clustershell]'))
+                              'in the configuration file.'))
     parser.add_argument('--dry-run', action='store_true',
                         help='do not execute the commands, just return the list of hosts')
     parser.add_argument('-d', '--debug', action='store_true', help='set log level to DEBUG')
