@@ -1,13 +1,10 @@
 """CLI tests."""
 
 import os
-import sys
 import tempfile
 import unittest
 
-from functools import wraps
 from logging import DEBUG, INFO
-from StringIO import StringIO
 
 import mock
 
@@ -17,31 +14,6 @@ from cumin import cli, CuminError
 _ENV = {'USER': 'root', 'SUDO_USER': 'user'}
 # Command line arguments
 _ARGV = ['-c', 'doc/examples/config.yaml', '-d', '-m', 'sync', 'host', 'command1', 'command2']
-
-
-def capture_stderr(func):
-    """Decorator to capture stderr while running a test method.
-
-    Arguments
-    func -- the function to be decorated
-    """
-    @wraps(func)
-    def func_wrapper(self):
-        """The actual stderr capturer.
-
-        Arguments
-        self -- the 'self' of the decorated method.
-        """
-        # Mask stderr because ArgumentParser error print directly to stderr and nosetest doesn't capture it.
-        stderr = sys.stderr
-        try:
-            err = StringIO()
-            sys.stderr = err
-            func(self)
-        finally:
-            sys.stderr = stderr
-
-    return func_wrapper
 
 
 class TestCLI(unittest.TestCase):
@@ -71,7 +43,6 @@ class TestCLI(unittest.TestCase):
         args = cli.parse_args(argv=_ARGV[:-2])
         self._validate_parsed_args(args, no_commands=True)
 
-    @capture_stderr
     def test_parse_args_no_mode(self):
         """If mode is not speficied with multiple commands, parsing the args should raise a parser error."""
         index = _ARGV.index('-m')

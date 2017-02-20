@@ -17,7 +17,8 @@ import yaml
 from ClusterShell.NodeSet import NodeSet
 from tqdm import tqdm
 
-from cumin import CuminError
+import cumin
+
 from cumin.query import QueryBuilder
 from cumin.transport import Transport
 from cumin.transports import Command
@@ -49,7 +50,7 @@ for nodes, output in worker.get_results():
 """
 
 
-class KeyboardInterruptError(CuminError):
+class KeyboardInterruptError(cumin.CuminError):
     """Custom KeyboardInterrupt exception class for the SIGINT signal handler."""
 
 
@@ -109,6 +110,7 @@ def parse_args(argv=None):
                               '[optional]'))
     parser.add_argument('--dry-run', action='store_true',
                         help='Do not execute any command, just return the list of matching hosts and exit.')
+    parser.add_argument('--version', action='store_true', help='Print current version and exit.')
     parser.add_argument('-d', '--debug', action='store_true', help='Set log level to DEBUG.')
     parser.add_argument('-i', '--interactive', action='store_true', help='Drop into a Python shell with the results.')
     parser.add_argument('hosts', metavar='HOSTS_QUERY', help='Hosts selection query')
@@ -140,9 +142,9 @@ def parse_args(argv=None):
 def get_running_user():
     """Ensure it's running as root and that the original user is detected and return it."""
     if os.getenv('USER') != 'root':
-        raise CuminError('Insufficient privileges, run with sudo')
+        raise cumin.CuminError('Insufficient privileges, run with sudo')
     if os.getenv('SUDO_USER') in (None, 'root'):
-        raise CuminError('Unable to determine real user, logged in as root?')
+        raise cumin.CuminError('Unable to determine real user, logged in as root?')
 
     return os.getenv('SUDO_USER')
 
@@ -181,13 +183,13 @@ def parse_config(config_file):
         with open(config_file, 'r') as f:
             config = yaml.safe_load(f)
     except IOError as e:
-        raise CuminError('Unable to read configuration file: {message}'.format(message=e))
+        raise cumin.CuminError('Unable to read configuration file: {message}'.format(message=e))
     except yaml.parser.ParserError as e:
-        raise CuminError("Unable to parse configuration file '{config}':\n{message}".format(
+        raise cumin.CuminError("Unable to parse configuration file '{config}':\n{message}".format(
             config=config_file, message=e))
 
     if config is None:
-        raise CuminError("Empty configuration found in '{config}'".format(config=config_file))
+        raise cumin.CuminError("Empty configuration found in '{config}'".format(config=config_file))
 
     return config
 
@@ -270,7 +272,7 @@ def get_hosts(args, config):
     elif not sys.stdout.isatty():  # pylint: disable=no-member
         message = 'Not in a TTY but neither DRY-RUN nor FORCE mode were specified.'
         stderr(message)
-        raise CuminError(message)
+        raise cumin.CuminError(message)
 
     for i in xrange(10):
         stderr('Confirm to continue [y/n]?', end=' ')
@@ -368,10 +370,14 @@ def main(argv=None):
     # Setup
     try:
         args = parse_args(argv)
+        if args.version:
+            tqdm.write('cumin {version}'.format(version=cumin.__version__))
+            return 0
+
         user = get_running_user()
         config = parse_config(args.config)
         setup_logging(config['log_file'], debug=args.debug)
-    except CuminError as e:
+    except cumin.CuminError as e:
         stderr(e)
         return 2
     except Exception as e:  # pylint: disable=broad-except

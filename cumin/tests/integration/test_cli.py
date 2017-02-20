@@ -1,14 +1,13 @@
-"""CLI tests."""
+"""CLI integration tests."""
+# pylint: disable=protected-access
 from __future__ import print_function
 
 import copy
 import os
 import re
 import sys
-import unittest
 
-from functools import wraps
-from StringIO import StringIO
+import pytest
 
 from cumin import cli
 
@@ -92,7 +91,7 @@ _VARIANTS_COMMANDS = (
     {'rc': None, 'additional_params': ['--global-timeout', '1'], 'commands': ['sleep 0.99', 'date']},
     {'rc': 2, 'additional_params': ['-t', '1'], 'commands': ['sleep 2', 'date'],
      'assert_false': ['failed', 'global_timeout', 'date_success']},
-    {'rc': 0, 'additional_params': ['-t', '1'], 'commands': ['sleep 0.5', 'date'],
+    {'rc': 0, 'additional_params': ['-t', '2'], 'commands': ['sleep 0.5', 'date'],
      'assert_false': ['failed', 'global_timeout']},
 )
 
@@ -113,67 +112,34 @@ _VARIANTS_PARAMETERS = (
 )
 
 
-def capture_output(func):
-    """Decorator to capture stdout and stderr of a test run and pass it to the test method.
-
-    Arguments
-    func -- the function to be decorated
-    """
-    @wraps(func)
-    def func_wrapper(self, *args, **kwargs):
-        """The actual sdtout/stderr capturer.
-
-        Arguments
-        self -- the 'self' of the decorated method.
-        """
-        try:
-            stdout = sys.stdout
-            stderr = sys.stderr
-            out = StringIO()
-            err = StringIO()
-            sys.stdout = out
-            sys.stderr = err
-            args += (out, err)
-            func(self, *args, **kwargs)
-        except AssertionError:
-            # Print both stderr and stdout to the original stdout captured by nose
-            print(err.getvalue(), file=stdout)
-            print(out.getvalue(), file=stdout)
-            raise
-        finally:
-            # Restore original stdout/stderr
-            sys.stdout = stdout
-            sys.stderr = stderr
-
-    return func_wrapper
-
-
 def make_method(name, commands_set):
     """Method generator with a dynamic name and docstring."""
     params = copy.deepcopy(commands_set)  # Needed to have a different one for each method
 
-    @capture_output
-    def test_variant(self, stdout, stderr):
+    @pytest.mark.variant_params(params)
+    def test_variant(self, capsys):
         """Test variant generated function"""
         argv = self.default_params + params['params'] + [self.all_nodes] + params['commands']
         rc = cli.main(argv=argv)
-        err = stderr.getvalue()
+        out, err = capsys.readouterr()
+        sys.stdout.write(out)
+        sys.stderr.write(err)
 
         if params['rc'] is None:
-            params['rc'] = self._get_rc(params)
+            params['rc'] = get_rc(params)
 
-        self.assertEqual(rc, params['rc'])
-        self.assertIn(_EXPECTED_LINES['all_targeted'], err, msg=_EXPECTED_LINES['all_targeted'])
+        assert rc == params['rc']
+        assert _EXPECTED_LINES['all_targeted'] in err, _EXPECTED_LINES['all_targeted']
 
         labels = params.get('assert_true', [])
-        labels += self._get_global_timeout_expected_lines(params)
+        labels += get_global_timeout_expected_lines(params)
 
         if 'async' in params['params']:
             mode = 'async'
         else:
             mode = 'sync'
-            labels += (self._get_ls_expected_lines(params) + self._get_date_expected_lines(params) +
-                       self._get_timeout_expected_lines(params))
+            labels += (get_ls_expected_lines(params) + get_date_expected_lines(params) +
+                       get_timeout_expected_lines(params))
 
         for label in labels:
             if label in ('all_success', 'all_failure') and '-p' in params['params']:
@@ -185,12 +151,12 @@ def make_method(name, commands_set):
                 string = _EXPECTED_LINES[label]
 
             if label.endswith('_re'):
-                self.assertIsNotNone(re.search(string, err), msg=string)
+                assert re.search(string, err) is not None, string
             else:
-                self.assertIn(string, err, msg=string)
+                assert string in err, string
 
         for label in params.get('assert_false', []):
-            self.assertNotIn(_EXPECTED_LINES[label], err, msg=_EXPECTED_LINES[label])
+            assert _EXPECTED_LINES[label] not in err, _EXPECTED_LINES[label]
 
     # Dynamically set the name and docstring of the generated function to distinguish them
     test_variant.__name__ = 'test_variant_{name}'.format(name=name)
@@ -202,6 +168,7 @@ def make_method(name, commands_set):
 def add_variants_methods(indexes):
     """Decorator to add generated tests to a TestClass subclass."""
     def func_wrapper(cls):
+        """Dynamic test generator."""
         for i in indexes:
             for j, commands_set in enumerate(_VARIANTS_COMMANDS):
                 commands_set['params'] = _VARIANTS_PARAMETERS[i] + commands_set.get('additional_params', [])
@@ -214,16 +181,127 @@ def add_variants_methods(indexes):
     return func_wrapper
 
 
+def get_rc(params):
+    """Return the expected return code based on the parameters.
+
+    Arguments:
+    params -- a dictionary with all the parameters passed to the variant_function
+    """
+    return_value = 2
+    if '-p' in params['params'] and '--global-timeout' not in params['params']:
+        return_value = 1
+
+    return return_value
+
+
+def get_global_timeout_expected_lines(params):  # pylint: disable=invalid-name
+    """Return a list of expected lines labels for global timeout-based tests.
+
+    Arguments:
+    params -- a dictionary with all the parameters passed to the variant_function
+    """
+    expected = []
+    if '--global-timeout' not in params['params']:
+        return expected
+
+    if '-p' in params['params']:
+        expected = ['global_timeout_executing_threshold_re', 'global_timeout_pending_threshold_re']
+    else:
+        expected = ['global_timeout_executing_re', 'global_timeout_pending_re']
+
+    return expected
+
+
+def get_timeout_expected_lines(params):
+    """Return a list of expected lines labels for timeout-based tests.
+
+    Arguments:
+    params -- a dictionary with all the parameters passed to the variant_function
+    """
+    expected = []
+    if '-t' not in params['params']:
+        return expected
+
+    if params['rc'] == 0:
+        # Test successful cases
+        if '-p' in params['params']:
+            expected = ['sleep_success_threshold', 'date_success_threshold']
+        else:
+            expected = ['date_success', 'sleep_success']
+    else:
+        # Test timeout cases
+        if '--batch-size' in params['params']:
+            expected = ['sleep_timeout_threshold_re']
+        else:
+            expected = ['sleep_timeout']
+
+    return expected
+
+
+def get_date_expected_lines(params):
+    """Return a list of expected lines labels for the date command based on parameters.
+
+    Arguments:
+    params -- a dictionary with all the parameters passed to the variant_function
+    """
+    expected = []
+    if 'ls -la /tmp/non_existing' in params['commands']:
+        return expected
+
+    if '-p' in params['params']:
+        if 'ls -la /tmp/maybe' in params['commands']:
+            expected = ['date_success_threshold_partial']
+        elif 'ls -la /tmp' in params['commands']:
+            expected = ['date_success_threshold']
+    elif 'ls -la /tmp' in params['commands']:
+        expected = ['date_success']
+
+    return expected
+
+
+def get_ls_expected_lines(params):
+    """Return a list of expected lines labels for the ls command based on the parameters.
+
+    Arguments:
+    params -- a dictionary with all the parameters passed to the variant_function
+    """
+    expected = []
+    if 'ls -la /tmp' in params['commands']:
+        if '-p' in params['params']:
+            expected = ['ls_success_threshold']
+        else:
+            expected = ['ls_success']
+    elif 'ls -la /tmp/maybe' in params['commands']:
+        if '-p' in params['params']:
+            expected = ['ls_partial_success', 'ls_partial_success_threshold_ratio']
+        else:
+            expected = ['ls_partial_success', 'ls_partial_success_ratio_re']
+    elif 'ls -la /tmp/non_existing' in params['commands']:
+        if '--batch-size' in params['params']:
+            if '-p' in params['params']:
+                expected.append('ls_failure_batch_threshold')
+            else:
+                expected.append('ls_failure_batch')
+        else:
+            expected.append('ls_total_failure')
+
+        if '-p' in params['params']:
+            expected.append('ls_total_failure_threshold_ratio')
+        else:
+            expected.append('ls_total_failure_ratio')
+
+    return expected
+
+
 @add_variants_methods(xrange(len(_VARIANTS_PARAMETERS)))
-class TestCLI(unittest.TestCase):
+class TestCLI(object):
     """CLI module tests."""
 
-    _multiprocess_can_split_ = True
-
-    def setUp(self):
+    def setup_method(self, _):
         """Set default properties."""
+        # pylint: disable=attribute-defined-outside-init
         self.identifier = os.getenv('CUMIN_IDENTIFIER')
-        self.assertIsNotNone(self.identifier, msg='Unable to find CUMIN_IDENTIFIER environmental variable')
+        assert self.identifier is not None, 'Unable to find CUMIN_IDENTIFIER environmental variable'
         self.config = os.path.join(os.getenv('CUMIN_TMPDIR', ''), 'config.yaml')
         self.default_params = ['--force', '-d', '-c', self.config]
         self.nodes_prefix = '{identifier}-'.format(identifier=self.identifier)
@@ -237,169 +315,64 @@ class TestCLI(unittest.TestCase):
         """
         if nodes is None:
             return self.all_nodes
-        else:
-            return '{prefix}[{nodes}]'.format(prefix=self.nodes_prefix, nodes=nodes)
 
-    def _get_rc(self, params):
-        """Return the expected return code based on the parameters.
+        return '{prefix}[{nodes}]'.format(prefix=self.nodes_prefix, nodes=nodes)
 
-        Arguments:
-        params -- a dictionary with all the parameters passed to the variant_function
-        """
-        return_value = 2
-        if '-p' in params['params'] and '--global-timeout' not in params['params']:
-            return_value = 1
-
-        return return_value
-
-    def _get_global_timeout_expected_lines(self, params):
-        """Return a list of expected lines labels for global timeout-based tests.
-
-        Arguments:
-        params -- a dictionary with all the parameters passed to the variant_function
-        """
-        expected = []
-        if '--global-timeout' not in params['params']:
-            return expected
-
-        if '-p' in params['params']:
-            expected = ['global_timeout_executing_threshold_re', 'global_timeout_pending_threshold_re']
-        else:
-            expected = ['global_timeout_executing_re', 'global_timeout_pending_re']
-
-        return expected
-
-    def _get_timeout_expected_lines(self, params):
-        """Return a list of expected lines labels for timeout-based tests.
-
-        Arguments:
-        params -- a dictionary with all the parameters passed to the variant_function
-        """
-        expected = []
-        if '-t' not in params['params']:
-            return expected
-
-        if params['rc'] == 0:
-            # Test successful cases
-            if '-p' in params['params']:
-                expected = ['sleep_success_threshold', 'date_success_threshold']
-            else:
-                expected = ['date_success', 'sleep_success']
-        else:
-            # Test timeout cases
-            if '--batch-size' in params['params']:
-                expected = ['sleep_timeout_threshold_re']
-            else:
-                expected = ['sleep_timeout']
-
-        return expected
-
-    def _get_date_expected_lines(self, params):
-        """Return a list of expected lines labels for the date command based on parameters.
-
-        Arguments:
-        params -- a dictionary with all the parameters passed to the variant_function
-        """
-        expected = []
-        if 'ls -la /tmp/non_existing' in params['commands']:
-            return expected
-
-        if '-p' in params['params']:
-            if 'ls -la /tmp/maybe' in params['commands']:
-                expected = ['date_success_threshold_partial']
-            elif 'ls -la /tmp' in params['commands']:
-                expected = ['date_success_threshold']
-        elif 'ls -la /tmp' in params['commands']:
-            expected = ['date_success']
-
-        return expected
-
-    def _get_ls_expected_lines(self, params):
-        """Return a list of expected lines labels for the ls command based on the parameters.
-
-        Arguments:
-        params -- a dictionary with all the parameters passed to the variant_function
-        """
-        expected = []
-        if 'ls -la /tmp' in params['commands']:
-            if '-p' in params['params']:
-                expected = ['ls_success_threshold']
-            else:
-                expected = ['ls_success']
-        elif 'ls -la /tmp/maybe' in params['commands']:
-            if '-p' in params['params']:
-                expected = ['ls_partial_success', 'ls_partial_success_threshold_ratio']
-            else:
-                expected = ['ls_partial_success', 'ls_partial_success_ratio_re']
-        elif 'ls -la /tmp/non_existing' in params['commands']:
-            if '--batch-size' in params['params']:
-                if '-p' in params['params']:
-                    expected.append('ls_failure_batch_threshold')
-                else:
-                    expected.append('ls_failure_batch')
-            else:
-                expected.append('ls_total_failure')
-
-            if '-p' in params['params']:
-                expected.append('ls_total_failure_threshold_ratio')
-            else:
-                expected.append('ls_total_failure_ratio')
-
-        return expected
-
-    @capture_output
-    def test_single_command_subfanout(self, stdout, stderr):
+    def test_single_command_subfanout(self, capsys):
         """Executing one command on a subset of nodes smaller than the ClusterShell fanout."""
         params = [self._get_nodes('1-2'), 'date']
         rc = cli.main(argv=self.default_params + params)
-        err = stderr.getvalue()
-        self.assertIn(_EXPECTED_LINES['subfanout_targeted'], err, msg=_EXPECTED_LINES['subfanout_targeted'])
-        self.assertIn(_EXPECTED_LINES['date_success_subfanout'], err, msg=_EXPECTED_LINES['date_success_subfanout'])
-        self.assertIn(_EXPECTED_LINES['all_success_subfanout'], err, msg=_EXPECTED_LINES['all_success_subfanout'])
-        self.assertNotIn(_EXPECTED_LINES['failed'], err, msg=_EXPECTED_LINES['failed'])
-        self.assertNotIn(_EXPECTED_LINES['global_timeout'], err, msg=_EXPECTED_LINES['global_timeout'])
-        self.assertEqual(rc, 0)
+        out, err = capsys.readouterr()
+        sys.stdout.write(out)
+        sys.stderr.write(err)
+        assert _EXPECTED_LINES['subfanout_targeted'] in err, _EXPECTED_LINES['subfanout_targeted']
+        assert _EXPECTED_LINES['date_success_subfanout'] in err, _EXPECTED_LINES['date_success_subfanout']
+        assert _EXPECTED_LINES['all_success_subfanout'] in err, _EXPECTED_LINES['all_success_subfanout']
+        assert _EXPECTED_LINES['failed'] not in err, _EXPECTED_LINES['failed']
+        assert _EXPECTED_LINES['global_timeout'] not in err, _EXPECTED_LINES['global_timeout']
+        assert rc == 0
 
-    @capture_output
-    def test_single_command_supfanout(self, stdout, stderr):
+    def test_single_command_supfanout(self, capsys):
         """Executing one command on a subset of nodes greater than the ClusterShell fanout."""
         params = [self.all_nodes, 'date']
         rc = cli.main(argv=self.default_params + params)
-        err = stderr.getvalue()
-        self.assertIn(_EXPECTED_LINES['all_targeted'], err, msg=_EXPECTED_LINES['all_targeted'])
-        self.assertIn(_EXPECTED_LINES['date_success'], err, msg=_EXPECTED_LINES['date_success'])
-        self.assertIn(_EXPECTED_LINES['all_success'], err, msg=_EXPECTED_LINES['all_success'])
-        self.assertNotIn(_EXPECTED_LINES['failed'], err, msg=_EXPECTED_LINES['failed'])
-        self.assertNotIn(_EXPECTED_LINES['global_timeout'], err, msg=_EXPECTED_LINES['global_timeout'])
-        self.assertEqual(rc, 0)
+        out, err = capsys.readouterr()
+        sys.stdout.write(out)
+        sys.stderr.write(err)
+        assert _EXPECTED_LINES['all_targeted'] in err, _EXPECTED_LINES['all_targeted']
+        assert _EXPECTED_LINES['date_success'] in err, _EXPECTED_LINES['date_success']
+        assert _EXPECTED_LINES['all_success'] in err, _EXPECTED_LINES['all_success']
+        assert _EXPECTED_LINES['failed'] not in err, _EXPECTED_LINES['failed']
+        assert _EXPECTED_LINES['global_timeout'] not in err, _EXPECTED_LINES['global_timeout']
+        assert rc == 0
 
-    @capture_output
-    def test_dry_run(self, stdout, stderr):
+    def test_dry_run(self, capsys):
         """With --dry-run only the matching hosts are printed."""
         params = ['--dry-run', self.all_nodes, 'date']
         rc = cli.main(argv=self.default_params + params)
-        err = stderr.getvalue()
-        self.assertIn(_EXPECTED_LINES['all_targeted'], err, msg=_EXPECTED_LINES['all_targeted'])
-        self.assertIn(_EXPECTED_LINES['dry_run'], err, msg=_EXPECTED_LINES['dry_run'])
-        self.assertNotIn(_EXPECTED_LINES['successfully'], err, msg=_EXPECTED_LINES['successfully'])
-        self.assertNotIn(_EXPECTED_LINES['failed'], err, msg=_EXPECTED_LINES['failed'])
-        self.assertNotIn(_EXPECTED_LINES['global_timeout'], err, msg=_EXPECTED_LINES['global_timeout'])
-        self.assertEqual(rc, 0)
+        out, err = capsys.readouterr()
+        sys.stdout.write(out)
+        sys.stderr.write(err)
+        assert _EXPECTED_LINES['all_targeted'] in err, _EXPECTED_LINES['all_targeted']
+        assert _EXPECTED_LINES['dry_run'] in err, _EXPECTED_LINES['dry_run']
+        assert _EXPECTED_LINES['successfully'] not in err, _EXPECTED_LINES['successfully']
+        assert _EXPECTED_LINES['failed'] not in err, _EXPECTED_LINES['failed']
+        assert _EXPECTED_LINES['global_timeout'] not in err, _EXPECTED_LINES['global_timeout']
+        assert rc == 0
 
-    @capture_output
-    def test_global_timeout(self, stdout, stderr):
-        """With a global timeout shorter than a command it should fail."""
+    def test_timeout(self, capsys):
+        """With a timeout shorter than a command it should fail."""
         params = ['--global-timeout', '1', self.all_nodes, 'sleep 2']
         rc = cli.main(argv=self.default_params + params)
-        err = stderr.getvalue()
-        self.assertIn(_EXPECTED_LINES['all_targeted'], err, msg=_EXPECTED_LINES['all_targeted'])
-        self.assertIsNotNone(
-            re.search(_EXPECTED_LINES['global_timeout_executing_re'], err),
-            msg=_EXPECTED_LINES['global_timeout_executing_re'])
-        self.assertIsNotNone(
-            re.search(_EXPECTED_LINES['global_timeout_pending_re'], err),
-            msg=_EXPECTED_LINES['global_timeout_pending_re'])
-        self.assertIn(_EXPECTED_LINES['sleep_total_failure'], err, msg=_EXPECTED_LINES['sleep_total_failure'])
-        self.assertIn(_EXPECTED_LINES['all_failure'], err, msg=_EXPECTED_LINES['all_failure'])
-        self.assertNotIn(_EXPECTED_LINES['failed'], err, msg=_EXPECTED_LINES['failed'])
-        self.assertEqual(rc, 2)
+        out, err = capsys.readouterr()
+        sys.stdout.write(out)
+        sys.stderr.write(err)
+        assert _EXPECTED_LINES['all_targeted'] in err, _EXPECTED_LINES['all_targeted']
+        assert re.search(_EXPECTED_LINES['global_timeout_executing_re'], err) is not None, \
+            _EXPECTED_LINES['global_timeout_executing_re']
+        assert re.search(_EXPECTED_LINES['global_timeout_pending_re'], err) is not None, \
+            _EXPECTED_LINES['global_timeout_pending_re']
+        assert _EXPECTED_LINES['sleep_total_failure'] in err, _EXPECTED_LINES['sleep_total_failure']
+        assert _EXPECTED_LINES['all_failure'] in err, _EXPECTED_LINES['all_failure']
+        assert _EXPECTED_LINES['failed'] not in err, _EXPECTED_LINES['failed']
+        assert rc == 2
