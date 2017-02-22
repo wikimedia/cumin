@@ -1,5 +1,7 @@
 import requests
 
+from requests.packages import urllib3
+
 from cumin.backends import BaseQuery, InvalidQueryError
 
 
@@ -27,6 +29,9 @@ class PuppetDBQuery(BaseQuery):
         self.url = self.base_url_template.format(
             host=puppetdb_config.get('host', 'localhost'),
             port=puppetdb_config.get('port', 443))
+
+        for exception in puppetdb_config.get('urllib3_disable_warnings', []):
+            urllib3.disable_warnings(category=getattr(urllib3.exceptions, exception))
 
     @property
     def category(self):
