@@ -67,7 +67,7 @@ class TestQueryBuilder(unittest.TestCase):
         query_builder.build()
 
         query_builder.query.add_hosts.assert_has_calls(
-            [mock.call(NodeSet.fromlist(['host1'])), mock.call(NodeSet.fromlist(['host2']))])
+            [mock.call(hosts=NodeSet.fromlist(['host1'])), mock.call(hosts=NodeSet.fromlist(['host2']))])
         query_builder.query.add_or.assert_has_calls([mock.call(), mock.call()])
         query_builder.query.open_subgroup.assert_called_once_with()
         query_builder.query.add_category.assert_has_calls([
@@ -82,7 +82,7 @@ class TestQueryBuilder(unittest.TestCase):
 
         query_builder = QueryBuilder('host1*', self.config)
         query_builder.build()
-        query_builder.query.add_hosts.assert_called_once_with(NodeSet.fromlist(['host1*']))
+        query_builder.query.add_hosts.assert_called_once_with(hosts=NodeSet.fromlist(['host1*']))
 
     @mock.patch('cumin.query.Query', QueryFactory)
     def test_build_invalid(self):

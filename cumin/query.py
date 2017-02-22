@@ -96,8 +96,8 @@ class QueryBuilder(object):
                 self.query.add_or()
 
         elif 'hosts' in keys:
-            expanded_hosts = NodeSet(token_dict['hosts'])
-            self.query.add_hosts(expanded_hosts)
+            token_dict['hosts'] = NodeSet(token_dict['hosts'])
+            self.query.add_hosts(**token_dict)
 
         elif 'category' in keys:
             self.query.add_category(**token_dict)
