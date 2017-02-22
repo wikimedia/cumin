@@ -134,7 +134,7 @@ class TestPuppetDBQuery(unittest.TestCase):
         self.query.current_group['tokens'] = []
         # Globbing hosts
         self.query.add_hosts(['host1*.domain'])
-        self.assertListEqual(self.query.current_group['tokens'], [r'["or", ["~", "{host_key}", "host1.*\\.domain"]]'])
+        self.assertListEqual(self.query.current_group['tokens'], [r'["or", ["~", "{host_key}", "^host1.*\\.domain$"]]'])
 
     def test_open_subgroup(self):
         """Calling open_subgroup() should open a subgroup and relate it to it's parent"""

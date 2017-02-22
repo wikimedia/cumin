@@ -76,7 +76,7 @@ class PuppetDBQuery(BaseQuery):
             # Convert a glob expansion into a regex
             if '*' in host:
                 operator = '~'
-                host = host.replace('.', r'\\.').replace('*', '.*')
+                host = r'^' + host.replace('.', r'\\.').replace('*', '.*') + r'$'
 
             hosts_tokens.append('["{op}", "{{host_key}}", "{host}"]'.format(op=operator, host=host))
 
