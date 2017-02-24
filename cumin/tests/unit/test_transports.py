@@ -9,7 +9,7 @@ from cumin.transports import BaseWorker
 class ConcreteBaseWorker(BaseWorker):
     """Extend the BaseWorker"""
 
-    def execute(self, hosts, commands, mode, handler=None, timeout=0, success_threshold=1):
+    def execute(self, hosts, commands, mode=None, handler=None, timeout=0, success_threshold=1):
         """Required by BaseWorker"""
 
     def get_results(self):

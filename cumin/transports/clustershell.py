@@ -1,9 +1,9 @@
 from collections import defaultdict
 
+import ClusterShell
 import colorama
 
-from ClusterShell.Event import EventHandler
-from ClusterShell.Task import NodeSet, task_self, TimeoutError
+from ClusterShell.Task import NodeSet, task_self
 from tqdm import tqdm
 
 from cumin.transports import BaseWorker
@@ -53,7 +53,7 @@ class ClusterShellWorker(BaseWorker):
 
         try:
             self.task.run(timeout=timeout)
-        except TimeoutError:
+        except ClusterShell.Task.TimeoutError:
             pass  # Handling of timeouts are delegated to the handler
         finally:
             if handler is not None:
@@ -65,7 +65,7 @@ class ClusterShellWorker(BaseWorker):
             yield NodeSet.fromlist(nodelist), output
 
 
-class BaseEventHandler(EventHandler):
+class BaseEventHandler(ClusterShell.Event.EventHandler):
     """ClusterShell event handler extension base class"""
 
     short_command_length = 35

@@ -142,7 +142,7 @@ def parse_config(config_file):
         config_file -- the path of the configuration file to load
     """
     with open(config_file, 'r') as f:
-        config = yaml.load(f)
+        config = yaml.safe_load(f)
 
     return config
 
@@ -300,5 +300,4 @@ def main(argv=None):
 
 
 if __name__ == '__main__':
-    """Execute the CLI"""
     sys.exit(main())

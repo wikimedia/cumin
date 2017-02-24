@@ -54,7 +54,7 @@ class TestClusterShellWorker(unittest.TestCase):
 
     def test_execute_timeout(self):
         """Calling execute() and let the timeout expire should be handled by the default event handler"""
-        self.worker.task.run = mock.Mock(side_effect=clustershell.TimeoutError)
+        self.worker.task.run = mock.Mock(side_effect=clustershell.ClusterShell.Task.TimeoutError)
         self.worker.execute(self.nodes, self.commands, 'sync', handler=True)
         # no exception raised
 
