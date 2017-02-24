@@ -2,7 +2,9 @@ Cumin - An automation and orchestration framework
 =======================
 
 [![Build Status](https://travis-ci.org/wikimedia/cumin.svg?branch=master)](https://travis-ci.org/wikimedia/cumin)
-[![Coverage Status](https://coveralls.io/repos/github/wikimedia/cumin/badge.svg?branch=master)](https://coveralls.io/github/wikimedia/cumin)
+[![Coveralls Coverage](https://coveralls.io/repos/github/wikimedia/cumin/badge.svg?branch=master)](https://coveralls.io/github/wikimedia/cumin)
+[![Codcov Coverage](https://codecov.io/github/wikimedia/cumin/coverage.svg?branch=master)](https://codecov.io/github/wikimedia/cumin)
+[![Licence](https://img.shields.io/badge/license-GPLv3%2B-blue.svg)](https://github.com/wikimedia/cumin/blob/master/LICENSE)
 
 Summary
 -------
