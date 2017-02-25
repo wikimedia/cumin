@@ -1,4 +1,5 @@
-"""CLI tests"""
+"""CLI tests."""
+
 import unittest
 
 from logging import DEBUG, INFO
@@ -14,17 +15,17 @@ _ARGV = ['-c', 'doc/examples/config.yaml', '-d', '-m', 'sync', 'host', 'command1
 
 
 class TestCLI(unittest.TestCase):
-    """CLI module tests"""
+    """CLI module tests."""
 
     def _validate_parsed_args(self, args):
-        """Validate that the parsed args have the proper values"""
+        """Validate that the parsed args have the proper values."""
         self.assertTrue(args.debug)
         self.assertEqual(args.config, 'doc/examples/config.yaml')
         self.assertEqual(args.hosts, 'host')
         self.assertEqual(args.commands, ['command1', 'command2'])
 
     def test_parse_args(self):
-        """A standard set of command line parameters should be properly parsed into their respective variables"""
+        """A standard set of command line parameters should be properly parsed into their respective variables."""
         args = cli.parse_args(argv=_ARGV)
         self._validate_parsed_args(args)
 
@@ -33,7 +34,7 @@ class TestCLI(unittest.TestCase):
             self._validate_parsed_args(args)
 
     def test_get_running_user(self):
-        """Unsufficient permissions or unknown user should raise RuntimeError and a proper user should be detected"""
+        """Unsufficient permissions or unknown user should raise RuntimeError and a proper user should be detected."""
         env = {'USER': None, 'SUDO_USER': None}
         with mock.patch('os.getenv', env.get):
             with self.assertRaisesRegexp(RuntimeError, r'Unsufficient privileges, run with sudo'):
@@ -51,7 +52,7 @@ class TestCLI(unittest.TestCase):
     @mock.patch('cumin.cli.RotatingFileHandler')
     @mock.patch('cumin.cli.logger')
     def test_setup_logging(self, mocked_logging, mocked_file_handler, mocked_os):
-        """Calling setup_logging() should properly setup the logger"""
+        """Calling setup_logging() should properly setup the logger."""
         mocked_os.path.exists.return_value = False
         cli.setup_logging('user', '/path/to/filename')
         mocked_logging.setLevel.assert_called_with(INFO)
@@ -61,7 +62,7 @@ class TestCLI(unittest.TestCase):
         mocked_logging.setLevel.assert_called_with(DEBUG)
 
     def test_parse_config(self):
-        """The configuration file is properly parsed and accessible"""
+        """The configuration file is properly parsed and accessible."""
         config = cli.parse_config('doc/examples/config.yaml')
         self.assertTrue('log_file' in config)
 
@@ -70,7 +71,7 @@ class TestCLI(unittest.TestCase):
     @mock.patch('cumin.cli.sys.stdout.isatty')
     @mock.patch('cumin.cli.logger')
     def test_sigint_handler(self, mocked_logging, mocked_isatty, mocked_raw_input, mocked_stderr):
-        """Calling the SIGINT handler should raise KeyboardInterrupt or not based on tty and answer"""
+        """Calling the SIGINT handler should raise KeyboardInterrupt or not based on tty and answer."""
         # Signal handler called without a tty
         mocked_isatty.return_value = False
         with self.assertRaises(cli.KeyboardInterruptError):
@@ -101,6 +102,6 @@ class TestCLI(unittest.TestCase):
 
     @mock.patch('cumin.cli.tqdm')
     def test_stderr(self, mocked_tqdm):
-        """Calling stderr() should call tqdm.write()"""
+        """Calling stderr() should call tqdm.write()."""
         cli.stderr('message')
         self.assertTrue(mocked_tqdm.write.called)

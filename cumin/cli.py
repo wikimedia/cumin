@@ -1,7 +1,5 @@
 #!/usr/bin/python2
-"""
-Cumin CLI entry point
-"""
+"""Cumin CLI entry point."""
 
 import argparse
 import logging
@@ -25,14 +23,14 @@ logger = logging.getLogger(__name__)
 
 
 class KeyboardInterruptError(Exception):
-    """Custom KeyboardInterrupt exception class for the SIGINT signal handler"""
+    """Custom KeyboardInterrupt exception class for the SIGINT signal handler."""
 
 
 def parse_args(argv=None):
-    """ Parse command line arguments and return them
+    """Parse command line arguments and return them.
 
-        Arguments:
-        argv -- the list of arguments to use. If None, the command line ones are used [optional, default: None]
+    Arguments:
+    argv -- the list of arguments to use. If None, the command line ones are used [optional, default: None]
     """
     sync_mode = 'sync'
     async_mode = 'async'
@@ -99,7 +97,7 @@ def parse_args(argv=None):
 
 
 def get_running_user():
-    """Ensure it's running as root and that the original user is detected and return it"""
+    """Ensure it's running as root and that the original user is detected and return it."""
     if os.getenv('USER') != 'root':
         raise RuntimeError('Unsufficient privileges, run with sudo')
     if os.getenv('SUDO_USER') in (None, 'root'):
@@ -109,14 +107,13 @@ def get_running_user():
 
 
 def setup_logging(user, filename, debug=False):
-    """ Setup the logger instance
+    """Setup the logger instance.
 
-        Arguments:
-        user     -- the real user to use in the logging formatter for auditing
-        filename -- the filename of the log file
-        debug    -- whether to set logging level to DEBUG [optional, default: False]
+    Arguments:
+    user     -- the real user to use in the logging formatter for auditing
+    filename -- the filename of the log file
+    debug    -- whether to set logging level to DEBUG [optional, default: False]
     """
-
     file_path = os.path.dirname(filename)
     if not os.path.exists(file_path):
         os.makedirs(file_path, 0770)
@@ -136,10 +133,10 @@ def setup_logging(user, filename, debug=False):
 
 
 def parse_config(config_file):
-    """ Parse the YAML configuration file
+    """Parse the YAML configuration file.
 
-        Arguments:
-        config_file -- the path of the configuration file to load
+    Arguments:
+    config_file -- the path of the configuration file to load
     """
     with open(config_file, 'r') as f:
         config = yaml.safe_load(f)
@@ -148,11 +145,11 @@ def parse_config(config_file):
 
 
 def sigint_handler(*args):
-    """ Signal handler for Ctrl+c / SIGINT, raises KeyboardInterruptError
+    """Signal handler for Ctrl+c / SIGINT, raises KeyboardInterruptError.
 
-        Arguments (as defined in https://docs.python.org/2/library/signal.html):
-        signum -- the signal number
-        frame  -- the current stack frame
+    Arguments (as defined in https://docs.python.org/2/library/signal.html):
+    signum -- the signal number
+    frame  -- the current stack frame
     """
     if not sys.stdout.isatty():
         logger.warning('Execution interrupted by Ctrl+c/SIGINT')
@@ -189,22 +186,22 @@ def sigint_handler(*args):
 
 
 def stderr(message, end='\n'):
-    """ Print a message to stderr and flush
+    r"""Print a message to stderr and flush.
 
-        Arguments:
-        message -- the message to print to sys.stderr
-        end     -- the character to use at the end of the message. [optional, default: \n]
+    Arguments:
+    message -- the message to print to sys.stderr
+    end     -- the character to use at the end of the message. [optional, default: \n]
     """
     tqdm.write('{color}{message}{reset}'.format(
         color=colorama.Fore.YELLOW, message=message, reset=colorama.Style.RESET_ALL), file=sys.stderr, end=end)
 
 
 def get_hosts(args, config):
-    """ Resolve the hosts selection into a list of hosts and return it. Raises KeyboardInterruptError
+    """Resolve the hosts selection into a list of hosts and return it. Raises KeyboardInterruptError.
 
-        Arguments:
-        args   -- ArgumentParser instance with parsed command line arguments
-        config -- a dictionary with the parsed configuration file
+    Arguments:
+    args   -- ArgumentParser instance with parsed command line arguments
+    config -- a dictionary with the parsed configuration file
     """
     query = QueryBuilder(args.hosts, config, logger).build()
     hosts = query.execute()
@@ -242,11 +239,11 @@ def get_hosts(args, config):
 
 
 def run(args, config):
-    """ Execute the commands on the selected hosts and print the results
+    """Execute the commands on the selected hosts and print the results.
 
-        Arguments:
-        args   -- ArgumentParser instance with parsed command line arguments
-        config -- a dictionary with the parsed configuration file
+    Arguments:
+    args   -- ArgumentParser instance with parsed command line arguments
+    config -- a dictionary with the parsed configuration file
     """
     hosts = get_hosts(args, config)
     if len(hosts) == 0:
@@ -258,10 +255,10 @@ def run(args, config):
 
 
 def main(argv=None):
-    """ CLI entry point. Execute commands on hosts according to arguments
+    """CLI entry point. Execute commands on hosts according to arguments.
 
-        Arguments:
-        argv -- the list of arguments to use. If None, the command line ones are used [optional, default: None]
+    Arguments:
+    argv -- the list of arguments to use. If None, the command line ones are used [optional, default: None]
     """
     signal.signal(signal.SIGINT, sigint_handler)
     colorama.init()

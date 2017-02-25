@@ -1,4 +1,4 @@
-"""Query grammar definition"""
+"""Query grammar definition."""
 
 import pyparsing as pp
 
@@ -12,26 +12,25 @@ operators = ('=', '!=', '>=', '<=', '<', '>', '~')
 
 
 def _grammar():
-    """ Define the query grammar
+    """Define the query grammar.
 
-        Some query examples:
-        - All hosts: *
-        - Hosts globbing: host10*
-        - ClusterShell syntax for hosts expansion: host10[10-42].domain,host2010.other-domain
-        - Category based key-value selection: F:key = value
-        - A complex selection:
-          host10[10-42].*.domain or (not F:key1 = value1 and host10*) or (F:key2 > value2 and F:key3 ~ '[v]alue[0-9]+')
+    Some query examples:
+    - All hosts: *
+    - Hosts globbing: host10*
+    - ClusterShell syntax for hosts expansion: host10[10-42].domain,host2010.other-domain
+    - Category based key-value selection: F:key = value
+    - A complex selection:
+      host10[10-42].*.domain or (not F:key1 = value1 and host10*) or (F:key2 > value2 and F:key3 ~ '[v]alue[0-9]+')
 
-        Backus-Naur form (BNF) of the grammar:
-                  <query> ::= <item> | <item> <and_or> <query>
-                   <item> ::= [<neg>] <query-token> | [<neg>] "(" <query> ")"
-            <query-token> ::= <token> | <hosts>
-                  <token> ::= <category>:<key> [<operator> <value>]
+    Backus-Naur form (BNF) of the grammar:
+              <query> ::= <item> | <item> <and_or> <query>
+               <item> ::= [<neg>] <query-token> | [<neg>] "(" <query> ")"
+        <query-token> ::= <token> | <hosts>
+              <token> ::= <category>:<key> [<operator> <value>]
 
-        Given that the pyparsing library defines the grammar in a BNF-like style, for the details of the tokens not
-        specified above check directly the code.
+    Given that the pyparsing library defines the grammar in a BNF-like style, for the details of the tokens not
+    specified above check directly the code.
     """
-
     # Boolean operators
     and_or = (pp.Keyword('and', caseless=True) | pp.Keyword('or', caseless=True))('bool')
     neg = pp.Keyword('not', caseless=True)('neg')  # 'neg' is used to allow the use of dot notation, 'not' is reserved

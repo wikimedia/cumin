@@ -1,13 +1,14 @@
-"""Abstract query tests"""
+"""Abstract query tests."""
+
 import unittest
 
 from cumin.backends import BaseQuery
 
 
 class TestBaseQuery(unittest.TestCase):
-    """BaseQuery class tests"""
+    """Class BaseQuery tests."""
 
     def test_instantiation(self):
-        """BaseQuery is not instantiable being an abstract class"""
+        """Class BaseQuery is not instantiable being an abstract class."""
         with self.assertRaises(TypeError):
             BaseQuery({})

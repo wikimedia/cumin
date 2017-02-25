@@ -1,4 +1,4 @@
-"""ClusterShell transport: worker and event handlers"""
+"""Transport ClusterShell: worker and event handlers."""
 
 from collections import defaultdict
 
@@ -12,12 +12,12 @@ from cumin.transports import BaseWorker
 
 
 class ClusterShellWorker(BaseWorker):
-    """ClusterShell worker, extends BaseWorker"""
+    """Worker ClusterShell, extends BaseWorker."""
 
     def __init__(self, config, logger=None):
-        """ ClusterShell worker constructor
+        """Worker ClusterShell constructor.
 
-            Arguments: according to BaseQuery interface
+        Arguments: according to BaseQuery interface
         """
         super(ClusterShellWorker, self).__init__(config, logger)
         self.task = task_self()  # Initialize a ClusterShell task
@@ -30,7 +30,7 @@ class ClusterShellWorker(BaseWorker):
             self.task.set_info('ssh_options', option)
 
     def execute(self, hosts, commands, mode=None, handler=None, timeout=0, success_threshold=1):
-        """Required by BaseWorker"""
+        """Required by BaseWorker."""
         if len(commands) == 0:
             self.logger.warning('No commands provided')
             return
@@ -62,26 +62,26 @@ class ClusterShellWorker(BaseWorker):
                 handler.close(self.task)
 
     def get_results(self):
-        """Required by BaseWorker"""
+        """Required by BaseWorker."""
         for output, nodelist in self.task.iter_buffers():
             yield NodeSet.fromlist(nodelist), output
 
 
 class BaseEventHandler(ClusterShell.Event.EventHandler):
-    """ClusterShell event handler extension base class"""
+    """ClusterShell event handler extension base class."""
 
     short_command_length = 35
 
     def __init__(self, nodes, commands, **kwargs):
-        """ ClusterShell event handler extension constructor
+        """Event handler ClusterShell extension constructor.
 
-            If inherited classes defines a self.pbar_ko tqdm progress bar, it will be updated on ev_error and
-            ev_timeout events.
+        If inherited classes defines a self.pbar_ko tqdm progress bar, it will be updated on ev_error and ev_timeout
+        events.
 
-            Arguments:
-            nodes    -- the list of nodes with which this worker was initiliazed
-            commands -- the list of commands that has to be executed on the nodes
-            **kwargs -- optional additional keyword arguments that might be used by classes that extend this base class
+        Arguments:
+        nodes    -- the list of nodes with which this worker was initiliazed
+        commands -- the list of commands that has to be executed on the nodes
+        **kwargs -- optional additional keyword arguments that might be used by classes that extend this base class
         """
         super(BaseEventHandler, self).__init__()
         self.nodes = nodes
@@ -99,17 +99,17 @@ class BaseEventHandler(ClusterShell.Event.EventHandler):
                            '[{elapsed}<{remaining}, {rate_fmt}]') + colorama.Style.RESET_ALL
 
     def close(self, task):
-        """ Additional method called at the end of the execution, useful for reporting and final actions
+        """Additional method called at the end of the execution, useful for reporting and final actions.
 
-            Arguments:
-            task -- a ClusterShell Task instance
+        Arguments:
+        task -- a ClusterShell Task instance
         """
         raise NotImplementedError
 
     def ev_error(self, worker):
-        """ Update the current fail progress bar and print the error
+        """Update the current fail progress bar and print the error.
 
-            Arguments: according to EventHandler interface
+        Arguments: according to EventHandler interface
         """
         self.failed_commands[worker.command].append(worker.current_node)
         if self.pbar_ko is not None:
@@ -117,22 +117,22 @@ class BaseEventHandler(ClusterShell.Event.EventHandler):
         tqdm.write(worker.current_errmsg)
 
     def ev_timeout(self, worker):
-        """ Update the current fail progress bar
+        """Update the current fail progress bar.
 
-            Arguments: according to EventHandler interface
+        Arguments: according to EventHandler interface
         """
         if self.pbar_ko is not None:
             self.pbar_ko.update(worker.num_timeout())
 
     def _print_report_line(self, num, tot, message, color=colorama.Fore.RED, nodes=None):
-        """ Helper to print a tqdm-friendly colored status line with success/failure ratio and optional list of nodes
+        """Helper to print a tqdm-friendly colored status line with success/failure ratio and optional list of nodes.
 
-            Arguments:
-            num     - the number of affecte nodes
-            tot     - the total number of nodes
-            message - the message to print
-            color   - the colorama color to use for the line [optional, default: colorama.Fore.RED]
-            nodes   - the list of nodes affected [optional, default: None]
+        Arguments:
+        num     - the number of affecte nodes
+        tot     - the total number of nodes
+        message - the message to print
+        color   - the colorama color to use for the line [optional, default: colorama.Fore.RED]
+        nodes   - the list of nodes affected [optional, default: None]
         """
         if nodes is None:
             nodes = ''
@@ -146,20 +146,20 @@ class BaseEventHandler(ClusterShell.Event.EventHandler):
             nodes_color=colorama.Fore.CYAN, nodes=nodes, reset=colorama.Style.RESET_ALL))
 
     def _get_short_command(self, command):
-        """ Return a shortened representation of a command omitting the central part
+        """Return a shortened representation of a command omitting the central part.
 
-            Arguments:
-            command - the command to be shortened
+        Arguments:
+        command - the command to be shortened
         """
         sublen = (self.short_command_length - 3) // 2  # The -3 is for the ellipsis
         return (command[:sublen] + '...' + command[-sublen:]) if len(command) > self.short_command_length else command
 
     def _commands_output_report(self, buffer_iterator, command=None):
-        """ Helper to print the commands output in a colored and tqdm-friendly way
+        """Helper to print the commands output in a colored and tqdm-friendly way.
 
-            Arguments:
-            buffer_iterator - any ClusterShell object that implements iter_buffers() like Task and Worker objects.
-            command         - command the output is referring to [optional, default: None]
+        Arguments:
+        buffer_iterator - any ClusterShell object that implements iter_buffers() like Task and Worker objects.
+        command         - command the output is referring to [optional, default: None]
         """
         nodelist = None
         if command is not None:
@@ -183,10 +183,10 @@ class BaseEventHandler(ClusterShell.Event.EventHandler):
         tqdm.write(colorama.Fore.BLUE + message + colorama.Style.RESET_ALL)
 
     def _timeout_nodes_report(self, buffer_iterator):
-        """ Helper to print the nodes that timed out in a colored and tqdm-friendly way
+        """Helper to print the nodes that timed out in a colored and tqdm-friendly way.
 
-            Arguments:
-            buffer_iterator - any ClusterShell object that implements iter_buffers() like Task and Worker objects.
+        Arguments:
+        buffer_iterator - any ClusterShell object that implements iter_buffers() like Task and Worker objects.
         """
         timeout = buffer_iterator.num_timeout()
         if timeout == 0:
@@ -196,10 +196,10 @@ class BaseEventHandler(ClusterShell.Event.EventHandler):
         self._print_report_line(timeout, tot, 'of nodes timed out', nodes=buffer_iterator.iter_keys_timeout())
 
     def _failed_commands_report(self, filter_command=None):
-        """ Helper to print the nodes that failed to execute commands in a colored and tqdm-friendly way
+        """Helper to print the nodes that failed to execute commands in a colored and tqdm-friendly way.
 
-            Arguments:
-            filter_command - print only the nodes that failed to execute this specific command [optional, default: None]
+        Arguments:
+        filter_command - print only the nodes that failed to execute this specific command [optional, default: None]
         """
         tot = len(self.nodes)
         for command, nodes in self.failed_commands.iteritems():
@@ -214,7 +214,7 @@ class BaseEventHandler(ClusterShell.Event.EventHandler):
             self._print_report_line(fail, tot, message, nodes=nodes)
 
     def _success_nodes_report(self):
-        """Helper to print how many nodes succesfully executed all commands in a colored and tqdm-friendly way"""
+        """Helper to print how many nodes succesfully executed all commands in a colored and tqdm-friendly way."""
         tot = len(self.nodes)
         succ = len(self.success_nodes)
         message = 'of nodes succesfully executed all commands'
@@ -234,32 +234,32 @@ class BaseEventHandler(ClusterShell.Event.EventHandler):
 
 
 class SyncEventHandler(BaseEventHandler):
-    """ Custom ClusterShell event handler class that execute commands synchronously
+    """Custom ClusterShell event handler class that execute commands synchronously.
 
-        The implemented logic is:
-        - execute command_N on all nodes where command_N-1 was successful (all nodes at first iteration)
-        - if success ratio of the execution of command_N < success threshold, then:
-          - abort the execution
-        - else:
-          - re-start from the top with N=N+1
+    The implemented logic is:
+    - execute command_N on all nodes where command_N-1 was successful (all nodes at first iteration)
+    - if success ratio of the execution of command_N < success threshold, then:
+      - abort the execution
+    - else:
+      - re-start from the top with N=N+1
 
-        The typical use case is to orchestrate some operation across a fleet, ensuring that each command is completed
-        by enough hosts before proceeding with the next one.
+    The typical use case is to orchestrate some operation across a fleet, ensuring that each command is completed by
+    enough hosts before proceeding with the next one.
     """
 
     def __init__(self, nodes, commands, **kwargs):
-        """ Custom ClusterShell synchronous event handler constructor
+        """Custom ClusterShell synchronous event handler constructor.
 
-            Arguments: according to BaseEventHandler interface
+        Arguments: according to BaseEventHandler interface
         """
         super(SyncEventHandler, self).__init__(nodes, commands, **kwargs)
         # Slicing the commands list to get a copy
         self.nodes_commands = commands[:]
 
     def ev_start(self, worker):
-        """ Worker started, initialize progress bars and variables for this command execution
+        """Worker started, initialize progress bars and variables for this command execution.
 
-            Arguments: according to EventHandler interface
+        Arguments: according to EventHandler interface
         """
         command = self.nodes_commands.pop(0)
         self.success_nodes = []
@@ -276,11 +276,11 @@ class SyncEventHandler(BaseEventHandler):
         self.pbar_ko.refresh()
 
     def ev_hup(self, worker):
-        """ Command execution completed
+        """Command execution completed.
 
-            Update the progress bars and keep track of nodes based on the success/failure of the command's execution
+        Update the progress bars and keep track of nodes based on the success/failure of the command's execution
 
-            Arguments: according to EventHandler interface
+        Arguments: according to EventHandler interface
         """
         if worker.current_rc != 0:
             self.pbar_ko.update()
@@ -290,9 +290,9 @@ class SyncEventHandler(BaseEventHandler):
             self.success_nodes.append(worker.current_node)
 
     def ev_close(self, worker):
-        """ Worker terminated, print the output of the command execution and the summary report lines
+        """Worker terminated, print the output of the command execution and the summary report lines.
 
-            Arguments: according to EventHandler interface
+        Arguments: according to EventHandler interface
         """
         self._commands_output_report(worker, command=worker.command)
 
@@ -327,28 +327,28 @@ class SyncEventHandler(BaseEventHandler):
         self._print_report_line(succ, tot, message, color=color)
 
     def close(self, task):
-        """ Print a final summary report line
+        """Print a final summary report line.
 
-            Arguments: according to BaseEventHandler interface
+        Arguments: according to BaseEventHandler interface
         """
         if len(self.commands) > 1 and len(self.nodes_commands) == 0:
             self._success_nodes_report()
 
 
 class AsyncEventHandler(BaseEventHandler):
-    """ Custom ClusterShell event handler class that execute commands asynchronously
+    """Custom ClusterShell event handler class that execute commands asynchronously.
 
-        The implemented logic is to execute on all nodes, independently one to each other, command_N only if
-        command_N-1 was succesful, aborting the execution on that node otherwise.
+    The implemented logic is to execute on all nodes, independently one to each other, command_N only if command_N-1
+    was succesful, aborting the execution on that node otherwise.
 
-        The typical use case is to execute read-only commands to gather the status of a fleet without any special need
-        of orchestration between the hosts.
+    The typical use case is to execute read-only commands to gather the status of a fleet without any special need of
+    orchestration between the hosts.
     """
 
     def __init__(self, nodes, commands, **kwargs):
-        """ Custom ClusterShell asynchronous event handler constructor
+        """Custom ClusterShell asynchronous event handler constructor.
 
-            Arguments: according to BaseEventHandler interface
+        Arguments: according to BaseEventHandler interface
         """
         super(AsyncEventHandler, self).__init__(nodes, commands, **kwargs)
         # Map commands to all nodes .Slicing the commands list to get a copy
@@ -364,21 +364,21 @@ class AsyncEventHandler(BaseEventHandler):
         self.pbar_ko.refresh()
 
     def ev_pickup(self, worker):
-        """ Command execution started, remove the command from the node's queue
+        """Command execution started, remove the command from the node's queue.
 
-            Arguments: according to EventHandler interface
+        Arguments: according to EventHandler interface
         """
         command = self.nodes_commands[worker.current_node].pop(0)
         if command != worker.command:
             raise RuntimeError('{} != {}'.format(command, worker.command))
 
     def ev_hup(self, worker):
-        """ Command execution completed
+        """Command execution completed.
 
-            Enqueue the next command if the previous was successful, track the failure otherwise
-            Update the progress bars accordingly
+        Enqueue the next command if the previous was successful, track the failure otherwise
+        Update the progress bars accordingly
 
-            Arguments: according to EventHandler interface
+        Arguments: according to EventHandler interface
         """
         if worker.current_rc != 0:
             self.pbar_ko.update()
@@ -394,9 +394,9 @@ class AsyncEventHandler(BaseEventHandler):
             self.success_nodes.append(worker.current_node)
 
     def close(self, task):
-        """ Properly close all progress bars and print results
+        """Properly close all progress bars and print results.
 
-            Arguments: according to BaseEventHandler interface
+        Arguments: according to BaseEventHandler interface
         """
         self._commands_output_report(task)
 

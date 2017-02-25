@@ -1,4 +1,4 @@
-"""PuppetDB backend"""
+"""PuppetDB backend."""
 
 import requests
 
@@ -8,10 +8,10 @@ from cumin.backends import BaseQuery, InvalidQueryError
 
 
 class PuppetDBQuery(BaseQuery):
-    """ PuppetDB query builder
+    """PuppetDB query builder.
 
-        The 'direct' backend allow to use an existing PuppetDB instance for the hosts selection.
-        At the moment only PuppetDB v3 API are implemented.
+    The 'direct' backend allow to use an existing PuppetDB instance for the hosts selection.
+    At the moment only PuppetDB v3 API are implemented.
     """
 
     base_url_template = 'https://{host}:{port}/v3/'
@@ -19,9 +19,9 @@ class PuppetDBQuery(BaseQuery):
     hosts_keys = {'R': 'certname', 'F': 'name'}
 
     def __init__(self, config, logger=None):
-        """ Query Builder constructor
+        """Query Builder constructor.
 
-            Arguments: according to BaseQuery interface
+        Arguments: according to BaseQuery interface
         """
         super(PuppetDBQuery, self).__init__(config, logger)
         self.grouped_tokens = {'parent': None, 'bool': None, 'tokens': []}
@@ -37,15 +37,15 @@ class PuppetDBQuery(BaseQuery):
 
     @property
     def category(self):
-        """Getter for the property category with a default value"""
+        """Getter for the property category with a default value."""
         return self._category or 'F'
 
     @category.setter
     def category(self, value):
-        """ Setter for the property category with validation
+        """Setter for the property category with validation.
 
-            Arguments:
-            value -- the value to set the category to
+        Arguments:
+        value -- the value to set the category to
         """
         if value not in self.endpoints.keys():
             raise RuntimeError("Invalid value '{category}' for category property".format(category=value))
@@ -55,7 +55,7 @@ class PuppetDBQuery(BaseQuery):
         self._category = value
 
     def add_category(self, category, key, value=None, operator='=', neg=False):
-        """Required by BaseQuery"""
+        """Required by BaseQuery."""
         self.category = category
         if operator == '~':
             value = value.replace(r'\\', r'\\\\')  # Required by PuppetDB API
@@ -73,7 +73,7 @@ class PuppetDBQuery(BaseQuery):
         self.current_group['tokens'].append(query)
 
     def add_hosts(self, hosts, neg=False):
-        """Required by BaseQuery"""
+        """Required by BaseQuery."""
         if len(hosts) == 0:
             return
 
@@ -94,37 +94,37 @@ class PuppetDBQuery(BaseQuery):
         self.current_group['tokens'].append(query)
 
     def open_subgroup(self):
-        """Required by BaseQuery"""
+        """Required by BaseQuery."""
         token = {'parent': self.current_group, 'bool': None, 'tokens': []}
         self.current_group['tokens'].append(token)
         self.current_group = token
 
     def close_subgroup(self):
-        """Required by BaseQuery"""
+        """Required by BaseQuery."""
         self.current_group = self.current_group['parent']
 
     def add_and(self):
-        """Required by BaseQuery"""
+        """Required by BaseQuery."""
         self._add_bool('and')
 
     def add_or(self):
-        """Required by BaseQuery"""
+        """Required by BaseQuery."""
         self._add_bool('or')
 
     def execute(self):
-        """Required by BaseQuery"""
+        """Required by BaseQuery."""
         query = self._get_query_string(group=self.grouped_tokens).format(host_key=self.hosts_keys[self.category])
         hosts = self._execute(query, self.endpoints[self.category])
 
         return {host[self.hosts_keys[self.category]] for host in hosts}  # Set comprehension
 
     def _get_resource_query(self, key, value=None, operator='='):
-        """ Build a resource query based on the parameters, resolving the special cases for %params and @field
+        """Build a resource query based on the parameters, resolving the special cases for %params and @field.
 
-            Arguments:
-            key      -- the key of the resource
-            value    -- the value to match, if not specified the key itself will be matched [optional, default: None]
-            operator -- the comparison operator to use, one of cumin.grammar.operators [optional: default: =]
+        Arguments:
+        key      -- the key of the resource
+        value    -- the value to match, if not specified the key itself will be matched [optional, default: None]
+        operator -- the comparison operator to use, one of cumin.grammar.operators [optional: default: =]
         """
         if all(char in key for char in ('%', '@')):
             raise RuntimeError(("Resource key cannot contain both '%' (query a resource's parameter) and '@' (query a "
@@ -153,10 +153,10 @@ class PuppetDBQuery(BaseQuery):
         return query
 
     def _get_query_string(self, group):
-        """ Recursively build and return the PuppetDB query string
+        """Recursively build and return the PuppetDB query string.
 
-            Arguments:
-            group -- a dictionary with the grouped tokens
+        Arguments:
+        group -- a dictionary with the grouped tokens
         """
         if group['bool']:
             query = '["{bool}", '.format(bool=group['bool'])
@@ -179,10 +179,10 @@ class PuppetDBQuery(BaseQuery):
         return query
 
     def _add_bool(self, bool_op):
-        """ Add a boolean AND or OR query block to the query and validate logic
+        """Add a boolean AND or OR query block to the query and validate logic.
 
-            Arguments:
-            bool_op -- the boolean operator (and|or) to add to the query
+        Arguments:
+        bool_op -- the boolean operator (and|or) to add to the query
         """
         if self.current_group['bool'] is None:
             self.current_group['bool'] = bool_op
@@ -191,11 +191,11 @@ class PuppetDBQuery(BaseQuery):
                 bool=bool_op, current=self.current_group['bool']))
 
     def _execute(self, query, endpoint):
-        """ Execute a query to PuppetDB API and return the parsed JSON
+        """Execute a query to PuppetDB API and return the parsed JSON.
 
-            Arguments:
-            query    -- the query parameter to send to the PuppetDB API
-            endpoint -- the endpoint of the PuppetDB API to call
+        Arguments:
+        query    -- the query parameter to send to the PuppetDB API
+        endpoint -- the endpoint of the PuppetDB API to call
         """
         self.logger.debug('Querying puppetdb: {query}'.format(query=query))
         resources = requests.get(self.url + endpoint, params={'query': query}, verify=True)
