@@ -1,3 +1,4 @@
+"""Grammar tests"""
 import unittest
 
 from cumin.grammar import grammar

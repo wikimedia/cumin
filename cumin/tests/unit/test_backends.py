@@ -1,3 +1,4 @@
+"""Abstract query tests"""
 import unittest
 
 from cumin.backends import BaseQuery

@@ -1,3 +1,5 @@
+"""Query handling: factory and builder"""
+
 import importlib
 import logging
 

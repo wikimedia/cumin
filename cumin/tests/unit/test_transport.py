@@ -1,3 +1,5 @@
+"""Transport class tests"""
+
 import os
 import pkgutil
 import unittest

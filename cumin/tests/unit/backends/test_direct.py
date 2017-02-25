@@ -1,3 +1,4 @@
+"""Direct backend tests"""
 import unittest
 
 from ClusterShell.NodeSet import NodeSet

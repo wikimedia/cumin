@@ -147,7 +147,7 @@ def parse_config(config_file):
     return config
 
 
-def sigint_handler(signum, frame):
+def sigint_handler(*args):
     """ Signal handler for Ctrl+c / SIGINT, raises KeyboardInterruptError
 
         Arguments (as defined in https://docs.python.org/2/library/signal.html):

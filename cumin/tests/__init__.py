@@ -1,3 +1,5 @@
+"""Tests utils"""
+
 import logging
 import os
 

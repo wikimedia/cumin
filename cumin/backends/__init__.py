@@ -1,3 +1,5 @@
+"""Abstract backend"""
+
 import logging
 
 from abc import ABCMeta, abstractmethod

@@ -1,3 +1,4 @@
+"""CLI tests"""
 import unittest
 
 from logging import DEBUG, INFO

@@ -1,3 +1,4 @@
+"""Query handling tests"""
 import os
 import pkgutil
 import unittest
@@ -17,6 +18,8 @@ class QueryFactory(object):
     @staticmethod
     def new(config, logger=None):
         """Return an instance of the mocked query class"""
+        if not isinstance(config, dict):
+            raise AssertionError("Expected instance of dict, got type '{type}' for config.".format(type=type(config)))
         return mock.MagicMock(spec_set=BaseQuery)
 
 

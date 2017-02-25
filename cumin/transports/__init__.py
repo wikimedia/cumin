@@ -1,3 +1,5 @@
+"""Abstract transport"""
+
 import logging
 import os
 

@@ -1,3 +1,5 @@
+"""Query grammar definition"""
+
 import pyparsing as pp
 
 # Available categories

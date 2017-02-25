@@ -1,3 +1,5 @@
+"""Direct backend"""
+
 from ClusterShell.NodeSet import NodeSet
 
 from cumin.backends import BaseQuery, InvalidQueryError

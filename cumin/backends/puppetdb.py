@@ -1,3 +1,5 @@
+"""PuppetDB backend"""
+
 import requests
 
 from requests.packages import urllib3

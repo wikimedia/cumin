@@ -1,3 +1,5 @@
+"""ClusterShell transport: worker and event handlers"""
+
 from collections import defaultdict
 
 import ClusterShell
@@ -87,6 +89,8 @@ class BaseEventHandler(ClusterShell.Event.EventHandler):
         self.kwargs = kwargs
         self.success_nodes = []
         self.failed_commands = defaultdict(list)
+        self.pbar_ok = None
+        self.pbar_ko = None
 
         # Initialize color and progress bar formats
         # TODO: decouple the output handling from the event handling
@@ -108,7 +112,7 @@ class BaseEventHandler(ClusterShell.Event.EventHandler):
             Arguments: according to EventHandler interface
         """
         self.failed_commands[worker.command].append(worker.current_node)
-        if hasattr(self, 'pbar_ko'):
+        if self.pbar_ko is not None:
             self.pbar_ko.update()
         tqdm.write(worker.current_errmsg)
 
@@ -117,7 +121,7 @@ class BaseEventHandler(ClusterShell.Event.EventHandler):
 
             Arguments: according to EventHandler interface
         """
-        if hasattr(self, 'pbar_ko'):
+        if self.pbar_ko is not None:
             self.pbar_ko.update(worker.num_timeout())
 
     def _print_report_line(self, num, tot, message, color=colorama.Fore.RED, nodes=None):

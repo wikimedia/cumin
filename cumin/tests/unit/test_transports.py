@@ -1,3 +1,5 @@
+"""Abstract worker tests"""
+
 import os
 import unittest
 

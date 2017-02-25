@@ -1,3 +1,4 @@
+"""ClusterShell transport tests"""
 import unittest
 
 import mock
@@ -13,6 +14,7 @@ class TestWorkerClass(unittest.TestCase):
         """An instance of worker_class should be an instance of BaseWorker"""
         worker = clustershell.worker_class({})
         self.assertIsInstance(worker, BaseWorker)
+        task_self.assert_called_once_with()
 
 
 class TestClusterShellWorker(unittest.TestCase):
@@ -91,7 +93,7 @@ class TestClusterShellWorker(unittest.TestCase):
 
     def test_get_results(self):
         """Calling get_results() should call ClusterShell iter_buffers with the right parameters"""
-        self.worker.task.iter_buffers = TestClusterShellWorker._iter_buffers
+        self.worker.task.iter_buffers = TestClusterShellWorker.iter_buffers
         self.worker.execute(self.nodes, self.commands, 'async')
         for nodes, output in self.worker.get_results():
             pass
@@ -99,7 +101,7 @@ class TestClusterShellWorker(unittest.TestCase):
         self.assertEqual(output, 'output 9')
 
     @staticmethod
-    def _iter_buffers():
+    def iter_buffers():
         """A generator to simulate the buffer iteration of ClusterShell objects"""
         for i in xrange(10):
             yield 'output {}'.format(i), ['node{}0'.format(i), 'node{}1'.format(i), 'node{}2'.format(i)]
@@ -107,13 +109,14 @@ class TestClusterShellWorker(unittest.TestCase):
 
 class TestBaseEventHandler(unittest.TestCase):
     """BaseEventHandler test class"""
-    def setUp(self):
+    def setUp(self, *args):
         """Initialize default properties and instances"""
         self.nodes = ['node1', 'node2']
         self.commands = ['command1', 'command2']
         self.worker = mock.MagicMock()
         self.worker.current_node = 'node1'
         self.worker.command = 'command1'
+        self.handler = None
 
     @mock.patch('cumin.transports.clustershell.colorama')
     def test_close(self, colorama):
@@ -121,6 +124,7 @@ class TestBaseEventHandler(unittest.TestCase):
         self.handler = clustershell.BaseEventHandler(self.nodes, self.commands)
         with self.assertRaises(NotImplementedError):
             self.handler.close(self.worker)
+        colorama.init.assert_called_once_with()
 
 
 class ConcreteBaseEventHandler(clustershell.BaseEventHandler):
@@ -204,7 +208,7 @@ class TestSyncEventHandler(TestBaseEventHandler):
 
     def test_ev_close(self):
         """Calling close should close progress bars"""
-        self.worker.task.iter_buffers = TestClusterShellWorker._iter_buffers
+        self.worker.task.iter_buffers = TestClusterShellWorker.iter_buffers
         self.worker.num_timeout.return_value = 0
         self.handler.ev_close(self.worker)
         self.assertTrue(self.handler.pbar_ko.close.called)
@@ -260,10 +264,11 @@ class TestAsyncEventHandler(TestBaseEventHandler):
         self.assertFalse(self.worker.task.shell.called)
         self.assertTrue(self.handler.pbar_ko.update.called)
 
-    def test_close(self):
+    @mock.patch('cumin.transports.clustershell.colorama')
+    def test_close(self, colorama):
         """Calling close with a worker should close progress bars"""
         self.handler.ev_start(self.worker)
-        self.worker.task.iter_buffers = TestClusterShellWorker._iter_buffers
+        self.worker.task.iter_buffers = TestClusterShellWorker.iter_buffers
         self.worker.num_timeout.return_value = 0
         self.handler.close(self.worker)
         self.assertTrue(self.handler.pbar_ok.close.called)

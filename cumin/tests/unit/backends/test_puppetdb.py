@@ -1,3 +1,4 @@
+"""PuppetDB backend tests"""
 import unittest
 
 import requests_mock
