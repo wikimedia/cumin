@@ -5,7 +5,6 @@ TODO
 
 ##### First improvements
 
-* clustershell transport: add batch size/fanout support
 * CLI: add an option to get raw output for easy post-processing by command line tools
 * CLI: read commands from a file, one per line
 * CLI: fix progress bar interaction with ctrl+c and sigint_handler()
@@ -16,6 +15,8 @@ TODO
 * CLI: read default options also from CUMIN_OPTIONS environmental variable or a config file in the /home directory
 * global: allow to log the whole output to a specific file, to allow multiple people to follow the progress
 * puppetdb: improve globbing support, check if fnmatch could be used without conflicting with ClusterShell NodeSet
+* puppetdb: add support for API v4
+* CLI: allow to just query the backend without passing any parameter
 
 ##### Next improvements
 
@@ -27,6 +28,7 @@ TODO
 * allow to specify a rollback strategy
 * CLI: allow to have an external audit log, for example IRC/SAL
 * CLI: improve the dry-run mode to show what would have been done
+* backends: allow to query multiple backends in the same query
 
 ## On the targets
 

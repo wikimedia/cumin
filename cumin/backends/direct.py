@@ -56,6 +56,7 @@ class DirectQuery(BaseQuery):
 
     def execute(self):
         """Required by BaseQuery."""
+        self.logger.debug("Direct backend matches '{num}' hosts.".format(num=len(self.hosts)))
         return list(self.hosts)
 
 

@@ -72,6 +72,9 @@ class TestPuppetDBQuery(unittest.TestCase):
         # Regex operator
         self.query.add_category('F', 'key', r'value\\escaped', operator='~')
         self.assertListEqual(self.query.current_group['tokens'], [r'["~", ["fact", "key"], "value\\\\escaped"]'])
+        # != is not supported by PuppetDB
+        with self.assertRaisesRegexp(RuntimeError, r"PuppetDB backend doesn't support"):
+            self.query.add_category('F', 'key', 'value', operator='!=')
 
     def test_add_category_resource_base(self):
         """Calling add_category() with a base resource query should add the proper query token to the object."""
@@ -184,83 +187,83 @@ class TestPuppetDBQueryExecute(unittest.TestCase):
 
     def setUp(self):
         """Setup an instace of PuppetDBQuery for each test."""
-        self.query = puppetdb.PuppetDBQuery({})
+        self.query = puppetdb.PuppetDBQuery({'puppetdb': {'urllib3_disable_warnings': ['SubjectAltNameWarning']}})
 
-    def _register_uris(self, mocked_requests):
+    def _register_uris(self, requests):
         """Setup the requests library mock for each test."""
-        # Register a mocked_requests valid response for each endpoint
+        # Register a requests valid response for each endpoint
         for category in self.query.endpoints.keys():
             endpoint = self.query.endpoints[category]
             key = self.query.hosts_keys[category]
-            mocked_requests.register_uri('GET', self.query.url + endpoint + '?query=', status_code=200, json=[
+            requests.register_uri('GET', self.query.url + endpoint + '?query=', status_code=200, json=[
                 {key: endpoint + '_host1', 'key': 'value1'}, {key: endpoint + '_host2', 'key': 'value2'}])
 
-        # Register a mocked_requests response for an empty query
-        mocked_requests.register_uri('GET', self.query.url + self.query.endpoints['F'] + '?query=', status_code=200,
-                                     json=[], complete_qs=True)
-        # Register a mocked_requests response for an invalid query
-        mocked_requests.register_uri('GET', self.query.url + self.query.endpoints['F'] + '?query=invalid_query',
-                                     status_code=400, complete_qs=True)
+        # Register a requests response for an empty query
+        requests.register_uri('GET', self.query.url + self.query.endpoints['F'] + '?query=', status_code=200,
+                              json=[], complete_qs=True)
+        # Register a requests response for an invalid query
+        requests.register_uri('GET', self.query.url + self.query.endpoints['F'] + '?query=invalid_query',
+                              status_code=400, complete_qs=True)
 
-    def test_nodes_endpoint(self, mocked_requests):
+    def test_nodes_endpoint(self, requests):
         """Calling execute() with a query that goes to the nodes endpoint should return the list of hosts."""
-        self._register_uris(mocked_requests)
+        self._register_uris(requests)
         self.query.add_hosts(['nodes_host1', 'nodes_host2'])
         hosts = self.query.execute()
-        self.assertEqual(hosts, {'nodes_host1', 'nodes_host2'})
-        self.assertEqual(mocked_requests.call_count, 1)
+        self.assertListEqual(sorted(hosts), ['nodes_host1', 'nodes_host2'])
+        self.assertEqual(requests.call_count, 1)
 
-    def test_resources_endpoint(self, mocked_requests):
+    def test_resources_endpoint(self, requests):
         """Calling execute() with a query that goes to the resources endpoint should return the list of hosts."""
-        self._register_uris(mocked_requests)
+        self._register_uris(requests)
         self.query.add_category('R', 'Class', 'value')
         hosts = self.query.execute()
-        self.assertEqual(hosts, {'resources_host1', 'resources_host2'})
-        self.assertEqual(mocked_requests.call_count, 1)
+        self.assertListEqual(sorted(hosts), ['resources_host1', 'resources_host2'])
+        self.assertEqual(requests.call_count, 1)
 
-    def test_with_boolean_operator(self, mocked_requests):
+    def test_with_boolean_operator(self, requests):
         """Calling execute() with a query with a boolean operator should return the list of hosts."""
-        self._register_uris(mocked_requests)
+        self._register_uris(requests)
         self.query.add_hosts(['nodes_host1'])
         self.query.add_or()
         self.query.add_hosts(['nodes_host2'])
         hosts = self.query.execute()
-        self.assertEqual(hosts, {'nodes_host1', 'nodes_host2'})
-        self.assertEqual(mocked_requests.call_count, 1)
+        self.assertListEqual(sorted(hosts), ['nodes_host1', 'nodes_host2'])
+        self.assertEqual(requests.call_count, 1)
 
-    def test_with_subgroup(self, mocked_requests):
+    def test_with_subgroup(self, requests):
         """Calling execute() with a query with a subgroup return the list of hosts."""
-        self._register_uris(mocked_requests)
+        self._register_uris(requests)
         self.query.open_subgroup()
         self.query.add_hosts(['nodes_host1'])
         self.query.add_or()
         self.query.add_hosts(['nodes_host2'])
         self.query.close_subgroup()
         hosts = self.query.execute()
-        self.assertEqual(hosts, {'nodes_host1', 'nodes_host2'})
-        self.assertEqual(mocked_requests.call_count, 1)
+        self.assertListEqual(sorted(hosts), ['nodes_host1', 'nodes_host2'])
+        self.assertEqual(requests.call_count, 1)
 
-    def test_empty(self, mocked_requests):
+    def test_empty(self, requests):
         """Calling execute() with a query that return no hosts should return an empty list."""
-        self._register_uris(mocked_requests)
+        self._register_uris(requests)
         hosts = self.query.execute()
-        self.assertEqual(hosts, set())
-        self.assertEqual(mocked_requests.call_count, 1)
+        self.assertListEqual(hosts, [])
+        self.assertEqual(requests.call_count, 1)
 
-    def test_error(self, mocked_requests):
+    def test_error(self, requests):
         """Calling execute() if the request fails it should raise the requests exception."""
-        self._register_uris(mocked_requests)
+        self._register_uris(requests)
         self.query.current_group['tokens'].append('invalid_query')
         with self.assertRaises(HTTPError):
             self.query.execute()
-            self.assertEqual(mocked_requests.call_count, 1)
+            self.assertEqual(requests.call_count, 1)
 
-    def test_complex_query(self, mocked_requests):
+    def test_complex_query(self, requests):
         """Calling execute() with a complex query should return the exptected structure."""
         category = 'R'
         endpoint = self.query.endpoints[category]
         key = self.query.hosts_keys[category]
-        mocked_requests.register_uri('GET', self.query.url + endpoint + '?query=', status_code=200, json=[
+        requests.register_uri('GET', self.query.url + endpoint + '?query=', status_code=200, json=[
             {key: endpoint + '_host1', 'key': 'value1'}, {key: endpoint + '_host2', 'key': 'value2'}])
 
         self.query.open_subgroup()
@@ -271,5 +274,5 @@ class TestPuppetDBQueryExecute(unittest.TestCase):
         self.query.add_and()
         self.query.add_category('R', 'Class', value='MyClass', operator='=')
         hosts = self.query.execute()
-        self.assertEqual(hosts, {'resources_host1', 'resources_host2'})
-        self.assertEqual(mocked_requests.call_count, 1)
+        self.assertListEqual(sorted(hosts), ['resources_host1', 'resources_host2'])
+        self.assertEqual(requests.call_count, 1)

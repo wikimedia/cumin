@@ -4,8 +4,10 @@ import logging
 
 from abc import ABCMeta, abstractmethod
 
+from cumin import CuminError
 
-class InvalidQueryError(Exception):
+
+class InvalidQueryError(CuminError):
     """Custom exception class for invalid queries."""
 
 

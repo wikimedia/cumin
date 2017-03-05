@@ -115,8 +115,11 @@ class PuppetDBQuery(BaseQuery):
         """Required by BaseQuery."""
         query = self._get_query_string(group=self.grouped_tokens).format(host_key=self.hosts_keys[self.category])
         hosts = self._execute(query, self.endpoints[self.category])
+        unique_hosts = list({host[self.hosts_keys[self.category]] for host in hosts})  # Set comprehension
+        self.logger.debug("Queried puppetdb for '{query}', got '{num}' results.".format(
+            query=query, num=len(unique_hosts)))
 
-        return {host[self.hosts_keys[self.category]] for host in hosts}  # Set comprehension
+        return unique_hosts
 
     def _get_resource_query(self, key, value=None, operator='='):
         """Build a resource query based on the parameters, resolving the special cases for %params and @field.
@@ -197,7 +200,6 @@ class PuppetDBQuery(BaseQuery):
         query    -- the query parameter to send to the PuppetDB API
         endpoint -- the endpoint of the PuppetDB API to call
         """
-        self.logger.debug('Querying puppetdb: {query}'.format(query=query))
         resources = requests.get(self.url + endpoint, params={'query': query}, verify=True)
         resources.raise_for_status()
         return resources.json()

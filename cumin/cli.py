@@ -1,6 +1,5 @@
 #!/usr/bin/python2
 """Cumin CLI entry point."""
-
 import argparse
 import logging
 import os
@@ -16,13 +15,14 @@ import yaml
 from ClusterShell.NodeSet import NodeSet
 from tqdm import tqdm
 
+from cumin import CuminError
 from cumin.query import QueryBuilder
 from cumin.transport import Transport
 
 logger = logging.getLogger(__name__)
 
 
-class KeyboardInterruptError(Exception):
+class KeyboardInterruptError(CuminError):
     """Custom KeyboardInterrupt exception class for the SIGINT signal handler."""
 
 
@@ -41,33 +41,46 @@ def parse_args(argv=None):
     transports = [name for _, name, _ in pkgutil.iter_modules([os.path.join(abs_path, 'transports')])]
 
     parser = argparse.ArgumentParser(
-        description='Cumin CLI - An automation and orchestration tool',
+        description='Cumin CLI - Automation and orchestration framework written in Python',
         epilog='More details at https://wikitech.wikimedia.org/wiki/Cumin')
     parser.add_argument('-c', '--config', default='/etc/cumin/config.yaml',
                         help='configuration file. [default: /etc/cumin/config.yaml]')
-    parser.add_argument('-t', '--timeout', type=int, help='timeout in seconds. [default: 0 (unlimited)]', default=0)
+    parser.add_argument('-t', '--timeout', type=int, default=0,
+                        help='Global timeout in seconds (int) for the whole execution. [default: 0 (unlimited)]')
     parser.add_argument('-m', '--mode', choices=(sync_mode, async_mode),
                         help=('Execution mode, required when there are multiple COMMANDS to be executed. In sync mode, '
                               'execute the first command on all hosts, then proceed with the next one only if '
-                              '-s/--success-percentage is reached. In async mode, execute on each host independently '
+                              '-p/--success-percentage is reached. In async mode, execute on each host independently '
                               'from each other, the list of commands, aborting the execution on any given host at the '
                               'first command that fails.'))
-    parser.add_argument('-s', '--success-percentage', type=int, choices=xrange(101), metavar='0-100',
-                        help=(('Percentage threshold to consider an execution unit successful. Used only when in sync '
-                               'mode and there are multiple COMMANDS. [default: 100]')))
+    parser.add_argument('-p', '--success-percentage', type=int, choices=xrange(101), metavar='0-100', default=100,
+                        help=(('Percentage threshold to consider an execution unit successful. Required in sync mode, '
+                               'optional in async mode when -b/--batch-size is used. [default: 100]')))
+    parser.add_argument('-b', '--batch-size', type=int,
+                        help=('The commands will be executed with a sliding batch of this size. The batch mode depends '
+                              'on the -m/--mode option when multiple commands are specified. In sync mode the first '
+                              'command is executed in batch to all hosts before proceeding with the next one. In async '
+                              'mode all commands are executed on the first batch of hosts, proceeding with the next '
+                              'hosts as soon as one host completes all the commands. The -p/--success-percentage is '
+                              'checked before starting the execution in each hosts.'))
+    parser.add_argument('-s', '--batch-sleep', type=float, default=0.0,
+                        help=('Sleep in seconds (float) to wait before starting the execution on the next host when '
+                              '-b/--batch-size is used. [default: 0.0]'))
     parser.add_argument('--force', action='store_true',
-                        help='force the execution without confirmation of the affected hosts')
+                        help='USE WITH CAUTION! Force the execution without confirmation of the affected hosts. ')
     parser.add_argument('--backend', choices=backends,
-                        help=('backend to be used for hosts selection. The backend configuration must be present in '
-                              'the configuration file.'))
+                        help=('Override the default backend selected in the configuration file for this execution. The '
+                              'backend-specific configuration must be already present in the configuration file. '
+                              '[optional]'))
     parser.add_argument('--transport', choices=transports,
-                        help=('transport to be used for commands execution. The transport configuration must be '
-                              'in the configuration file.'))
+                        help=('Override the default transport selected in the configuration file for this execution. '
+                              'The transport-specific configuration must already be present in the configuration file. '
+                              '[optional]'))
     parser.add_argument('--dry-run', action='store_true',
-                        help='do not execute the commands, just return the list of hosts')
-    parser.add_argument('-d', '--debug', action='store_true', help='set log level to DEBUG')
-    parser.add_argument('hosts', metavar='HOSTS_QUERY', help='hosts selection query')
-    parser.add_argument('commands', metavar='COMMAND', nargs='+', help='command to be executed')
+                        help='Do not execute any command, just return the list of matching hosts and exit.')
+    parser.add_argument('-d', '--debug', action='store_true', help='Set log level to DEBUG.')
+    parser.add_argument('hosts', metavar='HOSTS_QUERY', help='Hosts selection query')
+    parser.add_argument('commands', metavar='COMMAND', nargs='+', help='Command to be executed')
 
     if argv is None:
         parsed_args = parser.parse_args()
@@ -78,20 +91,6 @@ def parse_args(argv=None):
 
     if len(parsed_args.commands) > 1 and parsed_args.mode is None:
         parser.error('-m/--mode is required when there are multiple COMMANDS')
-
-    if len(parsed_args.commands) == 1:
-        if parsed_args.mode is not None:
-            parser.error('-m/--mode cannot be specified with only one COMMAND')
-        if parsed_args.success_percentage is not None:
-            parser.error('-s/--success-percentage cannot be specified with only one COMMAND')
-
-    if parsed_args.success_percentage is not None and parsed_args.mode == async_mode:
-        parser.error("-s/--success-percentage cannot be specified when mode is '{mode}'".format(mode=async_mode))
-
-    # Default values
-
-    if parsed_args.success_percentage is None:
-        parsed_args.success_percentage = 100
 
     return parsed_args
 
@@ -106,11 +105,10 @@ def get_running_user():
     return os.getenv('SUDO_USER')
 
 
-def setup_logging(user, filename, debug=False):
+def setup_logging(filename, debug=False):
     """Setup the logger instance.
 
     Arguments:
-    user     -- the real user to use in the logging formatter for auditing
     filename -- the filename of the log file
     debug    -- whether to set logging level to DEBUG [optional, default: False]
     """
@@ -119,8 +117,7 @@ def setup_logging(user, filename, debug=False):
         os.makedirs(file_path, 0770)
 
     log_formatter = logging.Formatter(
-        fmt=('%(asctime)s [%(levelname)s] ({user}) %(name)s::%(funcName)s: %(message)s').format(user=user),
-        datefmt='%F %T')
+        fmt='%(asctime)s [%(process)s] (%(levelname)s %(filename)s:%(lineno)s in %(funcName)s) %(message)s')
     log_handler = RotatingFileHandler(filename, maxBytes=(5 * (1024**2)), backupCount=30)
     log_handler.setFormatter(log_formatter)
     logger.addHandler(log_handler)
@@ -219,6 +216,10 @@ def get_hosts(args, config):
     elif args.force:
         stderr('FORCE mode enabled, continuing without confirmation')
         return hosts
+    elif not sys.stdout.isatty():
+        message = 'Not in a TTY but neither DRY-RUN nor FORCE mode were specified.'
+        stderr(message)
+        raise RuntimeError(message)
 
     for i in xrange(10):
         stderr('Confirm to continue [y/n]?', end=' ')
@@ -247,11 +248,17 @@ def run(args, config):
     """
     hosts = get_hosts(args, config)
     if len(hosts) == 0:
-        return
+        return 0
 
-    transport = Transport.new(config, logger)
-    transport.execute(hosts, args.commands, mode=args.mode, timeout=args.timeout, handler=True,
-                      success_threshold=(args.success_percentage / float(100)))
+    worker = Transport.new(config, logger)
+    worker.hosts = hosts
+    worker.commands = args.commands
+    worker.timeout = args.timeout
+    worker.handler = args.mode
+    worker.success_threshold = args.success_percentage / float(100)
+    worker.batch_size = args.batch_size
+    worker.batch_sleep = args.batch_sleep
+    return worker.execute()
 
 
 def main(argv=None):
@@ -268,7 +275,7 @@ def main(argv=None):
         args = parse_args(argv)
         user = get_running_user()
         config = parse_config(args.config)
-        setup_logging(user, config['log_file'], debug=args.debug)
+        setup_logging(config['log_file'], debug=args.debug)
     except Exception as e:
         stderr('Caught {name} exception: {msg}'.format(name=e.__class__.__name__, msg=e))
         return 3
@@ -279,19 +286,18 @@ def main(argv=None):
     if args.transport is not None:
         config['transport'] = args.transport
 
-    logger.info('Cumin called with args: {}'.format(args))
+    logger.info("Cumin called by user '{user}' with args: {args}".format(user=user, args=args))
 
     # Execution
     try:
-        exit_code = 0
-        run(args, config)
+        exit_code = run(args, config)
     except KeyboardInterruptError:
         stderr('Execution interrupted by Ctrl+c/SIGINT/Aborted')
-        exit_code = 1
+        exit_code = 98
     except Exception as e:
         stderr('Caught {name} exception: {msg}'.format(name=e.__class__.__name__, msg=e))
         logger.exception('Failed to execute')
-        exit_code = 2
+        exit_code = 99
 
     return exit_code
 
