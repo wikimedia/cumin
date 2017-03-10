@@ -1,4 +1,5 @@
 """PuppetDB backend."""
+from string import capwords
 
 import requests
 
@@ -149,9 +150,11 @@ class PuppetDBQuery(BaseQuery):
 
         else:
             # Querying a specific resource title
+            if key.lower() == 'class':
+                value = capwords(value, '::')  # Auto ucfirst the class title
             query_part = ', ["{op}", "title", "{value}"]'.format(op=operator, value=value)
 
-        query = '["and", ["=", "type", "{type}"]{query_part}]'.format(type=key, query_part=query_part)
+        query = '["and", ["=", "type", "{type}"]{query_part}]'.format(type=capwords(key, '::'), query_part=query_part)
 
         return query
 

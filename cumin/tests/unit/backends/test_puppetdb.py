@@ -81,36 +81,50 @@ class TestPuppetDBQuery(unittest.TestCase):
         self.assertListEqual(self.query.current_group['tokens'], [])
         self.query.add_category('R', 'key', 'value')
         self.assertListEqual(self.query.current_group['tokens'],
-                             ['["and", ["=", "type", "key"], ["=", "title", "value"]]'])
+                             ['["and", ["=", "type", "Key"], ["=", "title", "value"]]'])
+
+    def test_add_category_resource_class(self):
+        """Calling add_category() with a class resource query should add the proper query token to the object."""
+        self.assertListEqual(self.query.current_group['tokens'], [])
+        self.query.add_category('R', 'class', 'classtitle')
+        self.assertListEqual(self.query.current_group['tokens'],
+                             ['["and", ["=", "type", "Class"], ["=", "title", "Classtitle"]]'])
+
+    def test_add_category_resource_class_path(self):
+        """Calling add_category() with a class resource query should add the proper query token to the object."""
+        self.assertListEqual(self.query.current_group['tokens'], [])
+        self.query.add_category('R', 'class', 'resource::path::to::class')
+        self.assertListEqual(self.query.current_group['tokens'],
+                             ['["and", ["=", "type", "Class"], ["=", "title", "Resource::Path::To::Class"]]'])
 
     def test_add_category_resource_neg(self):
         """Calling add_category() with a negated resource query should add the proper query token to the object."""
         self.query.add_category('R', 'key', 'value', neg=True)
         self.assertListEqual(self.query.current_group['tokens'],
-                             ['["not", ["and", ["=", "type", "key"], ["=", "title", "value"]]]'])
+                             ['["not", ["and", ["=", "type", "Key"], ["=", "title", "value"]]]'])
 
     def test_add_category_resource_regex(self):
         """Calling add_category() with a regex resource query should add the proper query token to the object."""
         self.query.add_category('R', 'key', r'value\\escaped', operator='~')
         self.assertListEqual(self.query.current_group['tokens'],
-                             [r'["and", ["=", "type", "key"], ["~", "title", "value\\\\escaped"]]'])
+                             [r'["and", ["=", "type", "Key"], ["~", "title", "value\\\\escaped"]]'])
 
     def test_add_category_resource_parameter(self):
         """Calling add_category() with a resource's parameter query should add the proper query token to the object."""
         self.query.add_category('R', 'resource%param', 'value')
         self.assertListEqual(self.query.current_group['tokens'],
-                             ['["and", ["=", "type", "resource"], ["=", ["parameter", "param"], "value"]]'])
+                             ['["and", ["=", "type", "Resource"], ["=", ["parameter", "param"], "value"]]'])
 
     def test_add_category_resource_field(self):
         """Calling add_category() with a resource's field query should add the proper query token to the object."""
         self.query.add_category('R', 'resource@field', 'value')
         self.assertListEqual(self.query.current_group['tokens'],
-                             ['["and", ["=", "type", "resource"], ["=", "field", "value"]]'])
+                             ['["and", ["=", "type", "Resource"], ["=", "field", "value"]]'])
 
-    def test_add_category_resource_title(self):
-        """Calling add_category() with a resource's title query should add the proper query token to the object."""
-        self.query.add_category('R', 'resource')
-        self.assertListEqual(self.query.current_group['tokens'], ['["and", ["=", "type", "resource"]]'])
+    def test_add_category_resource(self):
+        """Calling add_category() with a resource type should add the proper query token to the object."""
+        self.query.add_category('R', 'Resource')
+        self.assertListEqual(self.query.current_group['tokens'], ['["and", ["=", "type", "Resource"]]'])
 
     def test_add_category_resource_parameter_field(self):
         """Calling add_category() with both a parameter and a field should raise RuntimeError."""
