@@ -87,9 +87,11 @@ def parse_args(argv=None):
     else:
         parsed_args = parser.parse_args(argv)
 
-    # Validation
+    # Validation and default values
 
-    if len(parsed_args.commands) > 1 and parsed_args.mode is None:
+    if len(parsed_args.commands) == 1:
+        parsed_args.mode = 'sync'
+    elif len(parsed_args.commands) > 1 and parsed_args.mode is None:
         parser.error('-m/--mode is required when there are multiple COMMANDS')
 
     return parsed_args

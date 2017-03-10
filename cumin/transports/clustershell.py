@@ -1,5 +1,6 @@
 """Transport ClusterShell: worker and event handlers."""
 import logging
+import sys
 import threading
 
 from collections import Counter, defaultdict
@@ -38,18 +39,16 @@ class ClusterShellWorker(BaseWorker):
             self.logger.warning('No commands provided')
             return
 
-        if self.handler is None and len(self.commands) > 1:
-            raise RuntimeError('An EventHandler is mandatory with more than one command to execute.')
+        if self.handler is None:
+            raise RuntimeError('An EventHandler is mandatory.')
 
         # Schedule only the first command for the first batch, the following ones must be handled by the EventHandler
         first_batch = NodeSet.NodeSet.fromlist(self.hosts[:self.batch_size])
 
-        self._handler_instance = None  # Reset handler instance
-        if self.handler is not None:
-            # Instantiate handler
-            self._handler_instance = self.handler(
-                self.hosts, self.commands, success_threshold=self.success_threshold, batch_size=self.batch_size,
-                batch_sleep=self.batch_sleep, logger=self.logger, first_batch=first_batch)
+        # Instantiate handler
+        self._handler_instance = self.handler(
+            self.hosts, self.commands, success_threshold=self.success_threshold, batch_size=self.batch_size,
+            batch_sleep=self.batch_sleep, logger=self.logger, first_batch=first_batch)
 
         self.logger.info("Executing commands {commands} on '{num}' hosts: {hosts}".format(
             commands=self.commands, num=len(self.hosts), hosts=NodeSet.NodeSet.fromlist(self.hosts)))
@@ -87,14 +86,14 @@ class ClusterShellWorker(BaseWorker):
 
         The available default handlers are defined in DEFAULT_HANDLERS.
         """
-        if value is None or (type(value) == type and issubclass(value, BaseEventHandler)):
+        if type(value) == type and issubclass(value, BaseEventHandler):
             self._handler = value
         elif value in DEFAULT_HANDLERS.keys():
             self._handler = DEFAULT_HANDLERS[value]
         else:
             self._raise_task_error(
                 'handler',
-                'must be one of (None, {default}, a class object derived from BaseEventHandler)'.format(
+                'must be one of ({default}, a class object derived from BaseEventHandler)'.format(
                     default=', '.join(DEFAULT_HANDLERS.keys())),
                 value)
 
@@ -189,14 +188,17 @@ class BaseEventHandler(Event.EventHandler):
             # batches) and those that were already scheduled (for example when the # of nodes is greater than
             # ClusterShell fanout)
             pending_or_scheduled = sum(
-                node.state.is_pending or node.state.is_scheduled for node in self.nodes.itervalues())
-
+                (node.state.is_pending or node.state.is_scheduled or
+                 (node.state.is_success and node.running_command_index == (len(node.commands) - 1))
+                 ) for node in self.nodes.itervalues())
             # Update the counter and fail progress bar
             self.counters['timeout'] += timeout + pending_or_scheduled
             if self.pbar_ko is not None:
                 self.pbar_ko.update(timeout + pending_or_scheduled)
         finally:
             self.lock.release()
+
+        self._timeout_nodes_report()
 
     def ev_pickup(self, worker):
         """Command execution started on a node, remove the command from the node's queue.
@@ -255,7 +257,7 @@ class BaseEventHandler(Event.EventHandler):
         """
         tqdm.write('{color}{message}{nodes_color}{nodes_string}{reset}'.format(
             color=color, message=message, nodes_color=colorama.Fore.CYAN,
-            nodes_string=nodes_string, reset=colorama.Style.RESET_ALL))
+            nodes_string=nodes_string, reset=colorama.Style.RESET_ALL), file=sys.stderr)
 
     def _get_short_command(self, command):
         """Return a shortened representation of a command omitting the central part.
@@ -280,19 +282,19 @@ class BaseEventHandler(Event.EventHandler):
             output_message = '----- OUTPUT -----'
 
         for output, nodelist in buffer_iterator.iter_buffers():
-            tqdm.write(colorama.Fore.BLUE + '===== NODE GROUP =====' + colorama.Style.RESET_ALL)
+            tqdm.write(colorama.Fore.BLUE + '===== NODE GROUP =====' + colorama.Style.RESET_ALL, file=sys.stdout)
             tqdm.write('{color}({num}) {nodes}{reset}'.format(
                 color=colorama.Fore.CYAN, num=len(nodelist), nodes=NodeSet.NodeSet.fromlist(nodelist),
-                reset=colorama.Style.RESET_ALL))
-            tqdm.write(colorama.Fore.BLUE + output_message + colorama.Style.RESET_ALL)
-            tqdm.write('{output}'.format(output=output))
+                reset=colorama.Style.RESET_ALL), file=sys.stdout)
+            tqdm.write(colorama.Fore.BLUE + output_message + colorama.Style.RESET_ALL, file=sys.stdout)
+            tqdm.write('{output}'.format(output=output), file=sys.stdout)
 
         if nodelist is None:
             message = '===== NO OUTPUT ====='
         else:
             message = '================'
 
-        tqdm.write(colorama.Fore.BLUE + message + colorama.Style.RESET_ALL)
+        tqdm.write(colorama.Fore.BLUE + message + colorama.Style.RESET_ALL, file=sys.stdout)
 
     def _timeout_nodes_report(self):
         """Helper to print the nodes that timed out in a colored and tqdm-friendly way."""
@@ -332,26 +334,42 @@ class BaseEventHandler(Event.EventHandler):
             self.logger.error('{message}{nodes}'.format(message=log_message, nodes=nodes_string))
             self._print_report_line(log_message, nodes_string=nodes_string)
 
-    def _success_nodes_report(self):
+    def _success_nodes_report(self, command=None):
         """Helper to print how many nodes succesfully executed all commands in a colored and tqdm-friendly way."""
-        message = 'of nodes succesfully executed all commands'
+        num = self.counters['success']
+        tot = self.counters['total']
+        success_threshold = self.kwargs.get('success_threshold', 1)
+        success_ratio = float(num) / tot
+
+        if success_ratio < success_threshold:
+            comp = '<'
+            post = '. Aborting.'
+        else:
+            comp = '>='
+            post = '.'
+
+        message_string = ' of nodes successfully executed all commands'
+        if command is not None:
+            message_string = " for command: '{command}'".format(command=self._get_short_command(command))
 
         nodes = None
-        if self.counters['success'] not in (0, self.counters['total']):
+        if num not in (0, tot):
             nodes = [node.name for node in self.nodes.itervalues() if node.state.is_success]
 
-        log_message, nodes_string = self._get_log_message(self.counters['success'], message, nodes=nodes)
+        message = "success ratio ({comp} {perc:.1%} threshold){message_string}{post}".format(
+            comp=comp, perc=success_threshold, message_string=message_string, post=post)
+        log_message, nodes_string = self._get_log_message(num, message, nodes=nodes)
         final_message = '{message}{nodes}'.format(message=log_message, nodes=nodes_string)
 
-        if self.counters['success'] == 0:
-            color = colorama.Fore.RED
-            self.logger.error(final_message)
-        elif self.counters['success'] == self.counters['total']:
+        if num == tot:
             color = colorama.Fore.GREEN
             self.logger.info(final_message)
-        else:
+        elif success_ratio >= success_threshold:
             color = colorama.Fore.YELLOW
             self.logger.warning(final_message)
+        else:
+            color = colorama.Fore.RED
+            self.logger.error(final_message)
 
         self._print_report_line(log_message, color=color, nodes_string=nodes_string)
 
@@ -393,11 +411,11 @@ class SyncEventHandler(BaseEventHandler):
         self.counters['success'] = 0
 
         self.pbar_ok = tqdm(total=self.counters['total'], leave=True, unit='hosts', dynamic_ncols=True,
-                            bar_format=colorama.Fore.GREEN + self.bar_format)
+                            bar_format=colorama.Fore.GREEN + self.bar_format, file=sys.stderr)
         self.pbar_ok.desc = 'PASS'
         self.pbar_ok.refresh()
         self.pbar_ko = tqdm(total=self.counters['total'], leave=True, unit='hosts', dynamic_ncols=True,
-                            bar_format=colorama.Fore.RED + self.bar_format)
+                            bar_format=colorama.Fore.RED + self.bar_format, file=sys.stderr)
         self.pbar_ko.desc = 'FAIL'
         self.pbar_ko.refresh()
 
@@ -434,44 +452,22 @@ class SyncEventHandler(BaseEventHandler):
         self.pbar_ok.close()
         self.pbar_ko.close()
 
-        self._timeout_nodes_report()
         self._failed_commands_report(filter_command_index=self.current_command_index)
+        self._success_nodes_report(command=self.commands[self.current_command_index])
 
-        num = self.counters['success']
-        tot = self.counters['total']
         success_threshold = self.kwargs.get('success_threshold', 1)
-        success_ratio = float(num) / tot
-        if success_ratio < success_threshold:
-            comp = '<'
-            post = '. Aborting.'
-        else:
-            comp = '>='
-            post = '.'
-
-        command = self.commands[self.current_command_index]
-        message = "success ratio ({comp} {perc:.1%} threshold) for command: '{command}'{post}".format(
-            comp=comp, perc=success_threshold, command=self._get_short_command(command), post=post)
-        log_message, _ = self._get_log_message(num, message)
+        success_ratio = float(self.counters['success']) / self.counters['total']
 
         # Abort on failure
         if success_ratio < success_threshold:
             self.return_value = 2
             self.aborted = True  # Tells other timers that might trigger after that the abort is already in progress
-            self.logger.error(log_message)
-            self._print_report_line(log_message)
             return False
 
-        # Print the report line
         if success_ratio == 1:
-            color = colorama.Fore.GREEN
             self.return_value = 0
-            self.logger.info(log_message)
         else:
-            color = colorama.Fore.YELLOW
             self.return_value = 1
-            self.logger.warning(log_message)
-
-        self._print_report_line(log_message, color=color)
 
         if self.current_command_index == (len(self.commands) - 1):
             self.logger.debug('This was the last command')
@@ -594,8 +590,7 @@ class SyncEventHandler(BaseEventHandler):
 
         Arguments: according to BaseEventHandler interface
         """
-        if len(self.commands) > 1 and self.current_command_index == len(self.commands):
-            self._success_nodes_report()
+        self._success_nodes_report()
 
 
 class AsyncEventHandler(BaseEventHandler):
@@ -621,11 +616,11 @@ class AsyncEventHandler(BaseEventHandler):
         super(AsyncEventHandler, self).__init__(nodes, commands, **kwargs)
 
         self.pbar_ok = tqdm(total=self.counters['total'], leave=True, unit='hosts', dynamic_ncols=True,
-                            bar_format=colorama.Fore.GREEN + self.bar_format)
+                            bar_format=colorama.Fore.GREEN + self.bar_format, file=sys.stderr)
         self.pbar_ok.desc = 'PASS'
         self.pbar_ok.refresh()
         self.pbar_ko = tqdm(total=self.counters['total'], leave=True, unit='hosts', dynamic_ncols=True,
-                            bar_format=colorama.Fore.RED + self.bar_format)
+                            bar_format=colorama.Fore.RED + self.bar_format, file=sys.stderr)
         self.pbar_ko.desc = 'FAIL'
         self.pbar_ko.refresh()
 
@@ -713,38 +708,20 @@ class AsyncEventHandler(BaseEventHandler):
         self.pbar_ok.close()
         self.pbar_ko.close()
 
-        self._timeout_nodes_report()
         self._failed_commands_report()
+        self._success_nodes_report()
 
-        success_threshold = self.kwargs.get('success_threshold', 1)
         num = self.counters['success']
         tot = self.counters['total']
+        success_threshold = self.kwargs.get('success_threshold', 1)
         success_ratio = float(num) / tot
-        if success_ratio < success_threshold:
-            comp = '<'
-            post = '. Aborting.'
-        else:
-            comp = '>='
-            post = ' of nodes succesfully executed all commands.'
-
-        message = 'success ratio ({comp} {perc:.1%} threshold){post}'.format(
-            comp=comp, perc=success_threshold, post=post)
-        log_message, _ = self._get_log_message(num, message)
 
         if success_ratio == 1:
-            color = colorama.Fore.GREEN
             self.return_value = 0
-            self.logger.info(log_message)
         elif success_ratio < success_threshold:
-            color = colorama.Fore.RED
             self.return_value = 2
-            self.logger.error(log_message)
         else:
-            color = colorama.Fore.YELLOW
             self.return_value = 1
-            self.logger.warning(log_message)
-
-        self._print_report_line(log_message, color=color)
 
 
 worker_class = ClusterShellWorker  # Required by the auto-loader in the cumin.transport.Transport factory

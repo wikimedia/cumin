@@ -85,12 +85,6 @@ class TestClusterShellWorker(unittest.TestCase):
         self.worker.execute()
         self.worker._handler_instance.on_timeout.assert_called_once_with(self.worker.task)
 
-    def test_execute_no_hanlder(self):
-        """Calling execute() with one command should call ClusterShell task without event handler."""
-        self.worker.commands = [self.commands[0]]
-        self.worker.execute()
-        self.worker.task.shell.assert_called_once_with('command1', nodes=self.nodes_set, handler=None)
-
     def test_execute_custom_handler(self):
         """Calling execute() using a custom handler should call ClusterShell task with the custom event handler."""
         self.worker.handler = ConcreteBaseEventHandler
@@ -106,23 +100,24 @@ class TestClusterShellWorker(unittest.TestCase):
         self.assertFalse(self.worker.task.shell.called)
 
     def test_execute_one_command_no_mode(self):
-        """Calling execute() with only one command without mode should work without raising exceptions."""
+        """Calling execute() with only one command without mode should raise exception."""
         self.worker.commands = [self.commands[0]]
-        self.worker.execute()
-        self.worker.task.shell.assert_called_once_with('command1', nodes=self.nodes_set, handler=None)
+        with self.assertRaisesRegexp(RuntimeError, 'An EventHandler is mandatory.'):
+            self.worker.execute()
 
     def test_execute_wrong_mode(self):
         """Calling execute() without setting the mode with multiple commands should raise RuntimeError."""
-        with self.assertRaisesRegexp(RuntimeError, r'An EventHandler is mandatory with more than one command'):
+        with self.assertRaisesRegexp(RuntimeError, r'An EventHandler is mandatory.'):
             self.worker.execute()
 
     def test_execute_batch_size(self):
         """Calling execute() with a batch_size specified should run in batches."""
         self.worker.commands = [self.commands[0]]
+        self.worker.handler = 'sync'
         self.worker.batch_size = 1
         self.worker.execute()
         self.worker.task.shell.assert_called_once_with(
-            'command1', nodes=clustershell.NodeSet.NodeSet(self.nodes[0]), handler=None)
+            'command1', nodes=clustershell.NodeSet.NodeSet(self.nodes[0]), handler=self.worker._handler_instance)
 
     def test_get_results(self):
         """Calling get_results() should call ClusterShell iter_buffers with the right parameters."""
@@ -150,14 +145,6 @@ class TestClusterShellWorker(unittest.TestCase):
 
         with self.assertRaisesRegexp(WorkerError, r'handler must be one of'):
             self.worker.handler = InvalidClass
-
-    def test_handler_setter_none(self):
-        """Should set the handler to None even if was set already"""
-        self.worker.handler = None
-        self.assertIsNone(self.worker.handler)
-        self.worker.handler = 'sync'
-        self.worker.handler = None
-        self.assertIsNone(self.worker.handler)
 
     def test_handler_setter_default_sync(self):
         """Should set the handler to the default handler for the sync mode"""
@@ -235,7 +222,8 @@ class TestConcreteBaseEventHandler(TestBaseEventHandler):
         self.assertListEqual(sorted(self.handler.nodes.keys()), self.nodes)
         self.colorama.init.assert_called_once_with()
 
-    def test_on_timeout(self):
+    @mock.patch('cumin.transports.clustershell.tqdm')
+    def test_on_timeout(self, tqdm):
         """Calling on_timeout() should update the fail progress bar."""
         for node in self.nodes:
             self.worker.current_node = node
@@ -249,6 +237,7 @@ class TestConcreteBaseEventHandler(TestBaseEventHandler):
         self.assertListEqual([node for node in self.worker.eh.nodes.itervalues() if node.state.is_timeout],
                              [self.worker.eh.nodes[self.nodes[0]]])
         self.assertTrue(self.handler.pbar_ko.update.called)
+        self.assertTrue(tqdm.write.called)
 
     def test_ev_pickup(self):
         """Calling ev_pickup() should set the state of the current node to running."""
@@ -303,7 +292,8 @@ class TestSyncEventHandler(TestBaseEventHandler):
                              sorted(['node1', 'node2']))
         self.assertTrue(task_self.called)
 
-    def test_end_command(self):
+    @mock.patch('cumin.transports.clustershell.tqdm')
+    def test_end_command(self, tqdm):
         """Calling end_command() should wrap up the command execution."""
         self.assertFalse(self.handler.end_command())
         self.handler.counters['success'] = 2
@@ -313,12 +303,15 @@ class TestSyncEventHandler(TestBaseEventHandler):
         self.assertTrue(self.handler.end_command())
         self.handler.current_command_index = 1
         self.assertFalse(self.handler.end_command())
+        self.assertTrue(tqdm.write.called)
 
-    def test_on_timeout(self):
+    @mock.patch('cumin.transports.clustershell.tqdm')
+    def test_on_timeout(self, tqdm):
         """Calling on_timeout() should call end_command()."""
         self.worker.task.num_timeout.return_value = 0
         self.worker.task.iter_keys_timeout.return_value = []
         self.handler.on_timeout(self.worker.task)
+        self.assertTrue(tqdm.write.called)
 
     def test_ev_timer(self):
         """Calling ev_timer() should schedule the execution of the next node/command."""
@@ -345,10 +338,12 @@ class TestSyncEventHandler(TestBaseEventHandler):
         self.assertFalse(timer.called)
         self.assertTrue(self.handler.nodes[self.worker.current_node].state.is_failed)
 
-    def test_close(self):
+    @mock.patch('cumin.transports.clustershell.tqdm')
+    def test_close(self, tqdm):
         """Calling close should print the report when needed."""
         self.handler.current_command_index = 2
         self.handler.close(self.worker)
+        self.assertTrue(tqdm.write.called)
 
 
 class TestAsyncEventHandler(TestBaseEventHandler):
@@ -400,10 +395,11 @@ class TestAsyncEventHandler(TestBaseEventHandler):
         # TODO: improve testing of ev_timer
         self.handler.ev_timer(mock.Mock())
 
-    @mock.patch('cumin.transports.clustershell.colorama')
-    def test_close(self, colorama):
+    @mock.patch('cumin.transports.clustershell.tqdm')
+    def test_close(self, tqdm):
         """Calling close with a worker should close progress bars."""
         self.worker.task.iter_buffers = TestClusterShellWorker.iter_buffers
         self.worker.num_timeout.return_value = 0
         self.handler.close(self.worker)
         self.assertTrue(self.handler.pbar_ok.close.called)
+        self.assertTrue(tqdm.write.called)
