@@ -171,10 +171,12 @@ class TestCLI(unittest.TestCase):
             cli.get_hosts(args, config)
 
     @mock.patch('cumin.cli.stderr')
-    def test_get_hosts_no_tty_ko(self, stderr):
+    @mock.patch('cumin.cli.sys.stdout.isatty')
+    def test_get_hosts_no_tty_ko(self, isatty, stderr):
         """Calling get_hosts() without a TTY should raise RuntimeError if --dry-run or --force are not specified."""
         args = cli.parse_args(argv=['host1', 'command1'])
         config = {'backend': 'direct'}
+        isatty.return_value = False
         with self.assertRaisesRegexp(RuntimeError, 'Not in a TTY but neither DRY-RUN nor FORCE mode were specified'):
             cli.get_hosts(args, config)
         self.assertTrue(stderr.called)
