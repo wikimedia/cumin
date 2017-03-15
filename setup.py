@@ -5,7 +5,7 @@ from setuptools import find_packages, setup
 
 setup(
     name='cumin',
-    version='0.0.1',
+    version='0.0.2',
     description='Cumin - An automation and orchestration framework',
     author='Riccardo Coccioli',
     author_email='rcoccioli@wikimedia.org',
