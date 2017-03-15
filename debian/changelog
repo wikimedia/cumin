@@ -1,3 +1,11 @@
+cumin (0.0.2-1) jessie-wikimedia; urgency=medium
+
+  * Upgrade to version 0.0.2.
+  * Add support for batch processing.
+  * Minor fixes and improvements.
+
+ -- Riccardo Coccioli <rcoccioli@wikimedia.org>  Wed, 15 Mar 2017 18:12:24 +0100
+
 cumin (0.0.1-1) jessie-wikimedia; urgency=medium
 
   * Initial packaging.
