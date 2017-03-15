@@ -1,3 +1,5 @@
+"""Query handling: factory and builder."""
+
 import importlib
 import logging
 
@@ -8,15 +10,15 @@ from cumin.grammar import grammar
 
 
 class Query(object):
-    """Query factory class"""
+    """Query factory class."""
 
     @staticmethod
     def new(config, logger=None):
-        """ Return an instance of the query class for the configured backend
+        """Return an instance of the query class for the configured backend.
 
-            Arguments:
-            config - the configuration dictionary
-            logger - an optional logging instance [optional, default: None]
+        Arguments:
+        config - the configuration dictionary
+        logger - an optional logging instance [optional, default: None]
         """
         try:
             module = importlib.import_module('cumin.backends.{backend}'.format(backend=config['backend']))
@@ -27,18 +29,18 @@ class Query(object):
 
 
 class QueryBuilder(object):
-    """ Query builder class
+    """Query builder class.
 
-        Parse a given query string and converts it into a query object for the configured backend
+    Parse a given query string and converts it into a query object for the configured backend
     """
 
     def __init__(self, query_string, config, logger=None):
-        """ Query builder constructor
+        """Query builder constructor.
 
-            Arguments:
-            query_string -- the query string to be parsed and passed to the query builder
-            config       -- the configuration dictionary
-            logger       -- an optional logging instance [optional, default: None]
+        Arguments:
+        query_string -- the query string to be parsed and passed to the query builder
+        config       -- the configuration dictionary
+        logger       -- an optional logging instance [optional, default: None]
         """
         self.logger = logger or logging.getLogger(__name__)
         self.query_string = query_string.strip()
@@ -46,7 +48,7 @@ class QueryBuilder(object):
         self.level = 0  # Nesting level for sub-groups
 
     def build(self):
-        """Parse the query string according to the grammar and build the query object for the configured backend"""
+        """Parse the query string according to the grammar and build the query object for the configured backend."""
         parsed = grammar.parseString(self.query_string, parseAll=True)
         for token in parsed:
             self._parse_token(token)
@@ -54,11 +56,11 @@ class QueryBuilder(object):
         return self.query
 
     def _parse_token(self, token, level=0):
-        """ Recursively interpret the tokens returned by the grammar parsing
+        """Recursively interpret the tokens returned by the grammar parsing.
 
-            Arguments:
-            token -- a single token returned by the grammar parsing
-            level -- Nesting level in case of sub-groups in the query [optional, default: 0]
+        Arguments:
+        token -- a single token returned by the grammar parsing
+        level -- Nesting level in case of sub-groups in the query [optional, default: 0]
         """
         if not isinstance(token, ParseResults):
             raise RuntimeError("Invalid query string syntax '{query}'. Token is '{token}'".format(
@@ -72,11 +74,11 @@ class QueryBuilder(object):
             self._build_token(token_dict, level)
 
     def _build_token(self, token_dict, level):
-        """ Buld a token into the query object for the configured backend
+        """Build a token into the query object for the configured backend.
 
-            Arguments:
-            token_dict -- the dictionary of the parsed token returned by the grammar parsing
-            level      -- Nesting level in the query
+        Arguments:
+        token_dict -- the dictionary of the parsed token returned by the grammar parsing
+        level      -- Nesting level in the query
         """
         keys = token_dict.keys()
 
@@ -96,8 +98,8 @@ class QueryBuilder(object):
                 self.query.add_or()
 
         elif 'hosts' in keys:
-            expanded_hosts = NodeSet(token_dict['hosts'])
-            self.query.add_hosts(expanded_hosts)
+            token_dict['hosts'] = NodeSet(token_dict['hosts'])
+            self.query.add_hosts(**token_dict)
 
         elif 'category' in keys:
             self.query.add_category(**token_dict)

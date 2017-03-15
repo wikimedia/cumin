@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+"""Package configuration."""
 
 from setuptools import find_packages, setup
 

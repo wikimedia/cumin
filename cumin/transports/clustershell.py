@@ -1,161 +1,279 @@
-from collections import defaultdict
+"""Transport ClusterShell: worker and event handlers."""
+import logging
+import sys
+import threading
+
+from collections import Counter, defaultdict
 
 import colorama
 
-from ClusterShell.Event import EventHandler
-from ClusterShell.Task import NodeSet, task_self, TimeoutError
+from ClusterShell import Event, NodeSet, Task
 from tqdm import tqdm
 
-from cumin.transports import BaseWorker
+from cumin.transports import BaseWorker, State
 
 
 class ClusterShellWorker(BaseWorker):
-    """ClusterShell worker, extends BaseWorker"""
+    """It provides a Cumin worker for SSH using the ClusterShell library."""
 
     def __init__(self, config, logger=None):
-        """ ClusterShell worker constructor
+        """Worker ClusterShell constructor.
 
-            Arguments: according to BaseQuery interface
+        Arguments: according to BaseQuery interface
         """
         super(ClusterShellWorker, self).__init__(config, logger)
-        self.task = task_self()  # Initialize a ClusterShell task
+        self.task = Task.task_self()  # Initialize a ClusterShell task
+        self._handler_instance = None
 
-        self.default_handlers = {'sync': SyncEventHandler, 'async': AsyncEventHandler}
+        # Set any ClusterShell task options
+        for key, value in config.get('clustershell', {}).items():
+            if type(value) == list:
+                for item in value:
+                    self.task.set_info(key, item)
+            else:
+                self.task.set_info(key, value)
 
-        # Set any SSH option
-        ssh_options = config.get('clustershell', {}).get('ssh_options', [])
-        for option in ssh_options:
-            self.task.set_info('ssh_options', option)
-
-    def execute(self, hosts, commands, mode=None, handler=None, timeout=0, success_threshold=1):
-        """Required by BaseWorker"""
-        if len(commands) == 0:
+    def execute(self):
+        """Required by BaseWorker."""
+        if len(self.commands) == 0:
             self.logger.warning('No commands provided')
             return
 
-        if len(commands) > 1 and mode not in self.default_handlers.keys():
-            raise RuntimeError("Unknown mode '{mode}' specified, expecting one of {modes}".format(
-                mode=mode, modes=self.default_handlers.keys()))
+        if self.handler is None:
+            raise RuntimeError('An EventHandler is mandatory.')
 
-        if len(commands) == 1 and mode is None:
-            mode = 'sync'
-
-        # Pick the default handler
-        if handler is True:
-            handler = self.default_handlers[mode]
+        # Schedule only the first command for the first batch, the following ones must be handled by the EventHandler
+        first_batch = NodeSet.NodeSet.fromlist(self.hosts[:self.batch_size])
 
         # Instantiate handler
-        if handler is not None:
-            handler = handler(hosts, commands, success_threshold=success_threshold)
+        self._handler_instance = self.handler(
+            self.hosts, self.commands, success_threshold=self.success_threshold, batch_size=self.batch_size,
+            batch_sleep=self.batch_sleep, logger=self.logger, first_batch=first_batch)
 
-        # Schedule only the first command, the following must be handled by the handler
-        self.task.shell(commands[0], nodes=NodeSet.fromlist(hosts), handler=handler)
+        self.logger.info("Executing commands {commands} on '{num}' hosts: {hosts}".format(
+            commands=self.commands, num=len(self.hosts), hosts=NodeSet.NodeSet.fromlist(self.hosts)))
+        self.task.shell(self.commands[0], nodes=first_batch, handler=self._handler_instance)
 
+        return_value = 0
         try:
-            self.task.run(timeout=timeout)
-        except TimeoutError:
-            pass  # Handling of timeouts are delegated to the handler
+            self.task.run(timeout=self.timeout)
+            self.task.join()
+        except Task.TimeoutError:
+            if self._handler_instance is not None:
+                self._handler_instance.on_timeout(self.task)
         finally:
-            if handler is not None:
-                handler.close(self.task)
+            if self._handler_instance is not None:
+                self._handler_instance.close(self.task)
+                return_value = self._handler_instance.return_value
+                if return_value is None:
+                    return_value = 3  # The handler did not set a return value
+
+        return return_value
 
     def get_results(self):
-        """Required by BaseWorker"""
+        """Required by BaseWorker."""
         for output, nodelist in self.task.iter_buffers():
-            yield NodeSet.fromlist(nodelist), output
+            yield NodeSet.NodeSet.fromlist(nodelist), output
+
+    @property
+    def handler(self):
+        """Getter for the handler property."""
+        return self._handler
+
+    @handler.setter
+    def handler(self, value):
+        """Required by BaseTask.
+
+        The available default handlers are defined in DEFAULT_HANDLERS.
+        """
+        if type(value) == type and issubclass(value, BaseEventHandler):
+            self._handler = value
+        elif value in DEFAULT_HANDLERS.keys():
+            self._handler = DEFAULT_HANDLERS[value]
+        else:
+            self._raise_task_error(
+                'handler',
+                'must be one of ({default}, a class object derived from BaseEventHandler)'.format(
+                    default=', '.join(DEFAULT_HANDLERS.keys())),
+                value)
 
 
-class BaseEventHandler(EventHandler):
-    """ClusterShell event handler extension base class"""
+class Node(object):
+    """Node class to represent each target node."""
 
-    short_command_length = 35
+    def __init__(self, name, commands):
+        """Node class constructor with default values.
+
+        Arguments:
+        name     -- the hostname of the node
+        commands -- a list of commands to be executed on the node
+        """
+        self.name = name
+        self.commands = commands
+        self.state = State()  # Initialize the state machine for this node.
+        self.running_command_index = -1  # Pointer to the current running command in self.commands
+
+
+class BaseEventHandler(Event.EventHandler):
+    """ClusterShell event handler extension base class.
+
+    Inherit from ClusterShell's EventHandler class and define a base EventHandler class to be used in Cumin.
+    It can be subclassed to generate custom EventHandler classes while taking advantage of some common
+    functionalities.
+    """
+
+    short_command_length = 35  # For logging and printing the commands are shortened to reach at most this length
 
     def __init__(self, nodes, commands, **kwargs):
-        """ ClusterShell event handler extension constructor
+        """Event handler ClusterShell extension constructor.
 
-            If inherited classes defines a self.pbar_ko tqdm progress bar, it will be updated on ev_error and
-            ev_timeout events.
+        If subclasses defines a self.pbar_ko tqdm progress bar, it will be updated on timeout.
 
-            Arguments:
-            nodes    -- the list of nodes with which this worker was initiliazed
-            commands -- the list of commands that has to be executed on the nodes
-            **kwargs -- optional additional keyword arguments that might be used by classes that extend this base class
+        Arguments:
+        nodes    -- the list of nodes with which this worker was initiliazed
+        commands -- the list of commands that has to be executed on the nodes
+        **kwargs -- optional additional keyword arguments that might be used by classes that extend this base class
         """
         super(BaseEventHandler, self).__init__()
-        self.nodes = nodes
+        self.logger = kwargs.get('logger', None) or logging.getLogger(__name__)
+        self.lock = threading.Lock()  # Used to update instance variables coherently from within callbacks
+
+        # Execution management variables
+        self.return_value = None
         self.commands = commands
-        self.kwargs = kwargs
-        self.success_nodes = []
-        self.failed_commands = defaultdict(list)
+        self.kwargs = kwargs  # Allow to store custom parameters from subclasses without changing the signature
+        self.counters = Counter()
+        self.counters['total'] = len(nodes)
+        # Instantiate all the node instances, slicing the commands list to get a copy
+        self.nodes = {node: Node(node, commands[:]) for node in nodes}
+        # Move already all the nodes in the first_batch to the scheduled state, it means that ClusterShell was
+        # already instructed to execute a command on those nodes
+        for node_name in kwargs.get('first_batch', []):
+            self.nodes[node_name].state.update(State.scheduled)
 
         # Initialize color and progress bar formats
         # TODO: decouple the output handling from the event handling
+        self.pbar_ok = None
+        self.pbar_ko = None
         colorama.init()
         self.bar_format = ('{desc} |{bar}| {percentage:3.0f}% ({n_fmt}/{total_fmt}) '
                            '[{elapsed}<{remaining}, {rate_fmt}]') + colorama.Style.RESET_ALL
 
     def close(self, task):
-        """ Additional method called at the end of the execution, useful for reporting and final actions
+        """Additional method called at the end of the whole execution, useful for reporting and final actions.
 
-            Arguments:
-            task -- a ClusterShell Task instance
+        Arguments:
+        task -- a ClusterShell Task instance
         """
         raise NotImplementedError
 
-    def ev_error(self, worker):
-        """ Update the current fail progress bar and print the error
+    def on_timeout(self, task):
+        """Callback called by the ClusterShellWorker when a Task.TimeoutError is raised.
 
-            Arguments: according to EventHandler interface
+        The whole execution timed out, update the state of the nodes and the timeout counter accordingly.
+
+        Arguments:
+        task -- a ClusterShell Task instance
         """
-        self.failed_commands[worker.command].append(worker.current_node)
-        if hasattr(self, 'pbar_ko'):
-            self.pbar_ko.update()
-        tqdm.write(worker.current_errmsg)
+        self.logger.error('timeout triggered while {num} nodes were executing a command'.format(num=task.num_timeout()))
 
-    def ev_timeout(self, worker):
-        """ Update the current fail progress bar
+        self.lock.acquire()  # Avoid modifications of the same data from other callbacks triggered by ClusterShell
+        try:
+            timeout = task.num_timeout()
+            for node in task.iter_keys_timeout():
+                # Those nodes timed out while running a command
+                self.nodes[node].state.update(State.timeout)
 
-            Arguments: according to EventHandler interface
+            # Considering timed out also the nodes that were pending the execution (for example when executing in
+            # batches) and those that were already scheduled (for example when the # of nodes is greater than
+            # ClusterShell fanout)
+            pending_or_scheduled = sum(
+                (node.state.is_pending or node.state.is_scheduled or
+                 (node.state.is_success and node.running_command_index == (len(node.commands) - 1))
+                 ) for node in self.nodes.itervalues())
+            # Update the counter and fail progress bar
+            self.counters['timeout'] += timeout + pending_or_scheduled
+            if self.pbar_ko is not None:
+                self.pbar_ko.update(timeout + pending_or_scheduled)
+        finally:
+            self.lock.release()
+
+        self._timeout_nodes_report()
+
+    def ev_pickup(self, worker):
+        """Command execution started on a node, remove the command from the node's queue.
+
+        This callback is triggered by ClusterShell for each node when it starts executing a command.
+
+        Arguments: according to EventHandler interface
         """
-        if hasattr(self, 'pbar_ko'):
-            self.pbar_ko.update(worker.num_timeout())
+        self.logger.debug("node={node}, command='{command}'".format(
+            node=worker.current_node, command=worker.command))
 
-    def _print_report_line(self, num, tot, message, color=colorama.Fore.RED, nodes=None):
-        """ Helper to print a tqdm-friendly colored status line with success/failure ratio and optional list of nodes
+        self.lock.acquire()  # Avoid modifications of the same data from other callbacks triggered by ClusterShell
+        try:
+            node = self.nodes[worker.current_node]
+            node.state.update(State.running)  # Update the node's state to running
 
-            Arguments:
-            num     - the number of affecte nodes
-            tot     - the total number of nodes
-            message - the message to print
-            color   - the colorama color to use for the line [optional, default: colorama.Fore.RED]
-            nodes   - the list of nodes affected [optional, default: None]
+            command = node.commands[node.running_command_index + 1]
+            # Security check, it should never be triggered
+            if command != worker.command:
+                raise RuntimeError("ev_pickup: got unexpected command '{command}', expected '{expected}'".format(
+                    command=command, expected=worker.command))
+            node.running_command_index += 1  # Move the pointer of the current command
+        finally:
+            self.lock.release()
+
+    def _get_log_message(self, num, message, nodes=None):
+        """Helper to get a pre-formatted message suitable for logging or printing.
+
+        Returns a tuple of two strings: a logging message, the affected nodes in NodeSet format
+
+        Arguments:
+        num     - the number of affecte nodes
+        message - the message to print
+        nodes   - the list of nodes affected [optional, default: None]
         """
         if nodes is None:
-            nodes = ''
+            nodes_string = ''
             message_end = ''
         else:
-            nodes = NodeSet.fromlist(nodes)
+            nodes_string = NodeSet.NodeSet.fromlist(nodes)
             message_end = ': '
 
-        tqdm.write('{color}{perc:.1%} ({num}/{tot}) {message}{message_end}{nodes_color}{nodes}{reset}'.format(
-            color=color, perc=(float(num) / tot), num=num, tot=tot, message=message, message_end=message_end,
-            nodes_color=colorama.Fore.CYAN, nodes=nodes, reset=colorama.Style.RESET_ALL))
+        tot = self.counters['total']
+        log_message = '{perc:.1%} ({num}/{tot}) {message}{message_end}'.format(
+            perc=(float(num) / tot), num=num, tot=tot, message=message, message_end=message_end)
+
+        return (log_message, str(nodes_string))
+
+    def _print_report_line(self, message, color=colorama.Fore.RED, nodes_string=''):
+        """Helper to print a tqdm-friendly colored status line with success/failure ratio and optional list of nodes.
+
+        Arguments:
+        message      -- the message to print
+        color        -- the message color [optional, default: colorama.Fore.RED]
+        nodes_string -- the string representation of the affected nodes [optional, default: '']
+        """
+        tqdm.write('{color}{message}{nodes_color}{nodes_string}{reset}'.format(
+            color=color, message=message, nodes_color=colorama.Fore.CYAN,
+            nodes_string=nodes_string, reset=colorama.Style.RESET_ALL), file=sys.stderr)
 
     def _get_short_command(self, command):
-        """ Return a shortened representation of a command omitting the central part
+        """Return a shortened representation of a command omitting the central part.
 
-            Arguments:
-            command - the command to be shortened
+        Arguments:
+        command - the command to be shortened
         """
         sublen = (self.short_command_length - 3) // 2  # The -3 is for the ellipsis
         return (command[:sublen] + '...' + command[-sublen:]) if len(command) > self.short_command_length else command
 
     def _commands_output_report(self, buffer_iterator, command=None):
-        """ Helper to print the commands output in a colored and tqdm-friendly way
+        """Helper to print the commands output in a colored and tqdm-friendly way.
 
-            Arguments:
-            buffer_iterator - any ClusterShell object that implements iter_buffers() like Task and Worker objects.
-            command         - command the output is referring to [optional, default: None]
+        Arguments:
+        buffer_iterator - any ClusterShell object that implements iter_buffers() like Task and Worker objects.
+        command         - command the output is referring to [optional, default: None]
         """
         nodelist = None
         if command is not None:
@@ -164,245 +282,447 @@ class BaseEventHandler(EventHandler):
             output_message = '----- OUTPUT -----'
 
         for output, nodelist in buffer_iterator.iter_buffers():
-            tqdm.write(colorama.Fore.BLUE + '===== NODE GROUP =====' + colorama.Style.RESET_ALL)
+            tqdm.write(colorama.Fore.BLUE + '===== NODE GROUP =====' + colorama.Style.RESET_ALL, file=sys.stdout)
             tqdm.write('{color}({num}) {nodes}{reset}'.format(
-                color=colorama.Fore.CYAN, num=len(nodelist), nodes=NodeSet.fromlist(nodelist),
-                reset=colorama.Style.RESET_ALL))
-            tqdm.write(colorama.Fore.BLUE + output_message + colorama.Style.RESET_ALL)
-            tqdm.write('{output}'.format(output=output))
+                color=colorama.Fore.CYAN, num=len(nodelist), nodes=NodeSet.NodeSet.fromlist(nodelist),
+                reset=colorama.Style.RESET_ALL), file=sys.stdout)
+            tqdm.write(colorama.Fore.BLUE + output_message + colorama.Style.RESET_ALL, file=sys.stdout)
+            tqdm.write('{output}'.format(output=output), file=sys.stdout)
 
         if nodelist is None:
             message = '===== NO OUTPUT ====='
         else:
             message = '================'
 
-        tqdm.write(colorama.Fore.BLUE + message + colorama.Style.RESET_ALL)
+        tqdm.write(colorama.Fore.BLUE + message + colorama.Style.RESET_ALL, file=sys.stdout)
 
-    def _timeout_nodes_report(self, buffer_iterator):
-        """ Helper to print the nodes that timed out in a colored and tqdm-friendly way
-
-            Arguments:
-            buffer_iterator - any ClusterShell object that implements iter_buffers() like Task and Worker objects.
-        """
-        timeout = buffer_iterator.num_timeout()
-        if timeout == 0:
+    def _timeout_nodes_report(self):
+        """Helper to print the nodes that timed out in a colored and tqdm-friendly way."""
+        if self.counters['timeout'] == 0:
             return
 
-        tot = len(self.nodes)
-        self._print_report_line(timeout, tot, 'of nodes timed out', nodes=buffer_iterator.iter_keys_timeout())
+        timeout = [node.name for node in self.nodes.itervalues() if node.state.is_timeout]
+        timeout_desc = 'of nodes were executing a command when the timeout occurred'
+        timeout_message, timeout_nodes = self._get_log_message(len(timeout), timeout_desc, nodes=timeout)
+        self.logger.error('{message}{nodes}'.format(message=timeout_message, nodes=timeout_nodes))
+        self._print_report_line(timeout_message, nodes_string=timeout_nodes)
 
-    def _failed_commands_report(self, filter_command=None):
-        """ Helper to print the nodes that failed to execute commands in a colored and tqdm-friendly way
+        not_run = [node.name for node in self.nodes.itervalues() if node.state.is_pending or node.state.is_scheduled]
+        not_run_desc = 'of nodes were pending execution when the timeout occurred'
+        not_run_message, not_run_nodes = self._get_log_message(len(not_run), not_run_desc, nodes=not_run)
+        self.logger.error('{message}{nodes}'.format(message=not_run_message, nodes=not_run_nodes))
+        self._print_report_line(not_run_message, nodes_string=not_run_nodes)
 
-            Arguments:
-            filter_command - print only the nodes that failed to execute this specific command [optional, default: None]
+    def _failed_commands_report(self, filter_command_index=-1):
+        """Helper to print the nodes that failed to execute commands in a colored and tqdm-friendly way.
+
+        Arguments:
+        filter_command - print only the nodes that failed to execute this specific command [optional, default: None]
         """
-        tot = len(self.nodes)
-        for command, nodes in self.failed_commands.iteritems():
-            fail = len(nodes)
-            if fail == 0:
-                continue
+        failed_commands = defaultdict(list)
+        for node in [node for node in self.nodes.itervalues() if node.state.is_failed]:
+            failed_commands[node.running_command_index].append(node.name)
 
-            if filter_command is not None and command is not None and command != filter_command:
+        for index, nodes in failed_commands.iteritems():
+            command = self.commands[index]
+
+            if filter_command_index >= 0 and command is not None and index != filter_command_index:
                 continue
 
             message = "of nodes failed to execute command '{command}'".format(command=self._get_short_command(command))
-            self._print_report_line(fail, tot, message, nodes=nodes)
+            log_message, nodes_string = self._get_log_message(len(nodes), message, nodes=nodes)
+            self.logger.error('{message}{nodes}'.format(message=log_message, nodes=nodes_string))
+            self._print_report_line(log_message, nodes_string=nodes_string)
 
-    def _success_nodes_report(self):
-        """Helper to print how many nodes succesfully executed all commands in a colored and tqdm-friendly way"""
-        tot = len(self.nodes)
-        succ = len(self.success_nodes)
-        message = 'of nodes succesfully executed all commands'
-        if succ == tot or len(self.success_nodes) == 0:
-            nodes = None
+    def _success_nodes_report(self, command=None):
+        """Helper to print how many nodes succesfully executed all commands in a colored and tqdm-friendly way."""
+        num = self.counters['success']
+        tot = self.counters['total']
+        success_threshold = self.kwargs.get('success_threshold', 1)
+        success_ratio = float(num) / tot
+
+        if success_ratio < success_threshold:
+            comp = '<'
+            post = '. Aborting.'
         else:
-            nodes = self.success_nodes
+            comp = '>='
+            post = '.'
 
-        if succ == 0:
-            color = colorama.Fore.RED
-        elif succ == tot:
+        message_string = ' of nodes successfully executed all commands'
+        if command is not None:
+            message_string = " for command: '{command}'".format(command=self._get_short_command(command))
+
+        nodes = None
+        if num not in (0, tot):
+            nodes = [node.name for node in self.nodes.itervalues() if node.state.is_success]
+
+        message = "success ratio ({comp} {perc:.1%} threshold){message_string}{post}".format(
+            comp=comp, perc=success_threshold, message_string=message_string, post=post)
+        log_message, nodes_string = self._get_log_message(num, message, nodes=nodes)
+        final_message = '{message}{nodes}'.format(message=log_message, nodes=nodes_string)
+
+        if num == tot:
             color = colorama.Fore.GREEN
-        else:
+            self.logger.info(final_message)
+        elif success_ratio >= success_threshold:
             color = colorama.Fore.YELLOW
+            self.logger.warning(final_message)
+        else:
+            color = colorama.Fore.RED
+            self.logger.error(final_message)
 
-        self._print_report_line(succ, tot, message, color=color, nodes=nodes)
+        self._print_report_line(log_message, color=color, nodes_string=nodes_string)
 
 
 class SyncEventHandler(BaseEventHandler):
-    """ Custom ClusterShell event handler class that execute commands synchronously
+    """Custom ClusterShell event handler class that execute commands synchronously.
 
-        The implemented logic is:
-        - execute command_N on all nodes where command_N-1 was successful (all nodes at first iteration)
-        - if success ratio of the execution of command_N < success threshold, then:
-          - abort the execution
-        - else:
-          - re-start from the top with N=N+1
+    The implemented logic is:
+    - execute command #N on all nodes where command #N-1 was successful according to batch_size
+    - the success ratio is checked at each command completion on every node, and will abort if not met, however
+      nodes already scheduled for execution with ClusterShell will execute the command anyway. The use of the
+      batch_size allow to control this aspect.
+    - if the execution of command #N is completed and the success ratio is greater than the success threshold,
+      re-start from the top with N=N+1
 
-        The typical use case is to orchestrate some operation across a fleet, ensuring that each command is completed
-        by enough hosts before proceeding with the next one.
+    The typical use case is to orchestrate some operation across a fleet, ensuring that each command is completed by
+    enough nodes before proceeding with the next one.
     """
 
     def __init__(self, nodes, commands, **kwargs):
-        """ Custom ClusterShell synchronous event handler constructor
+        """Custom ClusterShell synchronous event handler constructor.
 
-            Arguments: according to BaseEventHandler interface
+        Arguments: according to BaseEventHandler interface
         """
         super(SyncEventHandler, self).__init__(nodes, commands, **kwargs)
-        # Slicing the commands list to get a copy
-        self.nodes_commands = commands[:]
+        self.current_command_index = 0  # Global pointer for the current command in execution across all nodes
+        self.start_command()
+        self.aborted = False
 
-    def ev_start(self, worker):
-        """ Worker started, initialize progress bars and variables for this command execution
+    def start_command(self, schedule=False):
+        """Initialize progress bars and variables for this command execution.
 
-            Arguments: according to EventHandler interface
+        Executed at the start of each command.
+
+        Arguments:
+        schedule -- boolean to decide if the next command should be sent to ClusterShell for execution or not.
+                    [optional, default: False]
         """
-        command = self.nodes_commands.pop(0)
-        self.success_nodes = []
-        if command != worker.command:
-            raise RuntimeError('{} != {}'.format(command, worker.command))
+        self.counters['success'] = 0
 
-        self.pbar_ok = tqdm(total=len(self.nodes), leave=True, unit='hosts', dynamic_ncols=True,
-                            bar_format=colorama.Fore.GREEN + self.bar_format)
+        self.pbar_ok = tqdm(total=self.counters['total'], leave=True, unit='hosts', dynamic_ncols=True,
+                            bar_format=colorama.Fore.GREEN + self.bar_format, file=sys.stderr)
         self.pbar_ok.desc = 'PASS'
         self.pbar_ok.refresh()
-        self.pbar_ko = tqdm(total=len(self.nodes), leave=True, unit='hosts', dynamic_ncols=True,
-                            bar_format=colorama.Fore.RED + self.bar_format)
+        self.pbar_ko = tqdm(total=self.counters['total'], leave=True, unit='hosts', dynamic_ncols=True,
+                            bar_format=colorama.Fore.RED + self.bar_format, file=sys.stderr)
         self.pbar_ko.desc = 'FAIL'
         self.pbar_ko.refresh()
 
-    def ev_hup(self, worker):
-        """ Command execution completed
+        # Schedule the next command, the first was already scheduled by ClusterShellWorker.execute()
+        if schedule:
+            batch_size = self.kwargs.get('batch_size', self.counters['total'])
 
-            Update the progress bars and keep track of nodes based on the success/failure of the command's execution
+            self.lock.acquire()  # Avoid modifications of the same data from other callbacks triggered by ClusterShell
+            try:
+                # Available nodes for the next command execution were already update back to the pending state
+                remaining_nodes = [node.name for node in self.nodes.itervalues() if node.state.is_pending]
+                first_batch = remaining_nodes[:batch_size]
+                first_batch_set = NodeSet.NodeSet.fromlist(first_batch)
+                for node_name in first_batch:
+                    self.nodes[node_name].state.update(State.scheduled)
+            finally:
+                self.lock.release()
 
-            Arguments: according to EventHandler interface
+            self.logger.debug("command='{command}', first_batch={first_batch}".format(
+                command=self.commands[self.current_command_index], first_batch=first_batch_set))
+
+            # Schedule the command for execution in ClusterShell
+            Task.task_self().flush_buffers()
+            Task.task_self().shell(
+                self.commands[self.current_command_index], nodes=first_batch_set, handler=self)
+
+    def end_command(self):
+        """Command terminated, print the result and schedule the next command if criteria are met.
+
+        Executed at the end of each command inside a lock.
         """
-        if worker.current_rc != 0:
-            self.pbar_ko.update()
-            self.failed_commands[worker.command].append(worker.current_node)
-        else:
-            self.pbar_ok.update()
-            self.success_nodes.append(worker.current_node)
-
-    def ev_close(self, worker):
-        """ Worker terminated, print the output of the command execution and the summary report lines
-
-            Arguments: according to EventHandler interface
-        """
-        self._commands_output_report(worker, command=worker.command)
+        self._commands_output_report(Task.task_self(), command=self.commands[self.current_command_index])
 
         self.pbar_ok.close()
         self.pbar_ko.close()
 
-        self._timeout_nodes_report(worker)
-        self._failed_commands_report(filter_command=worker.command)
+        self._failed_commands_report(filter_command_index=self.current_command_index)
+        self._success_nodes_report(command=self.commands[self.current_command_index])
 
         success_threshold = self.kwargs.get('success_threshold', 1)
-        tot = len(self.nodes)
-        succ = len(self.success_nodes)
-        success_ratio = float(succ) / tot
+        success_ratio = float(self.counters['success']) / self.counters['total']
 
-        if len(self.nodes_commands) == 0:
-            return  # This was the last command
+        # Abort on failure
+        if success_ratio < success_threshold:
+            self.return_value = 2
+            self.aborted = True  # Tells other timers that might trigger after that the abort is already in progress
+            return False
 
-        # Schedule the next command
-        if success_ratio >= success_threshold:
-            worker.task.shell(self.nodes_commands[0], nodes=NodeSet.fromlist(self.success_nodes), handler=worker.eh)
-            message = 'success ratio (>= {perc:.1%} threshold) for command: {command}'.format(
-                perc=success_threshold, command=self._get_short_command(worker.command))
-
-            if success_ratio == 1:
-                color = colorama.Fore.GREEN
-            else:
-                color = colorama.Fore.YELLOW
+        if success_ratio == 1:
+            self.return_value = 0
         else:
-            message = 'success ratio < success threshold ({perc:.1%}). Aborting.'.format(perc=success_threshold)
-            color = colorama.Fore.RED
+            self.return_value = 1
 
-        self._print_report_line(succ, tot, message, color=color)
+        if self.current_command_index == (len(self.commands) - 1):
+            self.logger.debug('This was the last command')
+            return False  # This was the last command
+
+        return True
+
+    def on_timeout(self, task):
+        """Callback called by the ClusterShellWorker when a Task.TimeoutError is raised.
+
+        Arguments: according to BaseEventHandler interface
+        """
+        super(SyncEventHandler, self).on_timeout(task)
+        self.end_command()
+
+    def ev_hup(self, worker):
+        """Command execution completed.
+
+        This callback is triggered by ClusterShell for each node when it completes the execution of a command.
+
+        Update the progress bars and keep track of nodes based on the success/failure of the command's execution.
+        Schedule a timer for further decisions.
+
+        Arguments: according to EventHandler interface
+        """
+        self.logger.debug("node={node}, rc={rc}, command='{command}'".format(
+            node=worker.current_node, rc=worker.current_rc, command=worker.command))
+
+        self.lock.acquire()  # Avoid modifications of the same data from other callbacks triggered by ClusterShell
+        try:
+            if worker.current_rc != 0:
+                # Considering failed any execution with return code different than zero
+                self.pbar_ko.update()
+                self.counters['failed'] += 1
+                new_state = State.failed
+            else:
+                self.pbar_ok.update()
+                self.counters['success'] += 1
+                new_state = State.success
+
+            self.nodes[worker.current_node].state.update(new_state)
+        finally:
+            self.lock.release()
+
+        # Schedule a timer to run the current command on the next node or start the next command
+        worker.task.timer(self.kwargs.get('batch_sleep', 0.0), worker.eh)
+
+    def ev_timer(self, timer):
+        """Schedule the current command on the next node or the next command on the first batch of nodes.
+
+        This callback is triggered by ClusterShell when a scheduled Task.timer() goes off.
+
+        Arguments: according to EventHandler interface
+        """
+        success_threshold = self.kwargs.get('success_threshold', 1)
+        success_ratio = 1 - (float(self.counters['failed']) / self.counters['total'])
+
+        node = None
+        if success_ratio >= success_threshold:
+            # Success ratio is still good, looking for the next node
+            self.lock.acquire()  # Avoid modifications of the same data from other callbacks triggered by ClusterShell
+            try:
+                for new_node in self.nodes.itervalues():
+                    if new_node.state.is_pending:
+                        # Found the next node where to execute the command
+                        node = new_node
+                        node.state.update(State.scheduled)
+                        break
+            finally:
+                self.lock.release()
+
+        if node is not None:
+            # Schedule the execution with ClusterShell of the current command to the next node found above
+            command = self.nodes[node.name].commands[self.nodes[node.name].running_command_index + 1]
+            self.logger.debug("next_node={node}, command='{command}'".format(node=node.name, command=command))
+            Task.task_self().shell(command, nodes=NodeSet.NodeSet(node.name), handler=timer.eh)
+            return
+
+        # No more nodes were left for the execution of the current command
+        self.lock.acquire()  # Avoid modifications of the same data from other callbacks triggered by ClusterShell
+        try:
+            try:
+                command = self.commands[self.current_command_index]
+            except IndexError:
+                command = None  # Last command reached
+
+            # Get a list of the nodes still in pending state
+            pending = [pending_node.name for pending_node in self.nodes.itervalues() if pending_node.state.is_pending]
+            # Nodes in running are still running the command and nodes in scheduled state will execute the command
+            # anyway, they were already offloaded to ClusterShell
+            accounted = len(pending) + self.counters['failed'] + self.counters['success'] + self.counters['timeout']
+
+            # Avoid race conditions
+            if self.aborted or accounted != self.counters['total'] or command is None:
+                self.logger.debug("skipped timer")
+                return
+
+            if len(pending) > 0:
+                # This usually happens when executing in batches
+                self.logger.warning("command '{command}' was not executed on: {nodes}".format(
+                    command=command, nodes=NodeSet.NodeSet.fromlist(pending)))
+
+            self.logger.info("completed command '{command}'".format(command=command))
+            restart = self.end_command()
+            self.current_command_index += 1  # Move the global pointer of the command in execution
+
+            if restart:
+                for node in self.nodes.itervalues():
+                    if node.state.is_success:
+                        # Only nodes in pending state will be scheduled for the next command
+                        node.state.update(State.pending)
+        finally:
+                self.lock.release()
+
+        if restart:
+            self.start_command(schedule=True)
 
     def close(self, task):
-        """ Print a final summary report line
+        """Print a final summary report line.
 
-            Arguments: according to BaseEventHandler interface
+        Arguments: according to BaseEventHandler interface
         """
-        if len(self.commands) > 1 and len(self.nodes_commands) == 0:
-            self._success_nodes_report()
+        self._success_nodes_report()
 
 
 class AsyncEventHandler(BaseEventHandler):
-    """ Custom ClusterShell event handler class that execute commands asynchronously
+    """Custom ClusterShell event handler class that execute commands asynchronously.
 
-        The implemented logic is to execute on all nodes, independently one to each other, command_N only if
-        command_N-1 was succesful, aborting the execution on that node otherwise.
+    The implemented logic is:
+    - execute on all nodes independently every command in a sequence, aborting the execution on that node if any
+      command fails.
+    - The success ratio is checked at each node completion (either because it completed all commands or aborted
+      earlier), however nodes already scheduled for execution with ClusterShell will execute the commands anyway. The
+      use of the batch_size allows to control this aspect.
+    - if the success ratio is met, schedule the execution of all commands to the next node.
 
-        The typical use case is to execute read-only commands to gather the status of a fleet without any special need
-        of orchestration between the hosts.
+    The typical use case is to execute read-only commands to gather the status of a fleet without any special need of
+    orchestration between the nodes.
     """
 
     def __init__(self, nodes, commands, **kwargs):
-        """ Custom ClusterShell asynchronous event handler constructor
+        """Custom ClusterShell asynchronous event handler constructor.
 
-            Arguments: according to BaseEventHandler interface
+        Arguments: according to BaseEventHandler interface
         """
         super(AsyncEventHandler, self).__init__(nodes, commands, **kwargs)
-        # Map commands to all nodes .Slicing the commands list to get a copy
-        self.nodes_commands = {node: commands[:] for node in nodes}
 
-        self.pbar_ok = tqdm(total=len(self.nodes), leave=True, unit='hosts', dynamic_ncols=True,
-                            bar_format=colorama.Fore.GREEN + self.bar_format)
+        self.pbar_ok = tqdm(total=self.counters['total'], leave=True, unit='hosts', dynamic_ncols=True,
+                            bar_format=colorama.Fore.GREEN + self.bar_format, file=sys.stderr)
         self.pbar_ok.desc = 'PASS'
         self.pbar_ok.refresh()
-        self.pbar_ko = tqdm(total=len(self.nodes), leave=True, unit='hosts', dynamic_ncols=True,
-                            bar_format=colorama.Fore.RED + self.bar_format)
+        self.pbar_ko = tqdm(total=self.counters['total'], leave=True, unit='hosts', dynamic_ncols=True,
+                            bar_format=colorama.Fore.RED + self.bar_format, file=sys.stderr)
         self.pbar_ko.desc = 'FAIL'
         self.pbar_ko.refresh()
 
-    def ev_pickup(self, worker):
-        """ Command execution started, remove the command from the node's queue
-
-            Arguments: according to EventHandler interface
-        """
-        command = self.nodes_commands[worker.current_node].pop(0)
-        if command != worker.command:
-            raise RuntimeError('{} != {}'.format(command, worker.command))
-
     def ev_hup(self, worker):
-        """ Command execution completed
+        """Command execution completed on a node.
 
-            Enqueue the next command if the previous was successful, track the failure otherwise
-            Update the progress bars accordingly
+        This callback is triggered by ClusterShell for each node when it completes the execution of a command.
 
-            Arguments: according to EventHandler interface
+        Enqueue the next command if the success criteria are met, track the failure otherwise
+        Update the progress bars accordingly
+
+        Arguments: according to EventHandler interface
         """
-        if worker.current_rc != 0:
-            self.pbar_ko.update()
-            self.failed_commands[worker.command].append(worker.current_node)
-            return
+        self.logger.debug("node={node}, rc={rc}, command='{command}'".format(
+            node=worker.current_node, rc=worker.current_rc, command=worker.command))
 
+        schedule_next = False
+        schedule_timer = False
+        self.lock.acquire()  # Avoid modifications of the same data from other callbacks triggered by ClusterShell
         try:
-            worker.task.shell(self.nodes_commands[worker.current_node][0],
-                              nodes=worker.current_node, handler=worker.eh)
-        except IndexError:
-            # All commands completed
-            self.pbar_ok.update()
-            self.success_nodes.append(worker.current_node)
+            node = self.nodes[worker.current_node]
+            if worker.current_rc != 0:
+                # Considering failed any execution with return code different than zero
+                self.pbar_ko.update()
+                self.counters['failed'] += 1
+                node.state.update(State.failed)
+                schedule_timer = True  # Continue the execution on other nodes if criteria are met
+            else:
+                if node.running_command_index == (len(node.commands) - 1):
+                    self.pbar_ok.update()
+                    self.counters['success'] += 1
+                    node.state.update(State.success)
+                    schedule_timer = True  # Continue the execution on other nodes if criteria are met
+                else:
+                    schedule_next = True  # Continue the execution in the current node with the next command
+        finally:
+            self.lock.release()
+
+        if schedule_next:
+            # Schedule the execution of the next command on this node with ClusterShell
+            worker.task.shell(node.commands[node.running_command_index + 1],
+                              nodes=NodeSet.NodeSet(worker.current_node), handler=worker.eh)
+        elif schedule_timer:
+            # Schedule a timer to allow to run all the commands in the next available node
+            worker.task.timer(self.kwargs.get('batch_sleep', 0.0), worker.eh)
+
+    def ev_timer(self, timer):
+        """Schedule the current command on the next node or the next command on the first batch of nodes.
+
+        This callback is triggered by ClusterShell when a scheduled Task.timer() goes off.
+
+        Arguments: according to EventHandler interface
+        """
+        success_threshold = self.kwargs.get('success_threshold', 1)
+        success_ratio = 1 - (float(self.counters['failed']) / self.counters['total'])
+
+        node = None
+        if success_ratio >= success_threshold:
+            # Success ratio is still good, looking for the next node
+            self.lock.acquire()  # Avoid modifications of the same data from other callbacks triggered by ClusterShell
+            try:
+                for new_node in self.nodes.itervalues():
+                    if new_node.state.is_pending:
+                        # Found the next node where to execute all the commands
+                        node = new_node
+                        node.state.update(State.scheduled)
+                        break
+            finally:
+                self.lock.release()
+
+        if node is not None:
+            # Schedule the exeuction of the first command to the next node with ClusterShell
+            self.logger.debug("next_node={node}, command='{command}'".format(node=node.name, command=node.commands[0]))
+            Task.task_self().shell(node.commands[0], nodes=NodeSet.NodeSet(node.name), handler=timer.eh)
+        else:
+            self.logger.debug('No more nodes left')
 
     def close(self, task):
-        """ Properly close all progress bars and print results
+        """Properly close all progress bars and print results.
 
-            Arguments: according to BaseEventHandler interface
+        Arguments: according to BaseEventHandler interface
         """
         self._commands_output_report(task)
 
         self.pbar_ok.close()
         self.pbar_ko.close()
 
-        self._timeout_nodes_report(task)
         self._failed_commands_report()
-        if len(self.commands) > 1:
-            self._success_nodes_report()
+        self._success_nodes_report()
+
+        num = self.counters['success']
+        tot = self.counters['total']
+        success_threshold = self.kwargs.get('success_threshold', 1)
+        success_ratio = float(num) / tot
+
+        if success_ratio == 1:
+            self.return_value = 0
+        elif success_ratio < success_threshold:
+            self.return_value = 2
+        else:
+            self.return_value = 1
 
 
 worker_class = ClusterShellWorker  # Required by the auto-loader in the cumin.transport.Transport factory
+DEFAULT_HANDLERS = {'sync': SyncEventHandler, 'async': AsyncEventHandler}  # Available default EventHandler classes

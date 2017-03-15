@@ -2,14 +2,19 @@ backend: puppetdb  # Default backend to use, can be overriden by command line ar
 transport: clustershell  # Default transport to use, can be overriden by command line arguments
 log_file: logs/cumin.log  # Absolute or relative path for the log file
 
+# Environment variables that will be defined [optional]
+environment:
+    ENV_VARIABLE: env_value
+
 # Backend-specific configuration
 puppetdb:
     host: puppetdb.local
     port: 443
+    urllib3_disable_warnings:  # List of Python urllib3 exceptions to ignore
+        - SubjectAltNameWarning
 
 # Transport-specific configuration
 clustershell:
-    environment: # Environment variables that will be defined [optional]
-        ENV_VARIABLE: env_value
     ssh_options:  # SSH options passed to ClusterShell [optional]
         - 'some_option'
+    fanout: 16  # Max size of the sliding window of concurrent workers active at any given time [optional, default: 64]
