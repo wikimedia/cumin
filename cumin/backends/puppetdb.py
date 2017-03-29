@@ -150,7 +150,7 @@ class PuppetDBQuery(BaseQuery):
 
         else:
             # Querying a specific resource title
-            if key.lower() == 'class':
+            if key.lower() == 'class' and operator != '~':
                 value = capwords(value, '::')  # Auto ucfirst the class title
             query_part = ', ["{op}", "title", "{value}"]'.format(op=operator, value=value)
 

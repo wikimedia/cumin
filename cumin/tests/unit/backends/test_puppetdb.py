@@ -109,6 +109,12 @@ class TestPuppetDBQuery(unittest.TestCase):
         self.assertListEqual(self.query.current_group['tokens'],
                              [r'["and", ["=", "type", "Key"], ["~", "title", "value\\\\escaped"]]'])
 
+    def test_add_category_resource_class_regex(self):
+        """Calling add_category() with a regex Class resource query should add the proper query token to the object."""
+        self.query.add_category('R', 'Class', r'Role::(One|Another)', operator='~')
+        self.assertListEqual(self.query.current_group['tokens'],
+                             [r'["and", ["=", "type", "Class"], ["~", "title", "Role::(One|Another)"]]'])
+
     def test_add_category_resource_parameter(self):
         """Calling add_category() with a resource's parameter query should add the proper query token to the object."""
         self.query.add_category('R', 'resource%param', 'value')
