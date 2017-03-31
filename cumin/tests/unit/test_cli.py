@@ -45,12 +45,15 @@ def capture_stderr(func):
 class TestCLI(unittest.TestCase):
     """CLI module tests."""
 
-    def _validate_parsed_args(self, args):
+    def _validate_parsed_args(self, args, no_commands=False):
         """Validate that the parsed args have the proper values."""
         self.assertTrue(args.debug)
         self.assertEqual(args.config, 'doc/examples/config.yaml')
         self.assertEqual(args.hosts, 'host')
-        self.assertEqual(args.commands, ['command1', 'command2'])
+        if no_commands:
+            self.assertTrue(args.dry_run)
+        else:
+            self.assertEqual(args.commands, ['command1', 'command2'])
 
     def test_parse_args_ok(self):
         """A standard set of command line parameters should be properly parsed into their respective variables."""
@@ -60,6 +63,11 @@ class TestCLI(unittest.TestCase):
         with mock.patch.object(cli.sys, 'argv', ['progname'] + _ARGV):
             args = cli.parse_args()
             self._validate_parsed_args(args)
+
+    def test_parse_args_no_commands(self):
+        """If no commands are specified, dry-run mode should be implied."""
+        args = cli.parse_args(argv=_ARGV[:-2])
+        self._validate_parsed_args(args, no_commands=True)
 
     @capture_stderr
     def test_parse_args_no_mode(self):

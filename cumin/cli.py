@@ -80,7 +80,8 @@ def parse_args(argv=None):
                         help='Do not execute any command, just return the list of matching hosts and exit.')
     parser.add_argument('-d', '--debug', action='store_true', help='Set log level to DEBUG.')
     parser.add_argument('hosts', metavar='HOSTS_QUERY', help='Hosts selection query')
-    parser.add_argument('commands', metavar='COMMAND', nargs='+', help='Command to be executed')
+    parser.add_argument('commands', metavar='COMMAND', nargs='*',
+                        help='Command to be executed. If no commands are speficied, --dry-run is set.')
 
     if argv is None:
         parsed_args = parser.parse_args()
@@ -88,10 +89,12 @@ def parse_args(argv=None):
         parsed_args = parser.parse_args(argv)
 
     # Validation and default values
-
-    if len(parsed_args.commands) == 1:
+    num_commands = len(parsed_args.commands)
+    if num_commands == 0:
+        parsed_args.dry_run = True
+    elif num_commands == 1:
         parsed_args.mode = 'sync'
-    elif len(parsed_args.commands) > 1 and parsed_args.mode is None:
+    elif num_commands > 1 and parsed_args.mode is None:
         parser.error('-m/--mode is required when there are multiple COMMANDS')
 
     return parsed_args
