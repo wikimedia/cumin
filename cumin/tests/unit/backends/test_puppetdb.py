@@ -35,14 +35,14 @@ class TestPuppetDBQuery(unittest.TestCase):
         self.assertEqual(self.query.category, 'F')
 
     def test_category_setter(self):
-        """Setting category property should accept only valid values, raise RuntimeError otherwise."""
+        """Setting category property should accept only valid values, raise InvalidQueryError otherwise."""
         self.query.category = 'F'
         self.assertEqual(self.query.category, 'F')
 
-        with self.assertRaisesRegexp(RuntimeError, r"Invalid value 'invalid_value'"):
+        with self.assertRaisesRegexp(InvalidQueryError, r"Invalid value 'invalid_value'"):
             self.query.category = 'invalid_value'
 
-        with self.assertRaisesRegexp(RuntimeError, r"Mixed F: and R: queries are currently not supported"):
+        with self.assertRaisesRegexp(InvalidQueryError, r"Mixed F: and R: queries are currently not supported"):
             self.query.category = 'R'
 
         # Get a new query object to test also setting a resource before a fact
@@ -51,7 +51,7 @@ class TestPuppetDBQuery(unittest.TestCase):
         query.category = 'R'
         self.assertEqual(query.category, 'R')
 
-        with self.assertRaisesRegexp(RuntimeError, r"Mixed F: and R: queries are currently not supported"):
+        with self.assertRaisesRegexp(InvalidQueryError, r"Mixed F: and R: queries are currently not supported"):
             query.category = 'F'
 
     def test_add_category_fact(self):
@@ -73,7 +73,7 @@ class TestPuppetDBQuery(unittest.TestCase):
         self.query.add_category('F', 'key', r'value\\escaped', operator='~')
         self.assertListEqual(self.query.current_group['tokens'], [r'["~", ["fact", "key"], "value\\\\escaped"]'])
         # != is not supported by PuppetDB
-        with self.assertRaisesRegexp(RuntimeError, r"PuppetDB backend doesn't support"):
+        with self.assertRaisesRegexp(InvalidQueryError, r"PuppetDB backend doesn't support"):
             self.query.add_category('F', 'key', 'value', operator='!=')
 
     def test_add_category_resource_base(self):
@@ -133,8 +133,8 @@ class TestPuppetDBQuery(unittest.TestCase):
         self.assertListEqual(self.query.current_group['tokens'], ['["and", ["=", "type", "Resource"]]'])
 
     def test_add_category_resource_parameter_field(self):
-        """Calling add_category() with both a parameter and a field should raise RuntimeError."""
-        with self.assertRaisesRegexp(RuntimeError, 'Resource key cannot contain both'):
+        """Calling add_category() with both a parameter and a field should raise InvalidQueryError."""
+        with self.assertRaisesRegexp(InvalidQueryError, 'Resource key cannot contain both'):
             self.query.add_category('R', 'resource@field%param')
 
     def test_add_hosts(self):

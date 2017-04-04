@@ -49,9 +49,9 @@ class PuppetDBQuery(BaseQuery):
         value -- the value to set the category to
         """
         if value not in self.endpoints.keys():
-            raise RuntimeError("Invalid value '{category}' for category property".format(category=value))
+            raise InvalidQueryError("Invalid value '{category}' for category property".format(category=value))
         if self._category is not None and value != self._category:
-            raise RuntimeError('Mixed F: and R: queries are currently not supported')
+            raise InvalidQueryError('Mixed F: and R: queries are currently not supported')
 
         self._category = value
 
@@ -61,7 +61,7 @@ class PuppetDBQuery(BaseQuery):
         if operator == '~':
             value = value.replace(r'\\', r'\\\\')  # Required by PuppetDB API
         elif operator == '!=':
-            raise RuntimeError("PuppetDB backend doesn't support the '!=' operator")
+            raise InvalidQueryError("PuppetDB backend doesn't support the '!=' operator")
 
         if category == 'R':
             query = self._get_resource_query(key, value, operator)
@@ -131,8 +131,8 @@ class PuppetDBQuery(BaseQuery):
         operator -- the comparison operator to use, one of cumin.grammar.operators [optional: default: =]
         """
         if all(char in key for char in ('%', '@')):
-            raise RuntimeError(("Resource key cannot contain both '%' (query a resource's parameter) and '@' (query a "
-                                " resource's field)"))
+            raise InvalidQueryError(("Resource key cannot contain both '%' (query a resource's parameter) and '@' "
+                                     "(query a  resource's field)"))
 
         elif '%' in key:
             # Querying a specific parameter of the resource
