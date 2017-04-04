@@ -136,6 +136,8 @@ class PuppetDBQuery(BaseQuery):
 
         elif '%' in key:
             # Querying a specific parameter of the resource
+            if operator == '~':
+                raise InvalidQueryError('Regex operations are not supported in PuppetDB API v3 for resource parameters')
             key, param = key.split('%', 1)
             query_part = ', ["{op}", ["parameter", "{param}"], "{value}"]'.format(op=operator, param=param, value=value)
 

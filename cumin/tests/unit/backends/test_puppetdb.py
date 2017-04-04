@@ -121,6 +121,11 @@ class TestPuppetDBQuery(unittest.TestCase):
         self.assertListEqual(self.query.current_group['tokens'],
                              ['["and", ["=", "type", "Resource"], ["=", ["parameter", "param"], "value"]]'])
 
+    def test_add_category_resource_parameter_regex(self):
+        """Calling add_category() with a resource's parameter query with a regex should raise InvalidQueryError."""
+        with self.assertRaisesRegexp(InvalidQueryError, 'Regex operations are not supported in PuppetDB'):
+            self.query.add_category('R', 'resource%param', 'value.*', operator='~')
+
     def test_add_category_resource_field(self):
         """Calling add_category() with a resource's field query should add the proper query token to the object."""
         self.query.add_category('R', 'resource@field', 'value')
