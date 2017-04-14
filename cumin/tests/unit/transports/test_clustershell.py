@@ -36,7 +36,7 @@ class TestClusterShellWorker(unittest.TestCase):
         """Initialize default properties and instances"""
         self.config = {
             'clustershell': {
-                'ssh_options': ['-o StrictHostKeyChecking=no'],
+                'ssh_options': ['-o StrictHostKeyChecking=no', '-o BatchMode=yes'],
                 'fanout': 3}}
 
         self.worker = clustershell.worker_class(self.config)
@@ -60,7 +60,8 @@ class TestClusterShellWorker(unittest.TestCase):
         self.assertIsInstance(worker, BaseWorker)
         task_self.assert_called_once_with()
         worker.task.set_info.assert_has_calls(
-            [mock.call('fanout', 3), mock.call('ssh_options', '-o StrictHostKeyChecking=no')], any_order=True)
+            [mock.call('fanout', 3),
+             mock.call('ssh_options', '-o StrictHostKeyChecking=no -o BatchMode=yes')], any_order=True)
 
     def test_execute_default_sync_handler(self):
         """Calling execute() in sync mode without event handler should use the default sync event handler."""

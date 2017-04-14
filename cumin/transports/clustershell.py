@@ -28,8 +28,7 @@ class ClusterShellWorker(BaseWorker):
         # Set any ClusterShell task options
         for key, value in config.get('clustershell', {}).items():
             if type(value) == list:
-                for item in value:
-                    self.task.set_info(key, item)
+                self.task.set_info(key, ' '.join(value))
             else:
                 self.task.set_info(key, value)
 
