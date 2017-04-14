@@ -143,6 +143,7 @@ class BaseEventHandler(Event.EventHandler):
         self.kwargs = kwargs  # Allow to store custom parameters from subclasses without changing the signature
         self.counters = Counter()
         self.counters['total'] = len(nodes)
+        self.deduplicate_output = self.counters['total'] > 1
         # Instantiate all the node instances, slicing the commands list to get a copy
         self.nodes = {node: Node(node, commands[:]) for node in nodes}
         # Move already all the nodes in the first_batch to the scheduled state, it means that ClusterShell was
@@ -223,6 +224,22 @@ class BaseEventHandler(Event.EventHandler):
         finally:
             self.lock.release()
 
+        if not self.deduplicate_output:
+            output_message = "----- OUTPUT of '{command}' -----".format(command=self._get_short_command(worker.command))
+            tqdm.write(colorama.Fore.BLUE + output_message + colorama.Style.RESET_ALL, file=sys.stdout)
+
+    def ev_read(self, worker):
+        """Worker has data to read from a specific node. Print it if running on a single host.
+
+        This callback is triggered by ClusterShell for each node when output is available.
+
+        Arguments: according to EventHandler interface
+        """
+        if self.deduplicate_output:
+            return
+
+        tqdm.write(worker.current_msg)
+
     def _get_log_message(self, num, message, nodes=None):
         """Helper to get a pre-formatted message suitable for logging or printing.
 
@@ -274,6 +291,10 @@ class BaseEventHandler(Event.EventHandler):
         buffer_iterator - any ClusterShell object that implements iter_buffers() like Task and Worker objects.
         command         - command the output is referring to [optional, default: None]
         """
+        if not self.deduplicate_output:
+            tqdm.write(colorama.Fore.BLUE + '================' + colorama.Style.RESET_ALL, file=sys.stdout)
+            return
+
         nodelist = None
         if command is not None:
             output_message = "----- OUTPUT of '{command}' -----".format(command=self._get_short_command(command))

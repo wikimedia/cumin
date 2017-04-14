@@ -248,6 +248,30 @@ class TestConcreteBaseEventHandler(TestBaseEventHandler):
         self.assertListEqual([node for node in self.worker.eh.nodes.itervalues() if node.state.is_running],
                              self.worker.eh.nodes.values())
 
+    @mock.patch('cumin.transports.clustershell.tqdm')
+    def test_ev_read_many_hosts(self, tqdm):
+        """Calling ev_read() should not print the worker message if matching multiple hosts."""
+        for node in self.nodes:
+            self.worker.current_node = node
+            self.worker.current_msg = 'Node output'
+            self.handler.ev_read(self.worker)
+        self.assertFalse(tqdm.write.called)
+
+    @mock.patch('cumin.transports.clustershell.tqdm')
+    def test_ev_read_single_host(self, tqdm):
+        """Calling ev_read() should print the worker message if matching a single host."""
+        nodes = ['node1']
+        self.nodes = nodes
+        self.handler = ConcreteBaseEventHandler(
+            nodes, self.commands, batch_size=len(self.nodes), batch_sleep=0.0, first_batch=self.nodes)
+
+        output = 'node1 output'
+        self.worker.nodes = clustershell.NodeSet.NodeSet.fromlist(nodes)
+        self.worker.current_node = nodes[0]
+        self.worker.current_msg = output
+        self.handler.ev_read(self.worker)
+        tqdm.write.assert_has_calls([mock.call(output)])
+
 
 class TestSyncEventHandler(TestBaseEventHandler):
     """SyncEventHandler test class."""
