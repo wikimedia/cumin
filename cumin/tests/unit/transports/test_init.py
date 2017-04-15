@@ -3,6 +3,8 @@ import unittest
 
 import mock
 
+import cumin  # noqa: F401 (dynamically used in TestCommand)
+
 from cumin import transports
 
 
@@ -35,6 +37,58 @@ class ConcreteBaseWorker(transports.BaseWorker):
     def handler(self, value):
         """Required by BaseWorker"""
         self._handler = value
+
+
+class TestCommand(unittest.TestCase):
+    """Command class tests."""
+
+    def setUp(self):
+        self.command_strings = [
+            'command1',
+            'command --with "options" -a -n -d params with\ spaces',
+        ]
+        self.same_command = "command  --with  'options'  -a  -n  -d  params  with\ spaces"
+        self.different_command = "command  --with  'other options'  -a  -n  -d  other_params  with\ spaces"
+        self.commands = {command: transports.Command(command) for command in self.command_strings}
+
+    def test_instantiation(self):
+        """A new Command instance should set the command property to the given command."""
+        for command_string, command in self.commands.iteritems():
+            self.assertIsInstance(command, transports.Command)
+            self.assertEqual(command.command, command_string)
+
+    def test_repr(self):
+        """A repr of a Command should allow to instantiate an instance with the same properties."""
+        for command_string, command in self.commands.iteritems():
+            command_instance = eval(repr(command))
+            self.assertIsInstance(command_instance, transports.Command)
+            self.assertEqual(repr(command_instance), repr(command))
+            self.assertEqual(command_instance.command, command.command)
+
+    def test_str(self):
+        """A cast to string of a Command should return its command."""
+        for command_string, command in self.commands.iteritems():
+            self.assertEqual(str(command), command_string)
+
+    def test_eq(self):
+        """A Command instance can be compared to another or to a string with the equality operator."""
+        for command_string, command in self.commands.iteritems():
+            self.assertEqual(command, transports.Command(command_string))
+            self.assertEqual(command, command_string)
+            with self.assertRaisesRegexp(ValueError, 'Unable to compare instance of'):
+                command == 1
+
+        self.assertEqual(self.commands[self.command_strings[1]], self.same_command)
+
+    def test_ne(self):
+        """A Command instance can be compared to another or to a string with the inequality operator."""
+        for command_string, command in self.commands.iteritems():
+            self.assertNotEqual(command, transports.Command(self.different_command))
+            self.assertNotEqual(command, self.different_command)
+            with self.assertRaisesRegexp(ValueError, 'Unable to compare instance of'):
+                command == 1
+
+        self.assertNotEqual(self.commands[self.command_strings[0]], self.same_command)
 
 
 class TestState(unittest.TestCase):

@@ -1,6 +1,7 @@
 """Abstract transport and state machine for hosts state."""
 import logging
 import os
+import shlex
 
 from abc import ABCMeta, abstractmethod, abstractproperty
 
@@ -17,6 +18,51 @@ class StateTransitionError(CuminError):
 
 class InvalidStateError(CuminError):
     """Exception raised when an invalid transition for a node's State was attempted."""
+
+
+class Command(object):
+    """Class to represent a command."""
+
+    def __init__(self, command):
+        """Command constructor.
+
+        Arguments:
+        command -- the command to execute.
+        """
+        self.command = command
+
+    def __repr__(self):
+        """Repr of the command, allow to instantiate a Command with the same properties."""
+        return "cumin.transports.Command('{command}')".format(command=self.command)
+
+    def __str__(self):
+        """String representation of the command."""
+        return self.command
+
+    def __eq__(self, other):
+        """Equality operation. Allow to directly compare a Command object to another or a string.
+
+        Raises ValueError if the comparing object is not an instance of Command or a string.
+
+        Arguments: according to Python's datamodel documentation
+        """
+        if isinstance(other, str):
+            other_command = other
+        elif isinstance(other, Command):
+            other_command = other.command
+        else:
+            raise ValueError("Unable to compare instance of '{other}' with Command instance".format(other=type(other)))
+
+        return shlex.split(self.command) == shlex.split(other_command)
+
+    def __ne__(self, other):
+        """Inequality operation. Allow to directly compare a Command object to another or a string.
+
+        Raises ValueError if the comparing object is not an instance of Command or a string.
+
+        Arguments: according to Python's datamodel documentation
+        """
+        return not self == other
 
 
 class State(object):
