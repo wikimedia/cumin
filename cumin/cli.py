@@ -45,8 +45,8 @@ def parse_args(argv=None):
         epilog='More details at https://wikitech.wikimedia.org/wiki/Cumin')
     parser.add_argument('-c', '--config', default='/etc/cumin/config.yaml',
                         help='configuration file. [default: /etc/cumin/config.yaml]')
-    parser.add_argument('-t', '--timeout', type=int, default=0,
-                        help='Global timeout in seconds (int) for the whole execution. [default: 0 (unlimited)]')
+    parser.add_argument('-t', '--timeout', type=int, default=None,
+                        help='Global timeout in seconds (int) for the whole execution. [default: None (unlimited)]')
     parser.add_argument('-m', '--mode', choices=(sync_mode, async_mode),
                         help=('Execution mode, required when there are multiple COMMANDS to be executed. In sync mode, '
                               'execute the first command on all hosts, then proceed with the next one only if '
@@ -63,9 +63,9 @@ def parse_args(argv=None):
                               'mode all commands are executed on the first batch of hosts, proceeding with the next '
                               'hosts as soon as one host completes all the commands. The -p/--success-percentage is '
                               'checked before starting the execution in each hosts.'))
-    parser.add_argument('-s', '--batch-sleep', type=float, default=0.0,
+    parser.add_argument('-s', '--batch-sleep', type=float, default=None,
                         help=('Sleep in seconds (float) to wait before starting the execution on the next host when '
-                              '-b/--batch-size is used. [default: 0.0]'))
+                              '-b/--batch-size is used. [default: None]'))
     parser.add_argument('--force', action='store_true',
                         help='USE WITH CAUTION! Force the execution without confirmation of the affected hosts. ')
     parser.add_argument('--backend', choices=backends,

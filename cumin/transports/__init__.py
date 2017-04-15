@@ -23,17 +23,28 @@ class InvalidStateError(CuminError):
 class Command(object):
     """Class to represent a command."""
 
-    def __init__(self, command):
+    def __init__(self, command, timeout=None):
         """Command constructor.
 
         Arguments:
         command -- the command to execute.
+        timeout -- the command's timeout in seconds. [optional, default: None]
         """
         self.command = command
+        self._timeout = None
+
+        if timeout is not None:
+            self.timeout = timeout
 
     def __repr__(self):
         """Repr of the command, allow to instantiate a Command with the same properties."""
-        return "cumin.transports.Command('{command}')".format(command=self.command)
+        kwargs = {}
+        if self._timeout is not None:
+            kwargs['timeout'] = self._timeout
+
+        params = ["'{command}'".format(command=self.command.replace("'", r'\''))]
+        params += ['{key}={value}'.format(key=key, value=value) for key, value in kwargs.iteritems()]
+        return 'cumin.transports.Command({params})'.format(params=', '.join(params))
 
     def __str__(self):
         """String representation of the command."""
@@ -48,12 +59,14 @@ class Command(object):
         """
         if isinstance(other, str):
             other_command = other
+            same_params = (self._timeout is None)
         elif isinstance(other, Command):
             other_command = other.command
+            same_params = (self.timeout == other.timeout)
         else:
             raise ValueError("Unable to compare instance of '{other}' with Command instance".format(other=type(other)))
 
-        return shlex.split(self.command) == shlex.split(other_command)
+        return shlex.split(self.command) == shlex.split(other_command) and same_params
 
     def __ne__(self, other):
         """Inequality operation. Allow to directly compare a Command object to another or a string.
@@ -63,6 +76,25 @@ class Command(object):
         Arguments: according to Python's datamodel documentation
         """
         return not self == other
+
+    @property
+    def timeout(self):
+        """Getter for the command's timeout property, return None if not set."""
+        return self._timeout
+
+    @timeout.setter
+    def timeout(self, value):
+        """Setter for the command's timeout property with validation, raise WorkerError if not valid.
+
+        Arguments:
+        value -- the command's timeout in seconds for it's execution on each host. Must be a positive float or a
+                 positive integer, or None to unset it.
+        """
+        if isinstance(value, int):
+            value = float(value)
+
+        validate_positive_float('timeout', value)
+        self._timeout = value
 
 
 class State(object):
@@ -325,8 +357,7 @@ class BaseWorker(object):
         Arguments:
         value -- the value to set the batch_sleep to. Must be a positive float or None to unset it.
         """
-        if value is not None and (not isinstance(value, float) or value < 0.0):
-            raise_error('batch_sleep', 'must be a positive float', value)
+        validate_positive_float('batch_sleep', value)
         self._batch_sleep = value
 
 
@@ -350,6 +381,17 @@ def validate_positive_integer(property_name, value):
     """
     if value is not None and (not isinstance(value, int) or value <= 0):
         raise_error(property_name, 'must be a positive integer', value)
+
+
+def validate_positive_float(property_name, value):
+    """Helper to validate a positive float or None, raise WorkerError otherwise.
+
+    Arguments:
+    property_name -- the name of the property to validate
+    value         -- the value to validate
+    """
+    if value is not None and (not isinstance(value, float) or value <= 0):
+        raise_error(property_name, 'must be a positive float', value)
 
 
 def raise_error(property_name, message, value):

@@ -43,52 +43,63 @@ class TestCommand(unittest.TestCase):
     """Command class tests."""
 
     def setUp(self):
-        self.command_strings = [
-            'command1',
-            'command --with "options" -a -n -d params with\ spaces',
+        self.commands = [
+            {'command': 'command1', 'timeout': None},
+            {'command': 'command1', 'timeout': 5},
+            {'command': 'command --with "options" -a -n -d params with\ spaces', 'timeout': None},
+            {'command': 'command --with "options" -a -n -d params with\ spaces', 'timeout': 5},
+            {'command': 'command --with \'nested "quotes"\' -a -n -d params with\ spaces', 'timeout': None},
         ]
         self.same_command = "command  --with  'options'  -a  -n  -d  params  with\ spaces"
+        self.same_command_comparison = self.commands[2]
         self.different_command = "command  --with  'other options'  -a  -n  -d  other_params  with\ spaces"
-        self.commands = {command: transports.Command(command) for command in self.command_strings}
+        for command in self.commands:
+            command['obj'] = transports.Command(command['command'], timeout=command['timeout'])
 
     def test_instantiation(self):
         """A new Command instance should set the command property to the given command."""
-        for command_string, command in self.commands.iteritems():
-            self.assertIsInstance(command, transports.Command)
-            self.assertEqual(command.command, command_string)
+        for command in self.commands:
+            self.assertIsInstance(command['obj'], transports.Command)
+            self.assertEqual(command['obj'].command, command['command'])
 
     def test_repr(self):
         """A repr of a Command should allow to instantiate an instance with the same properties."""
-        for command_string, command in self.commands.iteritems():
-            command_instance = eval(repr(command))
+        for command in self.commands:
+            command_instance = eval(repr(command['obj']))
             self.assertIsInstance(command_instance, transports.Command)
-            self.assertEqual(repr(command_instance), repr(command))
-            self.assertEqual(command_instance.command, command.command)
+            self.assertEqual(repr(command_instance), repr(command['obj']))
+            self.assertEqual(command_instance.command, command['obj'].command)
 
     def test_str(self):
         """A cast to string of a Command should return its command."""
-        for command_string, command in self.commands.iteritems():
-            self.assertEqual(str(command), command_string)
+        for command in self.commands:
+            self.assertEqual(str(command['obj']), command['command'])
 
     def test_eq(self):
         """A Command instance can be compared to another or to a string with the equality operator."""
-        for command_string, command in self.commands.iteritems():
-            self.assertEqual(command, transports.Command(command_string))
-            self.assertEqual(command, command_string)
-            with self.assertRaisesRegexp(ValueError, 'Unable to compare instance of'):
-                command == 1
+        for command in self.commands:
+            self.assertEqual(command['obj'], transports.Command(command['command'], timeout=command['timeout']))
 
-        self.assertEqual(self.commands[self.command_strings[1]], self.same_command)
+            if command['timeout'] is None:
+                self.assertEqual(command['obj'], command['command'])
+
+            with self.assertRaisesRegexp(ValueError, 'Unable to compare instance of'):
+                command['obj'] == 1
+
+        self.assertEqual(self.same_command_comparison['obj'], self.same_command)
 
     def test_ne(self):
         """A Command instance can be compared to another or to a string with the inequality operator."""
-        for command_string, command in self.commands.iteritems():
-            self.assertNotEqual(command, transports.Command(self.different_command))
-            self.assertNotEqual(command, self.different_command)
-            with self.assertRaisesRegexp(ValueError, 'Unable to compare instance of'):
-                command == 1
+        for command in self.commands:
+            self.assertNotEqual(command['obj'], transports.Command(self.different_command, timeout=command['timeout']))
+            self.assertNotEqual(command['obj'], transports.Command(command['command'], timeout=999))
+            self.assertNotEqual(command['obj'], self.different_command)
 
-        self.assertNotEqual(self.commands[self.command_strings[0]], self.same_command)
+            if command['timeout'] is not None:
+                self.assertNotEqual(command['obj'], command['command'])
+
+            with self.assertRaisesRegexp(ValueError, 'Unable to compare instance of'):
+                command['obj'] == 1
 
 
 class TestState(unittest.TestCase):
