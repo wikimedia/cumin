@@ -4,7 +4,7 @@ import unittest
 
 import mock
 
-from cumin.transports import BaseWorker, clustershell, State, WorkerError
+from cumin.transports import BaseWorker, Command, clustershell, State, WorkerError
 
 
 class TestNode(unittest.TestCase):
@@ -12,7 +12,7 @@ class TestNode(unittest.TestCase):
 
     def test_instantiation(self):
         """Default values should be set when a Node instance is created."""
-        node = clustershell.Node('name', ['command1', 'command2'])
+        node = clustershell.Node('name', [Command('command1'), Command('command2')])
         self.assertEqual(node.running_command_index, -1)
         self.assertIsInstance(node.state, State)
 
@@ -42,7 +42,7 @@ class TestClusterShellWorker(unittest.TestCase):
         self.worker = clustershell.worker_class(self.config)
         self.nodes = ['node1', 'node2']
         self.nodes_set = clustershell.NodeSet.NodeSet.fromlist(self.nodes)
-        self.commands = ['command1', 'command2']
+        self.commands = [Command('command1'), Command('command2')]
         self.task_self = task_self
         # Mock default handlers
         clustershell.DEFAULT_HANDLERS = {
@@ -175,7 +175,7 @@ class TestBaseEventHandler(unittest.TestCase):
     def setUp(self, *args):
         """Initialize default properties and instances."""
         self.nodes = ['node1', 'node2']
-        self.commands = ['command1', 'command2']
+        self.commands = [Command('command1'), Command('command2')]
         self.worker = mock.MagicMock()
         self.worker.current_node = 'node1'
         self.worker.command = 'command1'

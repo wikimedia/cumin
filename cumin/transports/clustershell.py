@@ -51,7 +51,7 @@ class ClusterShellWorker(BaseWorker):
 
         self.logger.info("Executing commands {commands} on '{num}' hosts: {hosts}".format(
             commands=self.commands, num=len(self.hosts), hosts=NodeSet.NodeSet.fromlist(self.hosts)))
-        self.task.shell(self.commands[0], nodes=first_batch, handler=self._handler_instance)
+        self.task.shell(self.commands[0].command, nodes=first_batch, handler=self._handler_instance)
 
         return_value = 0
         try:
@@ -104,8 +104,8 @@ class Node(object):
         """Node class constructor with default values.
 
         Arguments:
-        name     -- the hostname of the node
-        commands -- a list of commands to be executed on the node
+        name     -- the hostname of the node.
+        commands -- a list of Command objects to be executed on the node.
         """
         self.name = name
         self.commands = commands
@@ -129,9 +129,9 @@ class BaseEventHandler(Event.EventHandler):
         If subclasses defines a self.pbar_ko tqdm progress bar, it will be updated on timeout.
 
         Arguments:
-        nodes    -- the list of nodes with which this worker was initiliazed
-        commands -- the list of commands that has to be executed on the nodes
-        **kwargs -- optional additional keyword arguments that might be used by classes that extend this base class
+        nodes    -- the list of nodes with which this worker was initiliazed.
+        commands -- the list of Command objects that has to be executed on the nodes.
+        **kwargs -- optional additional keyword arguments that might be used by classes that extend this base class.
         """
         super(BaseEventHandler, self).__init__()
         self.logger = kwargs.get('logger', None) or logging.getLogger(__name__)
@@ -215,7 +215,7 @@ class BaseEventHandler(Event.EventHandler):
             node = self.nodes[worker.current_node]
             node.state.update(State.running)  # Update the node's state to running
 
-            command = node.commands[node.running_command_index + 1]
+            command = node.commands[node.running_command_index + 1].command
             # Security check, it should never be triggered
             if command != worker.command:
                 raise RuntimeError("ev_pickup: got unexpected command '{command}', expected '{expected}'".format(
@@ -344,7 +344,7 @@ class BaseEventHandler(Event.EventHandler):
             failed_commands[node.running_command_index].append(node.name)
 
         for index, nodes in failed_commands.iteritems():
-            command = self.commands[index]
+            command = self.commands[index].command
 
             if filter_command_index >= 0 and command is not None and index != filter_command_index:
                 continue
@@ -455,25 +455,25 @@ class SyncEventHandler(BaseEventHandler):
                 self.lock.release()
 
             self.logger.debug("command='{command}', first_batch={first_batch}".format(
-                command=self.commands[self.current_command_index], first_batch=first_batch_set))
+                command=self.commands[self.current_command_index].command, first_batch=first_batch_set))
 
             # Schedule the command for execution in ClusterShell
             Task.task_self().flush_buffers()
             Task.task_self().shell(
-                self.commands[self.current_command_index], nodes=first_batch_set, handler=self)
+                self.commands[self.current_command_index].command, nodes=first_batch_set, handler=self)
 
     def end_command(self):
         """Command terminated, print the result and schedule the next command if criteria are met.
 
         Executed at the end of each command inside a lock.
         """
-        self._commands_output_report(Task.task_self(), command=self.commands[self.current_command_index])
+        self._commands_output_report(Task.task_self(), command=self.commands[self.current_command_index].command)
 
         self.pbar_ok.close()
         self.pbar_ko.close()
 
         self._failed_commands_report(filter_command_index=self.current_command_index)
-        self._success_nodes_report(command=self.commands[self.current_command_index])
+        self._success_nodes_report(command=self.commands[self.current_command_index].command)
 
         success_threshold = self.kwargs.get('success_threshold', 1)
         success_ratio = float(self.counters['success']) / self.counters['total']
@@ -561,7 +561,7 @@ class SyncEventHandler(BaseEventHandler):
 
         if node is not None:
             # Schedule the execution with ClusterShell of the current command to the next node found above
-            command = self.nodes[node.name].commands[self.nodes[node.name].running_command_index + 1]
+            command = self.nodes[node.name].commands[self.nodes[node.name].running_command_index + 1].command
             self.logger.debug("next_node={node}, command='{command}'".format(node=node.name, command=command))
             Task.task_self().shell(command, nodes=NodeSet.NodeSet(node.name), handler=timer.eh)
             return
@@ -570,7 +570,7 @@ class SyncEventHandler(BaseEventHandler):
         self.lock.acquire()  # Avoid modifications of the same data from other callbacks triggered by ClusterShell
         try:
             try:
-                command = self.commands[self.current_command_index]
+                command = self.commands[self.current_command_index].command
             except IndexError:
                 command = None  # Last command reached
 
@@ -681,7 +681,7 @@ class AsyncEventHandler(BaseEventHandler):
 
         if schedule_next:
             # Schedule the execution of the next command on this node with ClusterShell
-            worker.task.shell(node.commands[node.running_command_index + 1],
+            worker.task.shell(node.commands[node.running_command_index + 1].command,
                               nodes=NodeSet.NodeSet(worker.current_node), handler=worker.eh)
         elif schedule_timer:
             # Schedule a timer to allow to run all the commands in the next available node
@@ -713,8 +713,9 @@ class AsyncEventHandler(BaseEventHandler):
 
         if node is not None:
             # Schedule the exeuction of the first command to the next node with ClusterShell
-            self.logger.debug("next_node={node}, command='{command}'".format(node=node.name, command=node.commands[0]))
-            Task.task_self().shell(node.commands[0], nodes=NodeSet.NodeSet(node.name), handler=timer.eh)
+            command = node.commands[0].command
+            self.logger.debug("next_node={node}, command='{command}'".format(node=node.name, command=command))
+            Task.task_self().shell(command, nodes=NodeSet.NodeSet(node.name), handler=timer.eh)
         else:
             self.logger.debug('No more nodes left')
 

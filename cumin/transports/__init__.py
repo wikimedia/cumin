@@ -219,10 +219,24 @@ class BaseWorker(object):
         """Setter for the commands property with validation, raise WorkerError if not valid.
 
         Arguments:
-        value -- a list of commands to be executed on the hosts
+        value -- a list of Command objects or strings with the commands to be executed on the hosts. If a list of
+                 strings is passed, it will be automatically converted to a list of Command objects.
         """
+        if value is None:
+            self._commands = value
+            return
+
         validate_list('commands', value)
-        self._commands = value
+        commands = []
+        for command in value:
+            if isinstance(command, Command):
+                commands.append(command)
+            elif isinstance(command, str):
+                commands.append(Command(command))
+            else:
+                raise_error('commands', 'must be a list of Command objects or strings', value)
+
+        self._commands = commands
 
     @abstractproperty
     @property

@@ -234,7 +234,7 @@ class TestConcreteBaseWorker(unittest.TestCase):
         """Initialize default properties and instances."""
         self.worker = ConcreteBaseWorker({})
         self.hosts = ['node1', 'node2']
-        self.commands = ['command1', 'command2']
+        self.commands = [transports.Command('command1'), transports.Command('command2')]
 
     def test_hosts_getter(self):
         """Access to hosts property should return an empty list if not set and the list of hosts otherwise."""
@@ -255,13 +255,22 @@ class TestConcreteBaseWorker(unittest.TestCase):
         self.assertListEqual(self.worker.commands, [])
         self.worker._commands = self.commands
         self.assertListEqual(self.worker.commands, self.commands)
+        self.worker._commands = None
+        self.assertListEqual(self.worker.commands, [])
 
     def test_commands_setter(self):
         """Raise WorkerError if trying to set it not to a list, set it otherwise."""
         with self.assertRaisesRegexp(transports.WorkerError, r'commands must be a list'):
-            self.worker.commands = 'not-list'
+            self.worker.commands = 'invalid_value'
+
+        with self.assertRaisesRegexp(transports.WorkerError, r'commands must be a list of Command objects or strings'):
+            self.worker.commands = [1, 'command2']
 
         self.worker.commands = self.commands
+        self.assertListEqual(self.worker._commands, self.commands)
+        self.worker.commands = None
+        self.assertIsNone(self.worker._commands)
+        self.worker.commands = ['command1', 'command2']
         self.assertListEqual(self.worker._commands, self.commands)
 
     def test_timeout_getter(self):
