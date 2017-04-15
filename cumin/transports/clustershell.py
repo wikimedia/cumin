@@ -10,7 +10,7 @@ import colorama
 from ClusterShell import Event, NodeSet, Task
 from tqdm import tqdm
 
-from cumin.transports import BaseWorker, State
+from cumin.transports import BaseWorker, raise_error, State
 
 
 class ClusterShellWorker(BaseWorker):
@@ -90,7 +90,7 @@ class ClusterShellWorker(BaseWorker):
         elif value in DEFAULT_HANDLERS.keys():
             self._handler = DEFAULT_HANDLERS[value]
         else:
-            self._raise_task_error(
+            raise_error(
                 'handler',
                 'must be one of ({default}, a class object derived from BaseEventHandler)'.format(
                     default=', '.join(DEFAULT_HANDLERS.keys())),

@@ -217,15 +217,18 @@ class TestConcreteBaseWorker(unittest.TestCase):
         self.assertEqual(self.worker.timeout, 10)
 
     def test_timeout_setter(self):
-        """Raise WorkerError if not positive integer, set it otherwise."""
-        with self.assertRaisesRegexp(transports.WorkerError, r'timeout must be a positive integer'):
+        """Raise WorkerError if not a positive integer, set it otherwise."""
+        message = r'timeout must be a positive integer'
+        with self.assertRaisesRegexp(transports.WorkerError, message):
             self.worker.timeout = -1
 
-        with self.assertRaisesRegexp(transports.WorkerError, r'timeout must be a positive integer'):
-            self.worker.timeout = '1'
+        with self.assertRaisesRegexp(transports.WorkerError, message):
+            self.worker.timeout = 0
 
         self.worker.timeout = 10
         self.assertEqual(self.worker._timeout, 10)
+        self.worker.timeout = None
+        self.assertEqual(self.worker._timeout, None)
 
     def test_success_threshold_getter(self):
         """Return default value if not set, the value otherwise."""
@@ -257,6 +260,9 @@ class TestConcreteBaseWorker(unittest.TestCase):
         with self.assertRaisesRegexp(transports.WorkerError, r'batch_size must be a positive integer'):
             self.worker.batch_size = -1
 
+        with self.assertRaisesRegexp(transports.WorkerError, r'batch_size must be a positive integer'):
+            self.worker.batch_size = 0
+
         self.worker.hosts = self.hosts
         self.worker.batch_size = 10
         self.assertEqual(self.worker._batch_size, len(self.hosts))
@@ -273,10 +279,45 @@ class TestConcreteBaseWorker(unittest.TestCase):
         """Raise WorkerError if not positive integer, set it otherwise."""
         message = r'batch_sleep must be a positive float'
         with self.assertRaisesRegexp(transports.WorkerError, message):
-            self.worker.batch_sleep = -1
+            self.worker.batch_sleep = 1
 
         with self.assertRaisesRegexp(transports.WorkerError, message):
             self.worker.batch_sleep = '1'
 
+        with self.assertRaisesRegexp(transports.WorkerError, message):
+            self.worker.batch_sleep = -1.0
+
         self.worker.batch_sleep = 10.0
         self.assertAlmostEqual(self.worker._batch_sleep, 10.0)
+
+
+class TestModuleFunctions(unittest.TestCase):
+    """Transports module functions test class."""
+
+    def test_validate_list(self):
+        """Should raise a WorkerError if the argument is not a list or None."""
+        transports.validate_list('Test', None)
+        transports.validate_list('Test', [])
+        transports.validate_list('Test', ['value1'])
+        transports.validate_list('Test', ['value1', 'value2'])
+
+        message = r'Test must be a list'
+        func = transports.validate_list
+        for invalid_value in (0, 'invalid_value', {'invalid': 'value'}):
+            self.assertRaisesRegexp(transports.WorkerError, message, func, 'Test', invalid_value)
+
+    def test_validate_positive_integer(self):
+        """Should raise a WorkerError if the argument is not a positive integer or None."""
+        transports.validate_positive_integer('Test', None)
+        transports.validate_positive_integer('Test', 1)
+        transports.validate_positive_integer('Test', 100)
+
+        message = r'Test must be a positive integer'
+        func = transports.validate_positive_integer
+        for invalid_value in (0, -1, 'invalid_value', ['invalid_value']):
+            self.assertRaisesRegexp(transports.WorkerError, message, func, 'Test', invalid_value)
+
+    def test_raise_error(self):
+        """Should raise a WorkerError."""
+        with self.assertRaisesRegexp(transports.WorkerError, 'Test message'):
+            transports.raise_error('Test', 'message', 'value')

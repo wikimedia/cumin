@@ -160,7 +160,7 @@ class BaseWorker(object):
         Arguments:
         value -- a list of hosts to target for the execution of the commands
         """
-        self._validate_list('hosts', value)
+        validate_list('hosts', value)
         self._hosts = value
 
     @property
@@ -175,7 +175,7 @@ class BaseWorker(object):
         Arguments:
         value -- a list of commands to be executed on the hosts
         """
-        self._validate_list('commands', value)
+        validate_list('commands', value)
         self._commands = value
 
     @abstractproperty
@@ -199,7 +199,7 @@ class BaseWorker(object):
 
     @property
     def timeout(self):
-        """Getter for the global timeout property with a default value."""
+        """Getter for the global timeout property, default to 0 (unlimited) if not set."""
         return self._timeout or 0
 
     @timeout.setter
@@ -207,9 +207,9 @@ class BaseWorker(object):
         """Setter for the global timeout property with validation, raise WorkerError if not valid.
 
         Arguments:
-        value -- the global timeout in seconds for the whole execution. [default: 0 (unlimited)]
+        value -- the global timeout in seconds for the whole execution. Must be a positive integer or None to unset it.
         """
-        self._validate_positive_integer('timeout', value)
+        validate_positive_integer('timeout', value)
         self._timeout = value
 
     @property
@@ -233,7 +233,7 @@ class BaseWorker(object):
 
     @property
     def batch_size(self):
-        """Getter for the batch_size property with a default value."""
+        """Getter for the batch_size property, default to the number of hosts if not set."""
         return self._batch_size or len(self.hosts)
 
     @batch_size.setter
@@ -241,9 +241,10 @@ class BaseWorker(object):
         """Setter for the batch_size property with validation, raise WorkerError if not valid.
 
         Arguments:
-        value -- the value to set the batch_size to, if greater than the number of hosts it will be auto-resized.
+        value -- the value to set the batch_size to, if greater than the number of hosts it will be auto-resized to the
+                 number of hosts. Must be a positive integer or None to unset it.
         """
-        self._validate_positive_integer('batch_size', value)
+        validate_positive_integer('batch_size', value)
         hosts_size = len(self.hosts)
         if value is not None and value > hosts_size:
             self.logger.debug(("Provided batch_size '{batch_size}' is greater than the number of hosts '{hosts_size}'"
@@ -254,7 +255,7 @@ class BaseWorker(object):
 
     @property
     def batch_sleep(self):
-        """Getter for the batch_sleep property with a default value."""
+        """Getter for the batch_sleep property, default to 0.0 if not set."""
         return self._batch_sleep or 0.0
 
     @batch_sleep.setter
@@ -262,39 +263,42 @@ class BaseWorker(object):
         """Setter for the batch_sleep property with validation, raise WorkerError if value is not valid.
 
         Arguments:
-        value -- the value to set the batch_sleep to
+        value -- the value to set the batch_sleep to. Must be a positive float or None to unset it.
         """
         if value is not None and (not isinstance(value, float) or value < 0.0):
-            self._raise_task_error('batch_sleep', 'must be a positive float', value)
+            raise_error('batch_sleep', 'must be a positive float', value)
         self._batch_sleep = value
 
-    def _validate_list(self, property_name, value):
-        """Helper to validate a list or None, raise WorkerError otherwise.
 
-        Arguments:
-        property_name -- the name of the property to validate
-        value         -- the value to validate
-        """
-        if value is not None and not isinstance(value, list):
-            self._raise_task_error(property_name, 'must be a list', value)
+def validate_list(property_name, value):
+    """Helper to validate a list or None, raise WorkerError otherwise.
 
-    def _validate_positive_integer(self, property_name, value):
-        """Helper to validate a positive integer or None, raise WorkerError otherwise.
+    Arguments:
+    property_name -- the name of the property to validate
+    value         -- the value to validate
+    """
+    if value is not None and not isinstance(value, list):
+        raise_error(property_name, 'must be a list', value)
 
-        Arguments:
-        property_name -- the name of the property to validate
-        value         -- the value to validate
-        """
-        if value is not None and (not isinstance(value, int) or value < 0):
-            self._raise_task_error(property_name, 'must be a positive integer', value)
 
-    def _raise_task_error(self, property_name, message, value):
-        """Helper to raise a WorkerError exception.
+def validate_positive_integer(property_name, value):
+    """Helper to validate a positive integer or None, raise WorkerError otherwise.
 
-        Arguments:
-        property_name -- the name of the property that raised the exception
-        message       -- the message to use for the exception
-        value         -- the value that raised the exception
-        """
-        raise WorkerError("{property_name} {message}, got '{value_type}': {value}".format(
-            property_name=property_name, message=message, value_type=type(value), value=value))
+    Arguments:
+    property_name -- the name of the property to validate
+    value         -- the value to validate
+    """
+    if value is not None and (not isinstance(value, int) or value <= 0):
+        raise_error(property_name, 'must be a positive integer', value)
+
+
+def raise_error(property_name, message, value):
+    """Helper to raise a WorkerError exception.
+
+    Arguments:
+    property_name -- the name of the property that raised the exception
+    message       -- the message to use for the exception
+    value         -- the value that raised the exception
+    """
+    raise WorkerError("{property_name} {message}, got '{value_type}': {value}".format(
+        property_name=property_name, message=message, value_type=type(value), value=value))
