@@ -43,24 +43,37 @@ class TestCommand(unittest.TestCase):
     """Command class tests."""
 
     def setUp(self):
+        command_with_options = 'command --with "options" -a -n -d params with\ spaces'
+        self.same_command_a = transports.Command(command_with_options)
+        self.same_command_b = "command  --with  'options'  -a  -n  -d  params  with\ spaces"
+        command_with_nested_quotes = 'command --with \'nested "quotes"\' -a -n -d params with\ spaces'
+
         self.commands = [
-            {'command': 'command1', 'timeout': None},
+            {'command': 'command1'},
             {'command': 'command1', 'timeout': 5},
-            {'command': 'command --with "options" -a -n -d params with\ spaces', 'timeout': None},
-            {'command': 'command --with "options" -a -n -d params with\ spaces', 'timeout': 5},
-            {'command': 'command --with \'nested "quotes"\' -a -n -d params with\ spaces', 'timeout': None},
+            {'command': 'command1', 'ok_codes': [0, 255]},
+            {'command': 'command1', 'timeout': 5, 'ok_codes': [0, 255]},
+            {'command': command_with_options},
+            {'command': command_with_options, 'timeout': 5},
+            {'command': command_with_options, 'ok_codes': [0, 255]},
+            {'command': command_with_options, 'timeout': 5, 'ok_codes': [0, 255]},
+            {'command': command_with_nested_quotes},
+            {'command': command_with_nested_quotes, 'timeout': 5},
+            {'command': command_with_nested_quotes, 'ok_codes': [0, 255]},
+            {'command': command_with_nested_quotes, 'timeout': 5, 'ok_codes': [0, 255]},
         ]
-        self.same_command = "command  --with  'options'  -a  -n  -d  params  with\ spaces"
-        self.same_command_comparison = self.commands[2]
         self.different_command = "command  --with  'other options'  -a  -n  -d  other_params  with\ spaces"
         for command in self.commands:
-            command['obj'] = transports.Command(command['command'], timeout=command['timeout'])
+            command['obj'] = transports.Command(
+                command['command'], timeout=command.get('timeout', None), ok_codes=command.get('ok_codes', None))
 
     def test_instantiation(self):
         """A new Command instance should set the command property to the given command."""
         for command in self.commands:
             self.assertIsInstance(command['obj'], transports.Command)
             self.assertEqual(command['obj'].command, command['command'])
+            self.assertEqual(command['obj']._timeout, command.get('timeout', None))
+            self.assertEqual(command['obj']._ok_codes, command.get('ok_codes', None))
 
     def test_repr(self):
         """A repr of a Command should allow to instantiate an instance with the same properties."""
@@ -69,6 +82,8 @@ class TestCommand(unittest.TestCase):
             self.assertIsInstance(command_instance, transports.Command)
             self.assertEqual(repr(command_instance), repr(command['obj']))
             self.assertEqual(command_instance.command, command['obj'].command)
+            self.assertEqual(command_instance._timeout, command['obj']._timeout)
+            self.assertEqual(command_instance._ok_codes, command['obj']._ok_codes)
 
     def test_str(self):
         """A cast to string of a Command should return its command."""
@@ -78,28 +93,92 @@ class TestCommand(unittest.TestCase):
     def test_eq(self):
         """A Command instance can be compared to another or to a string with the equality operator."""
         for command in self.commands:
-            self.assertEqual(command['obj'], transports.Command(command['command'], timeout=command['timeout']))
+            self.assertEqual(command['obj'], transports.Command(
+                command['command'], timeout=command.get('timeout', None), ok_codes=command.get('ok_codes', None)))
 
-            if command['timeout'] is None:
+            if command.get('timeout', None) is None and command.get('ok_codes', None) is None:
                 self.assertEqual(command['obj'], command['command'])
 
             with self.assertRaisesRegexp(ValueError, 'Unable to compare instance of'):
                 command['obj'] == 1
 
-        self.assertEqual(self.same_command_comparison['obj'], self.same_command)
+        self.assertEqual(self.same_command_a, self.same_command_b)
 
     def test_ne(self):
         """A Command instance can be compared to another or to a string with the inequality operator."""
+        # Just a basic test, all the cases are covered by the test_eq test
         for command in self.commands:
-            self.assertNotEqual(command['obj'], transports.Command(self.different_command, timeout=command['timeout']))
-            self.assertNotEqual(command['obj'], transports.Command(command['command'], timeout=999))
+            # Different command with same or differnt properties
+            self.assertNotEqual(command['obj'], transports.Command(
+                self.different_command, timeout=command.get('timeout', None), ok_codes=command.get('ok_codes', None)))
+            self.assertNotEqual(command['obj'], transports.Command(
+                self.different_command, timeout=999, ok_codes=command.get('ok_codes', None)))
+            self.assertNotEqual(command['obj'], transports.Command(
+                self.different_command, timeout=command.get('timeout', None), ok_codes=[99]))
+            self.assertNotEqual(command['obj'], transports.Command(self.different_command, timeout=999, ok_codes=[99]))
             self.assertNotEqual(command['obj'], self.different_command)
 
-            if command['timeout'] is not None:
+            # Same command, properties different
+            self.assertNotEqual(command['obj'], transports.Command(
+                command['command'], timeout=999, ok_codes=command.get('ok_codes', None)))
+            self.assertNotEqual(command['obj'], transports.Command(
+                command['command'], timeout=command.get('timeout', None), ok_codes=[99]))
+            self.assertNotEqual(command['obj'], transports.Command(command['command'], timeout=999, ok_codes=[99]))
+
+            if command.get('timeout', None) is not None or command.get('ok_codes', None) is not None:
                 self.assertNotEqual(command['obj'], command['command'])
 
             with self.assertRaisesRegexp(ValueError, 'Unable to compare instance of'):
                 command['obj'] == 1
+
+    def test_timeout_getter(self):
+        """Should return the timeout set, None otherwise."""
+        for command in self.commands:
+            self.assertAlmostEqual(command['obj'].timeout, command['obj']._timeout)
+
+    def test_timeout_setter(self):
+        """Should set the timeout to its value, converted to float if integer. Unset it if None is passed."""
+        command = transports.Command('command1')
+        command.timeout = 1.0
+        self.assertAlmostEqual(command._timeout, 1.0)
+        command.timeout = None
+        self.assertIsNone(command._timeout)
+        command.timeout = 1
+        self.assertAlmostEqual(command._timeout, 1.0)
+        with self.assertRaisesRegexp(transports.WorkerError, 'timeout must be a positive float'):
+            command.timeout = -1.0
+
+    def test_ok_codes_getter(self):
+        """Should return the ok_codes set, [0] otherwise."""
+        for command in self.commands:
+            self.assertListEqual(command['obj'].ok_codes, command.get('ok_codes', [0]))
+
+    def test_ok_codes_setter(self):
+        """Should set the ok_codes to its value, unset it if None is passed."""
+        command = transports.Command('command1')
+        self.assertIsNone(command._ok_codes)
+        for i in xrange(256):
+            codes = [i]
+            command.ok_codes = codes
+            self.assertListEqual(command._ok_codes, codes)
+            codes.insert(0, 0)
+            command.ok_codes = codes
+            self.assertListEqual(command._ok_codes, codes)
+
+        command.ok_codes = None
+        self.assertIsNone(command._ok_codes)
+
+        with self.assertRaisesRegexp(transports.WorkerError, r'ok_codes must be a list or None'):
+            command.ok_codes = 'invalid_value'
+
+        for i in (-1, 0.0, 100.0, 256, 'invalid_value'):
+            codes = [i]
+            with self.assertRaisesRegexp(transports.WorkerError, r'must be a list of integers in the range'):
+                command.ok_codes = codes
+
+            codes.insert(0, 0)
+            with self.assertRaisesRegexp(transports.WorkerError, r'must be a list of integers in the range'):
+                command.ok_codes = codes
 
 
 class TestState(unittest.TestCase):

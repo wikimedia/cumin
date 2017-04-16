@@ -23,27 +23,34 @@ class InvalidStateError(CuminError):
 class Command(object):
     """Class to represent a command."""
 
-    def __init__(self, command, timeout=None):
+    def __init__(self, command, timeout=None, ok_codes=None):
         """Command constructor.
 
         Arguments:
-        command -- the command to execute.
-        timeout -- the command's timeout in seconds. [optional, default: None]
+        command  -- the command to execute.
+        timeout  -- the command's timeout in seconds. [optional, default: None]
+        ok_codes -- a list of exit codes to be considered successful for the command. The exit code 0 is considered
+                    successful by default, this option allows to override it. [optional, default: None]
         """
         self.command = command
         self._timeout = None
+        self._ok_codes = None
 
         if timeout is not None:
             self.timeout = timeout
 
+        if ok_codes is not None:
+            self.ok_codes = ok_codes
+
     def __repr__(self):
         """Repr of the command, allow to instantiate a Command with the same properties."""
-        kwargs = {}
-        if self._timeout is not None:
-            kwargs['timeout'] = self._timeout
-
         params = ["'{command}'".format(command=self.command.replace("'", r'\''))]
-        params += ['{key}={value}'.format(key=key, value=value) for key, value in kwargs.iteritems()]
+
+        for field in ('_timeout', '_ok_codes'):
+            value = getattr(self, field)
+            if value is not None:
+                params.append('{key}={value}'.format(key=field[1:], value=value))
+
         return 'cumin.transports.Command({params})'.format(params=', '.join(params))
 
     def __str__(self):
@@ -59,10 +66,10 @@ class Command(object):
         """
         if isinstance(other, str):
             other_command = other
-            same_params = (self._timeout is None)
+            same_params = (self._timeout is None and self._ok_codes is None)
         elif isinstance(other, Command):
             other_command = other.command
-            same_params = (self.timeout == other.timeout)
+            same_params = (self.timeout == other.timeout and self.ok_codes == other.ok_codes)
         else:
             raise ValueError("Unable to compare instance of '{other}' with Command instance".format(other=type(other)))
 
@@ -95,6 +102,31 @@ class Command(object):
 
         validate_positive_float('timeout', value)
         self._timeout = value
+
+    @property
+    def ok_codes(self):
+        """Getter for the command's ok_codes property, return a list with only the element 0 if not set."""
+        return self._ok_codes or [0]
+
+    @ok_codes.setter
+    def ok_codes(self, value):
+        """Setter for the command's ok_codes property with validation, raise WorkerError if not valid.
+
+        Arguments:
+        value -- the command's list of exit codes to be considered successful for the execution. Must be a list integers
+                 in the range 0-255 or None to unset it. The exit code 0 is considered successful by default, it can be
+                 overriden setting this property.
+        """
+        if value is None:
+            self._ok_codes = value
+            return
+
+        validate_list('ok_codes', value)
+        for code in value:
+            if not isinstance(code, int) or code < 0 or code > 255:
+                raise_error('ok_codes', 'must be a list of integers in the range 0-255 or None', value)
+
+        self._ok_codes = value
 
 
 class State(object):
@@ -369,7 +401,7 @@ def validate_list(property_name, value):
     value         -- the value to validate
     """
     if value is not None and not isinstance(value, list):
-        raise_error(property_name, 'must be a list', value)
+        raise_error(property_name, 'must be a list or None', value)
 
 
 def validate_positive_integer(property_name, value):
@@ -380,7 +412,7 @@ def validate_positive_integer(property_name, value):
     value         -- the value to validate
     """
     if value is not None and (not isinstance(value, int) or value <= 0):
-        raise_error(property_name, 'must be a positive integer', value)
+        raise_error(property_name, 'must be a positive integer or None', value)
 
 
 def validate_positive_float(property_name, value):
@@ -391,7 +423,7 @@ def validate_positive_float(property_name, value):
     value         -- the value to validate
     """
     if value is not None and (not isinstance(value, float) or value <= 0):
-        raise_error(property_name, 'must be a positive float', value)
+        raise_error(property_name, 'must be a positive float or None', value)
 
 
 def raise_error(property_name, message, value):
