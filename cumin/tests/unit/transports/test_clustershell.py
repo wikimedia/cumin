@@ -175,7 +175,7 @@ class TestBaseEventHandler(unittest.TestCase):
     def setUp(self, *args):
         """Initialize default properties and instances."""
         self.nodes = ['node1', 'node2']
-        self.commands = [Command('command1'), Command('command2')]
+        self.commands = [Command('command1', ok_codes=[0, 100]), Command('command2')]
         self.worker = mock.MagicMock()
         self.worker.current_node = 'node1'
         self.worker.command = 'command1'
@@ -346,7 +346,7 @@ class TestSyncEventHandler(TestBaseEventHandler):
     @mock.patch('cumin.transports.clustershell.Task.Task.timer')
     def test_ev_hup_ok(self, timer):
         """Calling ev_hup with a worker that has exit status zero should update the success progress bar."""
-        self.worker.current_rc = 0
+        self.worker.current_rc = 100
         self.handler.ev_pickup(self.worker)
         self.handler.ev_hup(self.worker)
         self.assertTrue(self.handler.pbar_ok.update.called)

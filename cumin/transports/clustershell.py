@@ -518,17 +518,18 @@ class SyncEventHandler(BaseEventHandler):
 
         self.lock.acquire()  # Avoid modifications of the same data from other callbacks triggered by ClusterShell
         try:
-            if worker.current_rc != 0:
-                # Considering failed any execution with return code different than zero
-                self.pbar_ko.update()
-                self.counters['failed'] += 1
-                new_state = State.failed
-            else:
+            node = self.nodes[worker.current_node]
+
+            if worker.current_rc in node.commands[node.running_command_index].ok_codes:
                 self.pbar_ok.update()
                 self.counters['success'] += 1
                 new_state = State.success
+            else:
+                self.pbar_ko.update()
+                self.counters['failed'] += 1
+                new_state = State.failed
 
-            self.nodes[worker.current_node].state.update(new_state)
+            node.state.update(new_state)
         finally:
             self.lock.release()
 
@@ -662,13 +663,8 @@ class AsyncEventHandler(BaseEventHandler):
         self.lock.acquire()  # Avoid modifications of the same data from other callbacks triggered by ClusterShell
         try:
             node = self.nodes[worker.current_node]
-            if worker.current_rc != 0:
-                # Considering failed any execution with return code different than zero
-                self.pbar_ko.update()
-                self.counters['failed'] += 1
-                node.state.update(State.failed)
-                schedule_timer = True  # Continue the execution on other nodes if criteria are met
-            else:
+
+            if worker.current_rc in node.commands[node.running_command_index].ok_codes:
                 if node.running_command_index == (len(node.commands) - 1):
                     self.pbar_ok.update()
                     self.counters['success'] += 1
@@ -676,6 +672,11 @@ class AsyncEventHandler(BaseEventHandler):
                     schedule_timer = True  # Continue the execution on other nodes if criteria are met
                 else:
                     schedule_next = True  # Continue the execution in the current node with the next command
+            else:
+                self.pbar_ko.update()
+                self.counters['failed'] += 1
+                node.state.update(State.failed)
+                schedule_timer = True  # Continue the execution on other nodes if criteria are met
         finally:
             self.lock.release()
 
