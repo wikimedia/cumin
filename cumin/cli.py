@@ -1,6 +1,7 @@
 #!/usr/bin/python2
 """Cumin CLI entry point."""
 import argparse
+import code
 import logging
 import os
 import pkgutil
@@ -20,6 +21,29 @@ from cumin.query import QueryBuilder
 from cumin.transport import Transport
 
 logger = logging.getLogger(__name__)
+INTERACTIVE_BANNER = """===== Cumin Interactive REPL =====
+# Press Ctrl+d or type exit() to exit the program.
+
+= Available variables =
+# hosts     -- the list of targeted hosts.
+# worker    -- the instance of the Transport worker that was used for the execution.
+# args      -- the parsed command line arguments, an argparse.Namespace instance.
+# config    -- the cofiguration dictionary.
+# exit_code -- the return code of the execution, that will be used as exit code.
+
+= Useful functions =
+# worker.get_results() -- generator that yields the tuple (nodes, output) for each grouped result, where:
+#                         - nodes  -- is a ClusterShell.NodeSet.NodeSet instance
+#                         - output -- is a ClusterShell.MsgTree.MsgTreeElem instance
+# h()                  -- print this help message.
+# help(object)         -- Python default interactive help and documentation of the given object.
+
+= Example usage:
+for nodes, output in worker.get_results():
+    print(nodes)
+    print(output)
+    print('-----')
+"""
 
 
 class KeyboardInterruptError(CuminError):
@@ -79,6 +103,7 @@ def parse_args(argv=None):
     parser.add_argument('--dry-run', action='store_true',
                         help='Do not execute any command, just return the list of matching hosts and exit.')
     parser.add_argument('-d', '--debug', action='store_true', help='Set log level to DEBUG.')
+    parser.add_argument('-i', '--interactive', action='store_true', help='Drop into a Python shell with the results.')
     parser.add_argument('hosts', metavar='HOSTS_QUERY', help='Hosts selection query')
     parser.add_argument('commands', metavar='COMMAND', nargs='*',
                         help='Command to be executed. If no commands are speficied, --dry-run is set.')
@@ -94,8 +119,11 @@ def parse_args(argv=None):
         parsed_args.dry_run = True
     elif num_commands == 1:
         parsed_args.mode = 'sync'
-    elif num_commands > 1 and parsed_args.mode is None:
-        parser.error('-m/--mode is required when there are multiple COMMANDS')
+    elif num_commands > 1:
+        if parsed_args.mode is None:
+            parser.error('-m/--mode is required when there are multiple COMMANDS')
+        if parsed_args.interactive:
+            parser.error('-i/--interactive can be used only with one command')
 
     return parsed_args
 
@@ -263,7 +291,15 @@ def run(args, config):
     worker.success_threshold = args.success_percentage / float(100)
     worker.batch_size = args.batch_size
     worker.batch_sleep = args.batch_sleep
-    return worker.execute()
+    exit_code = worker.execute()
+
+    if args.interactive:
+        # Define a help function h() that will be available in the interactive shell to print the help message.
+        # The name is to not shadow the Python built-in help() that might be usefult too to inspect objects.
+        def h(): tqdm.write(INTERACTIVE_BANNER)
+        code.interact(banner=INTERACTIVE_BANNER, local=locals())
+
+    return exit_code
 
 
 def main(argv=None):
