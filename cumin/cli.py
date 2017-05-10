@@ -2,6 +2,7 @@
 """Cumin CLI entry point."""
 import argparse
 import code
+import json
 import logging
 import os
 import pkgutil
@@ -21,6 +22,7 @@ from cumin.query import QueryBuilder
 from cumin.transport import Transport
 
 logger = logging.getLogger(__name__)
+OUTPUT_FORMATS = ('txt', 'json')
 INTERACTIVE_BANNER = """===== Cumin Interactive REPL =====
 # Press Ctrl+d or type exit() to exit the program.
 
@@ -90,6 +92,7 @@ def parse_args(argv=None):
     parser.add_argument('-s', '--batch-sleep', type=float, default=None,
                         help=('Sleep in seconds (float) to wait before starting the execution on the next host when '
                               '-b/--batch-size is used. [default: None]'))
+    parser.add_argument('-o', '--output', choices=OUTPUT_FORMATS, help='Specify a different output format.')
     parser.add_argument('--force', action='store_true',
                         help='USE WITH CAUTION! Force the execution without confirmation of the affected hosts. ')
     parser.add_argument('--backend', choices=backends,
@@ -124,6 +127,8 @@ def parse_args(argv=None):
             parser.error('-m/--mode is required when there are multiple COMMANDS')
         if parsed_args.interactive:
             parser.error('-i/--interactive can be used only with one command')
+        if parsed_args.output is not None:
+            parser.error('-o/--output can be used only with one command')
 
     return parsed_args
 
@@ -272,6 +277,32 @@ def get_hosts(args, config):
     return hosts
 
 
+def print_output(output_format, worker):
+    """Print the execution results in a specific format.
+
+    Arguments:
+    output_format -- the output format to use, one of: 'txt', 'json'.
+    worker        -- the Transport worker instance to retrieve the results from.
+    """
+    if output_format not in OUTPUT_FORMATS:
+        raise RuntimeError("Got invalid output format '{fmt}', expected one of {allowed}".format(
+            fmt=output_format, allowed=OUTPUT_FORMATS))
+
+    out = {}
+    for nodeset, output in worker.get_results():
+        for node in nodeset:
+            if output_format == 'txt':
+                out[node] = '\n'.join(['{node}: {line}'.format(node=node, line=line) for line in output.lines()])
+            elif output_format == 'json':
+                out[node] = output.message()
+
+    if output_format == 'txt':
+        for node in sorted(out.keys()):
+            tqdm.write(out[node])
+    elif output_format == 'json':
+        tqdm.write(json.dumps(out, indent=4, sort_keys=True))
+
+
 def run(args, config):
     """Execute the commands on the selected hosts and print the results.
 
@@ -298,6 +329,9 @@ def run(args, config):
         # The name is to not shadow the Python built-in help() that might be usefult too to inspect objects.
         def h(): tqdm.write(INTERACTIVE_BANNER)
         code.interact(banner=INTERACTIVE_BANNER, local=locals())
+    elif args.output is not None:
+        tqdm.write('_____FORMATTED_OUTPUT_____')
+        print_output(args.output, worker)
 
     return exit_code
 
