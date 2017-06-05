@@ -1,7 +1,9 @@
 """CLI tests."""
 
-import unittest
+import os
 import sys
+import tempfile
+import unittest
 
 from functools import wraps
 from logging import DEBUG, INFO
@@ -9,7 +11,7 @@ from StringIO import StringIO
 
 import mock
 
-from cumin import cli
+from cumin import cli, CuminError
 
 # Environment variables
 _ENV = {'USER': 'root', 'SUDO_USER': 'user'}
@@ -80,12 +82,12 @@ class TestCLI(unittest.TestCase):
         """Unsufficient permissions or unknown user should raise RuntimeError and a proper user should be detected."""
         env = {'USER': None, 'SUDO_USER': None}
         with mock.patch('os.getenv', env.get):
-            with self.assertRaisesRegexp(RuntimeError, r'Unsufficient privileges, run with sudo'):
+            with self.assertRaisesRegexp(CuminError, r'Insufficient privileges, run with sudo'):
                 cli.get_running_user()
 
         env = {'USER': 'root', 'SUDO_USER': None}
         with mock.patch('os.getenv', env.get):
-            with self.assertRaisesRegexp(RuntimeError, r'Unable to determine real user'):
+            with self.assertRaisesRegexp(CuminError, r'Unable to determine real user'):
                 cli.get_running_user()
 
         with mock.patch('os.getenv', _ENV.get):
@@ -94,20 +96,38 @@ class TestCLI(unittest.TestCase):
     @mock.patch('cumin.cli.os')
     @mock.patch('cumin.cli.RotatingFileHandler')
     @mock.patch('cumin.cli.logger')
-    def test_setup_logging(self, logging, file_handler, os):
+    def test_setup_logging(self, logging, file_handler, mocked_os):
         """Calling setup_logging() should properly setup the logger."""
-        os.path.exists.return_value = False
+        mocked_os.path.exists.return_value = False
         cli.setup_logging('/path/to/filename')
         logging.setLevel.assert_called_with(INFO)
 
-        os.path.exists.return_value = True
+        mocked_os.path.exists.return_value = True
         cli.setup_logging('filename', debug=True)
         logging.setLevel.assert_called_with(DEBUG)
 
-    def test_parse_config(self):
+    def test_parse_config_ok(self):
         """The configuration file is properly parsed and accessible."""
         config = cli.parse_config('doc/examples/config.yaml')
         self.assertTrue('log_file' in config)
+
+    def test_parse_config_non_existent(self):
+        """A CuminError is raised if the configuration file is not available."""
+        with self.assertRaisesRegexp(CuminError, 'Unable to read configuration file'):
+            cli.parse_config('not_existent_config.yaml')
+
+    def test_parse_config_invalid(self):
+        """A CuminError is raised if the configuration cannot be parsed."""
+        invalid_yaml = '\n'.join((
+            'foo:',
+            '  bar: baz',
+            '  - foobar',
+        ))
+        tmpfile, tmpfilepath = tempfile.mkstemp(suffix='config.yaml', prefix='cumin', text=True)
+        os.write(tmpfile, invalid_yaml)
+
+        with self.assertRaisesRegexp(CuminError, 'Unable to parse configuration file'):
+            cli.parse_config(tmpfilepath)
 
     @mock.patch('cumin.cli.stderr')
     @mock.patch('cumin.cli.raw_input')
@@ -185,7 +205,7 @@ class TestCLI(unittest.TestCase):
         args = cli.parse_args(argv=['host1', 'command1'])
         config = {'backend': 'direct'}
         isatty.return_value = False
-        with self.assertRaisesRegexp(RuntimeError, 'Not in a TTY but neither DRY-RUN nor FORCE mode were specified'):
+        with self.assertRaisesRegexp(CuminError, 'Not in a TTY but neither DRY-RUN nor FORCE mode were specified'):
             cli.get_hosts(args, config)
         self.assertTrue(stderr.called)
 

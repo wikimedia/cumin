@@ -136,9 +136,9 @@ def parse_args(argv=None):
 def get_running_user():
     """Ensure it's running as root and that the original user is detected and return it."""
     if os.getenv('USER') != 'root':
-        raise RuntimeError('Unsufficient privileges, run with sudo')
+        raise CuminError('Insufficient privileges, run with sudo')
     if os.getenv('SUDO_USER') in (None, 'root'):
-        raise RuntimeError('Unable to determine real user')
+        raise CuminError('Unable to determine real user, logged in as root?')
 
     return os.getenv('SUDO_USER')
 
@@ -173,8 +173,17 @@ def parse_config(config_file):
     Arguments:
     config_file -- the path of the configuration file to load
     """
-    with open(config_file, 'r') as f:
-        config = yaml.safe_load(f)
+    try:
+        with open(config_file, 'r') as f:
+            config = yaml.safe_load(f)
+    except IOError as e:
+        raise CuminError('Unable to read configuration file: {message}'.format(message=e))
+    except yaml.parser.ParserError as e:
+        raise CuminError("Unable to parse configuration file '{config}':\n{message}".format(
+            config=config_file, message=e))
+
+    if config is None:
+        raise CuminError("Empty configuration found in '{config}'".format(config=config_file))
 
     return config
 
@@ -257,7 +266,7 @@ def get_hosts(args, config):
     elif not sys.stdout.isatty():
         message = 'Not in a TTY but neither DRY-RUN nor FORCE mode were specified.'
         stderr(message)
-        raise RuntimeError(message)
+        raise CuminError(message)
 
     for i in xrange(10):
         stderr('Confirm to continue [y/n]?', end=' ')
@@ -351,6 +360,9 @@ def main(argv=None):
         user = get_running_user()
         config = parse_config(args.config)
         setup_logging(config['log_file'], debug=args.debug)
+    except CuminError as e:
+        stderr(e)
+        return 2
     except Exception as e:
         stderr('Caught {name} exception: {msg}'.format(name=e.__class__.__name__, msg=e))
         return 3
