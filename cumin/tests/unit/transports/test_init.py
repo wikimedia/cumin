@@ -386,8 +386,9 @@ class TestConcreteBaseWorker(unittest.TestCase):
     def test_success_threshold_getter(self):
         """Return default value if not set, the value otherwise."""
         self.assertAlmostEqual(self.worker.success_threshold, 1.0)
-        self.worker._success_threshold = 0.5
-        self.assertAlmostEqual(self.worker.success_threshold, 0.5)
+        for success_threshold in (0.0, 0.0001, 0.5, 0.99):
+            self.worker._success_threshold = success_threshold
+            self.assertAlmostEqual(self.worker.success_threshold, success_threshold)
 
     def test_success_threshold_setter(self):
         """Raise WorkerError if not float between 0 and 1, set it otherwise."""

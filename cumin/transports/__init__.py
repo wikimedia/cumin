@@ -339,7 +339,11 @@ class BaseWorker(object):
     @property
     def success_threshold(self):
         """Getter for the success_threshold property with a default value."""
-        return self._success_threshold or 1.0
+        success_threshold = self._success_threshold
+        if success_threshold is None:
+            success_threshold = 1.0
+
+        return success_threshold
 
     @success_threshold.setter
     def success_threshold(self, value):
