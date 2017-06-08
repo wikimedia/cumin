@@ -106,16 +106,20 @@ class Command(object):
     @property
     def ok_codes(self):
         """Getter for the command's ok_codes property, return a list with only the element 0 if not set."""
-        return self._ok_codes or [0]
+        ok_codes = self._ok_codes
+        if ok_codes is None:
+            ok_codes = [0]
+
+        return ok_codes
 
     @ok_codes.setter
     def ok_codes(self, value):
         """Setter for the command's ok_codes property with validation, raise WorkerError if not valid.
 
         Arguments:
-        value -- the command's list of exit codes to be considered successful for the execution. Must be a list integers
-                 in the range 0-255 or None to unset it. The exit code 0 is considered successful by default, it can be
-                 overriden setting this property.
+        value -- the command's list of exit codes to be considered successful for the execution. Must be a list of
+                 integers in the range 0-255 or None to unset it. The exit code 0 is considered successful by default,
+                 but it can be overriden setting this property. An empty list is also accepted.
         """
         if value is None:
             self._ok_codes = value

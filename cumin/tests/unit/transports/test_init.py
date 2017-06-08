@@ -150,6 +150,11 @@ class TestCommand(unittest.TestCase):
 
     def test_ok_codes_getter(self):
         """Should return the ok_codes set, [0] otherwise."""
+        # Test empty list
+        command = transports.Command('command1')
+        command.ok_codes = []
+        self.assertListEqual(command.ok_codes, [])
+
         for command in self.commands:
             self.assertListEqual(command['obj'].ok_codes, command.get('ok_codes', [0]))
 
@@ -168,16 +173,20 @@ class TestCommand(unittest.TestCase):
         command.ok_codes = None
         self.assertIsNone(command._ok_codes)
 
+        command.ok_codes = []
+        self.assertListEqual(command._ok_codes, [])
+
         with self.assertRaisesRegexp(transports.WorkerError, r'ok_codes must be a list or None'):
             command.ok_codes = 'invalid_value'
 
+        message_regex = r'must be a list of integers in the range'
         for i in (-1, 0.0, 100.0, 256, 'invalid_value'):
             codes = [i]
-            with self.assertRaisesRegexp(transports.WorkerError, r'must be a list of integers in the range'):
+            with self.assertRaisesRegexp(transports.WorkerError, message_regex):
                 command.ok_codes = codes
 
             codes.insert(0, 0)
-            with self.assertRaisesRegexp(transports.WorkerError, r'must be a list of integers in the range'):
+            with self.assertRaisesRegexp(transports.WorkerError, message_regex):
                 command.ok_codes = codes
 
 
