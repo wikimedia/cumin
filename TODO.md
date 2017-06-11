@@ -1,39 +1,56 @@
 TODO
 ----
 
+Tracking ideas to improve Cumin. They are in no particular order inside each section
+and there is no guarantee that any item listed will be implemented in the nearby future.
+
 ## On the masters
 
-##### First improvements
-
-* CLI: add an option to get raw output for easy post-processing by command line tools
-* CLI: read commands from a file, one per line
+##### Internal improvements / bug fixes
+* global: add a man page [T159308](https://phabricator.wikimedia.org/T159308)
 * CLI: fix progress bar interaction with ctrl+c and sigint_handler()
-* global: improve logging in modules
-* clustershell transport: decouple the output handling from the event handlers (in progress)
+* CLI: suppress normal output when `-o/--output` is used
+* clustershell transport: decouple the output handling from the event handlers
 * clustershell transport: improve test coverage for partial/total failures and timeouts
-* CLI: add a --color option, don't use colors by default
-* CLI: read default options also from CUMIN_OPTIONS environmental variable or a config file in the /home directory
-* global: allow to log the whole output to a specific file, to allow multiple people to follow the progress
-* puppetdb: improve globbing support, check if fnmatch could be used without conflicting with ClusterShell NodeSet
-* puppetdb: add support for API v4
-* CLI: allow to just query the backend without passing any parameter
+* clustershell transport: improve and extend integration tests
 
-##### Next improvements
-
-* transports: add an output-only transport to nicely print the matching hosts and some related count
-* backends: generalize backends to allow to return other data too, not only the host certnames
-* backends: add a new backed to query the known hosts file format
-* puppetdb backend: add support for mixed facts/resources queries
-* integrate with monitoring and alerting tools
-* allow to specify a rollback strategy
-* CLI: allow to have an external audit log, for example IRC/SAL
+##### Small improvements
+* global: allow to log the whole output to a specific file, to allow multiple people follow the progress
+* global: allow to randomize the list hosts before execution [T164587](https://phabricator.wikimedia.org/T164587)
+* CLI: `--batch-size` allow to specify percentage too
+* CLI: automatically select async mode if only one host is targeted with multiple commands
 * CLI: improve the dry-run mode to show what would have been done
-* backends: allow to query multiple backends in the same query
+* CLI: add a `--color` or a `--no-color` option to manage the output color
+* CLI: read commands from a file, one per line
+* CLI: add `--limit` to randomly select N hosts within a broader selection
+* puppetdb backend: improve globbing support, check if fnmatch could be used without conflicting with ClusterShell NodeSet
+* puppetdb backend: allow to specify boolean values for resource parameters [T161545](https://phabricator.wikimedia.org/T161545)
+
+##### New Features
+* global: connection timeout/failure should be treated differently than normal failures
+  * don't consider them for the success threshold by default, add a `--fail-always` option for that
+  * if the first command executed on a host fails with exit code 255, try to run `/bin/true`, if it fails too it should be considered a connection timeout/failure
+* global: allow to notify the user who launched the execution on failure/termination trough IRC/email. Useful for long running jobs
+* global: allow to differentiate the command to execute on a per-host basis, i.e. passing a different parameter for each host.
+* global: allow to have an external audit log and/or announce commands execution on IRC
+* transports: add an output-only transport to nicely print the matching hosts and some related count
+* transports: allow to specify a rollback strategy to be executed in each host on failure
+* transports: add parallel execution of local commands on the master for each targeted host with the host as a parameter. Needs a new local transport with ExecWorker to shell out in parallel.
+* backends: generalize backends to allow to return other data too, not only the host certnames
+* backends: allow to query multiple backends in the same query (#A)
+* backends: add a new backend to support conftool
+* backends: add a new backed to query the known hosts file format
+* backends: allow to define aliases for complex common queries, depends on #A
+* puppetdb backend: add support for API v4
+* puppetdb backend: add support for mixed facts/resources queries, depends on #A
+* CLI: when `-i/--interactive` is used and no command or query is specified, drop into a REPL session allowing to easily setup them.
+
 
 ## On the targets
 
-##### Next improvements
+#### Future plans
 
-* Create a single entry point to execute modules
+* Create a single entry point to allow the execution of idempotent _modules_
 * Create a safe and reliable sync up mechanism for the modules
 * Allow to handle timeouts and failures locally within the module (local rollback and/or cleanup)
+* Allow to drop privileges into a different user
