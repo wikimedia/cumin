@@ -42,7 +42,7 @@ class TestClusterShellWorker(unittest.TestCase):
         self.worker = clustershell.worker_class(self.config)
         self.nodes = ['node1', 'node2']
         self.nodes_set = clustershell.NodeSet.NodeSet.fromlist(self.nodes)
-        self.commands = [Command('command1'), Command('command2')]
+        self.commands = [Command('command1'), Command('command2', ok_codes=[0, 100], timeout=5)]
         self.task_self = task_self
         # Mock default handlers
         clustershell.DEFAULT_HANDLERS = {
@@ -68,7 +68,7 @@ class TestClusterShellWorker(unittest.TestCase):
         self.worker.handler = 'sync'
         self.worker.execute()
         self.worker.task.shell.assert_called_once_with(
-            'command1', nodes=self.nodes_set, handler=self.worker._handler_instance)
+            'command1', nodes=self.nodes_set, handler=self.worker._handler_instance, timeout=None)
         self.assertTrue(clustershell.DEFAULT_HANDLERS['sync'].called)
 
     def test_execute_default_async_handler(self):
@@ -76,11 +76,11 @@ class TestClusterShellWorker(unittest.TestCase):
         self.worker.handler = 'async'
         self.worker.execute()
         self.worker.task.shell.assert_called_once_with(
-            'command1', nodes=self.nodes_set, handler=self.worker._handler_instance)
+            'command1', nodes=self.nodes_set, handler=self.worker._handler_instance, timeout=None)
         self.assertTrue(clustershell.DEFAULT_HANDLERS['async'].called)
 
     def test_execute_timeout(self):
-        """Calling execute() and let the timeout expire should call on_timeout."""
+        """Calling execute() and let the global timeout expire should call on_timeout."""
         self.worker.task.run = mock.Mock(side_effect=clustershell.Task.TimeoutError)
         self.worker.handler = 'sync'
         self.worker.execute()
@@ -92,7 +92,7 @@ class TestClusterShellWorker(unittest.TestCase):
         self.worker.execute()
         self.assertIsInstance(self.worker._handler_instance, ConcreteBaseEventHandler)
         self.worker.task.shell.assert_called_once_with(
-            'command1', nodes=self.nodes_set, handler=self.worker._handler_instance)
+            'command1', nodes=self.nodes_set, handler=self.worker._handler_instance, timeout=None)
 
     def test_execute_no_commands(self):
         """Calling execute() without commands should return without doing anything."""
@@ -118,7 +118,8 @@ class TestClusterShellWorker(unittest.TestCase):
         self.worker.batch_size = 1
         self.worker.execute()
         self.worker.task.shell.assert_called_once_with(
-            'command1', nodes=clustershell.NodeSet.NodeSet(self.nodes[0]), handler=self.worker._handler_instance)
+            'command1', nodes=clustershell.NodeSet.NodeSet(self.nodes[0]), handler=self.worker._handler_instance,
+            timeout=None)
 
     def test_get_results(self):
         """Calling get_results() should call ClusterShell iter_buffers with the right parameters."""
@@ -175,7 +176,7 @@ class TestBaseEventHandler(unittest.TestCase):
     def setUp(self, *args):
         """Initialize default properties and instances."""
         self.nodes = ['node1', 'node2']
-        self.commands = [Command('command1', ok_codes=[0, 100]), Command('command2')]
+        self.commands = [Command('command1', ok_codes=[0, 100]), Command('command2', timeout=5)]
         self.worker = mock.MagicMock()
         self.worker.current_node = 'node1'
         self.worker.command = 'command1'
@@ -232,13 +233,10 @@ class TestConcreteBaseEventHandler(TestBaseEventHandler):
         self.worker.task.num_timeout.return_value = 1
         self.worker.task.iter_keys_timeout.return_value = [self.nodes[0]]
 
+        self.assertFalse(self.handler.global_timedout)
         self.handler.on_timeout(self.worker.task)
-
-        self.assertEqual(self.worker.eh.counters['timeout'], 1)
-        self.assertListEqual([node for node in self.worker.eh.nodes.itervalues() if node.state.is_timeout],
-                             [self.worker.eh.nodes[self.nodes[0]]])
         self.assertTrue(self.handler.pbar_ko.update.called)
-        self.assertTrue(tqdm.write.called)
+        self.assertTrue(self.handler.global_timedout)
 
     def test_ev_pickup(self):
         """Calling ev_pickup() should set the state of the current node to running."""
@@ -271,6 +269,17 @@ class TestConcreteBaseEventHandler(TestBaseEventHandler):
         self.worker.current_msg = output
         self.handler.ev_read(self.worker)
         tqdm.write.assert_has_calls([mock.call(output)])
+
+    def test_ev_timeout(self):
+        """Calling ev_timeout() should increase the counters for the timed out hosts."""
+        for node in self.nodes:
+            self.worker.current_node = node
+            self.handler.ev_pickup(self.worker)
+
+        self.assertEqual(self.handler.counters['timeout'], 0)
+        self.worker.task.num_timeout.return_value = 2
+        self.handler.ev_timeout(self.worker)
+        self.assertEqual(self.handler.counters['timeout'], 2)
 
 
 class TestSyncEventHandler(TestBaseEventHandler):
@@ -389,14 +398,14 @@ class TestAsyncEventHandler(TestBaseEventHandler):
         self.assertTrue(self.handler.pbar_ok.refresh.called)
 
     def test_ev_hup_ok(self):
-        """Calling ev_hup with a worker that has zero exit status should update enqueue the next command."""
+        """Calling ev_hup with a worker that has zero exit status should enqueue the next command."""
         for node in self.handler.nodes.itervalues():
             node.state.update(State.scheduled)
         self.handler.ev_pickup(self.worker)
         self.worker.current_rc = 0
         self.handler.ev_hup(self.worker)
         self.worker.task.shell.assert_called_once_with(
-            'command2', nodes=clustershell.NodeSet.NodeSet(self.worker.current_node), handler=self.handler)
+            'command2', nodes=clustershell.NodeSet.NodeSet(self.worker.current_node), handler=self.handler, timeout=5)
 
         # Calling it again
         self.worker.command = 'command2'

@@ -51,7 +51,8 @@ class ClusterShellWorker(BaseWorker):
 
         self.logger.info("Executing commands {commands} on '{num}' hosts: {hosts}".format(
             commands=self.commands, num=len(self.hosts), hosts=NodeSet.NodeSet.fromlist(self.hosts)))
-        self.task.shell(self.commands[0].command, nodes=first_batch, handler=self._handler_instance)
+        self.task.shell(self.commands[0].command, nodes=first_batch, handler=self._handler_instance,
+                        timeout=self.commands[0].timeout)
 
         return_value = 0
         try:
@@ -144,6 +145,7 @@ class BaseEventHandler(Event.EventHandler):
         self.counters = Counter()
         self.counters['total'] = len(nodes)
         self.deduplicate_output = self.counters['total'] > 1
+        self.global_timedout = False
         # Instantiate all the node instances, slicing the commands list to get a copy
         self.nodes = {node: Node(node, commands[:]) for node in nodes}
         # Move already all the nodes in the first_batch to the scheduled state, it means that ClusterShell was
@@ -175,30 +177,26 @@ class BaseEventHandler(Event.EventHandler):
         Arguments:
         task -- a ClusterShell Task instance
         """
-        self.logger.error('timeout triggered while {num} nodes were executing a command'.format(num=task.num_timeout()))
+        num_timeout = task.num_timeout()
+        self.logger.error('global timeout was triggered while {num} nodes were executing a command'.format(
+            num=num_timeout))
 
         self.lock.acquire()  # Avoid modifications of the same data from other callbacks triggered by ClusterShell
         try:
-            timeout = task.num_timeout()
-            for node in task.iter_keys_timeout():
-                # Those nodes timed out while running a command
-                self.nodes[node].state.update(State.timeout)
-
+            self.global_timedout = True
             # Considering timed out also the nodes that were pending the execution (for example when executing in
             # batches) and those that were already scheduled (for example when the # of nodes is greater than
             # ClusterShell fanout)
             pending_or_scheduled = sum(
                 (node.state.is_pending or node.state.is_scheduled or
-                 (node.state.is_success and node.running_command_index == (len(node.commands) - 1))
+                 (node.state.is_success and node.running_command_index < (len(node.commands) - 1))
                  ) for node in self.nodes.itervalues())
-            # Update the counter and fail progress bar
-            self.counters['timeout'] += timeout + pending_or_scheduled
             if self.pbar_ko is not None:
-                self.pbar_ko.update(timeout + pending_or_scheduled)
+                self.pbar_ko.update(num_timeout + pending_or_scheduled)
         finally:
             self.lock.release()
 
-        self._timeout_nodes_report()
+        self._global_timeout_nodes_report()
 
     def ev_pickup(self, worker):
         """Command execution started on a node, remove the command from the node's queue.
@@ -239,6 +237,30 @@ class BaseEventHandler(Event.EventHandler):
             return
 
         tqdm.write(worker.current_msg)
+
+    def ev_timeout(self, worker):
+        """Worker has timed out.
+
+        This callback is triggered by ClusterShell when the execution has timed out.
+
+        Arguments: according to EventHandler interface
+        """
+        delta_timeout = worker.task.num_timeout() - self.counters['timeout']
+        self.logger.debug("command='{command}', delta_timeout={num}".format(
+            command=worker.command, num=delta_timeout))
+
+        self.lock.acquire()  # Avoid modifications of the same data from other callbacks triggered by ClusterShell
+        try:
+            self.pbar_ko.update(delta_timeout)
+            self.counters['timeout'] = worker.task.num_timeout()
+            for node in worker.task.iter_keys_timeout():
+                if not self.nodes[node].state.is_timeout:
+                    self.nodes[node].state.update(State.timeout)
+        finally:
+            self.lock.release()
+
+        # Schedule a timer to run the current command on the next node or start the next command
+        worker.task.timer(self.kwargs.get('batch_sleep', 0.0), worker.eh)
 
     def _get_log_message(self, num, message, nodes=None):
         """Helper to get a pre-formatted message suitable for logging or printing.
@@ -316,19 +338,19 @@ class BaseEventHandler(Event.EventHandler):
 
         tqdm.write(colorama.Fore.BLUE + message + colorama.Style.RESET_ALL, file=sys.stdout)
 
-    def _timeout_nodes_report(self):
-        """Helper to print the nodes that timed out in a colored and tqdm-friendly way."""
-        if self.counters['timeout'] == 0:
+    def _global_timeout_nodes_report(self):
+        """Helper to print the nodes that were caught by the global timeout in a colored and tqdm-friendly way."""
+        if not self.global_timedout:
             return
 
         timeout = [node.name for node in self.nodes.itervalues() if node.state.is_timeout]
-        timeout_desc = 'of nodes were executing a command when the timeout occurred'
+        timeout_desc = 'of nodes were executing a command when the global timeout occurred'
         timeout_message, timeout_nodes = self._get_log_message(len(timeout), timeout_desc, nodes=timeout)
         self.logger.error('{message}{nodes}'.format(message=timeout_message, nodes=timeout_nodes))
         self._print_report_line(timeout_message, nodes_string=timeout_nodes)
 
         not_run = [node.name for node in self.nodes.itervalues() if node.state.is_pending or node.state.is_scheduled]
-        not_run_desc = 'of nodes were pending execution when the timeout occurred'
+        not_run_desc = 'of nodes were pending execution when the global timeout occurred'
         not_run_message, not_run_nodes = self._get_log_message(len(not_run), not_run_desc, nodes=not_run)
         self.logger.error('{message}{nodes}'.format(message=not_run_message, nodes=not_run_nodes))
         self._print_report_line(not_run_message, nodes_string=not_run_nodes)
@@ -339,24 +361,31 @@ class BaseEventHandler(Event.EventHandler):
         Arguments:
         filter_command - print only the nodes that failed to execute this specific command [optional, default: None]
         """
-        failed_commands = defaultdict(list)
-        for node in [node for node in self.nodes.itervalues() if node.state.is_failed]:
-            failed_commands[node.running_command_index].append(node.name)
+        for state in (State.failed, State.timeout):
+            failed_commands = defaultdict(list)
+            for node in [node for node in self.nodes.itervalues() if node.state == state]:
+                failed_commands[node.running_command_index].append(node.name)
 
-        for index, nodes in failed_commands.iteritems():
-            command = self.commands[index].command
+            for index, nodes in failed_commands.iteritems():
+                command = self.commands[index].command
 
-            if filter_command_index >= 0 and command is not None and index != filter_command_index:
-                continue
+                if filter_command_index >= 0 and command is not None and index != filter_command_index:
+                    continue
 
-            message = "of nodes failed to execute command '{command}'".format(command=self._get_short_command(command))
-            log_message, nodes_string = self._get_log_message(len(nodes), message, nodes=nodes)
-            self.logger.error('{message}{nodes}'.format(message=log_message, nodes=nodes_string))
-            self._print_report_line(log_message, nodes_string=nodes_string)
+                message = "of nodes {state} to execute command '{command}'".format(
+                    state=State.states_representation[state], command=self._get_short_command(command))
+                log_message, nodes_string = self._get_log_message(len(nodes), message, nodes=nodes)
+                self.logger.error('{message}{nodes}'.format(message=log_message, nodes=nodes_string))
+                self._print_report_line(log_message, nodes_string=nodes_string)
 
     def _success_nodes_report(self, command=None):
         """Helper to print how many nodes succesfully executed all commands in a colored and tqdm-friendly way."""
-        num = self.counters['success']
+        if self.global_timedout and command is None:
+            num = sum(1 for node in self.nodes.itervalues() if node.state.is_success and
+                      node.running_command_index == (len(self.commands) - 1))
+        else:
+            num = self.counters['success']
+
         tot = self.counters['total']
         success_threshold = self.kwargs.get('success_threshold', 1)
         success_ratio = float(num) / tot
@@ -454,13 +483,13 @@ class SyncEventHandler(BaseEventHandler):
             finally:
                 self.lock.release()
 
-            self.logger.debug("command='{command}', first_batch={first_batch}".format(
-                command=self.commands[self.current_command_index].command, first_batch=first_batch_set))
+            command = self.commands[self.current_command_index]
+            self.logger.debug("command='{command}', timeout={timeout}, first_batch={first_batch}".format(
+                command=command.command, timeout=command.timeout, first_batch=first_batch_set))
 
             # Schedule the command for execution in ClusterShell
             Task.task_self().flush_buffers()
-            Task.task_self().shell(
-                self.commands[self.current_command_index].command, nodes=first_batch_set, handler=self)
+            Task.task_self().shell(command.command, nodes=first_batch_set, handler=self, timeout=command.timeout)
 
     def end_command(self):
         """Command terminated, print the result and schedule the next command if criteria are met.
@@ -544,7 +573,7 @@ class SyncEventHandler(BaseEventHandler):
         Arguments: according to EventHandler interface
         """
         success_threshold = self.kwargs.get('success_threshold', 1)
-        success_ratio = 1 - (float(self.counters['failed']) / self.counters['total'])
+        success_ratio = 1 - (float(self.counters['failed'] + self.counters['timeout']) / self.counters['total'])
 
         node = None
         if success_ratio >= success_threshold:
@@ -562,9 +591,11 @@ class SyncEventHandler(BaseEventHandler):
 
         if node is not None:
             # Schedule the execution with ClusterShell of the current command to the next node found above
-            command = self.nodes[node.name].commands[self.nodes[node.name].running_command_index + 1].command
-            self.logger.debug("next_node={node}, command='{command}'".format(node=node.name, command=command))
-            Task.task_self().shell(command, nodes=NodeSet.NodeSet(node.name), handler=timer.eh)
+            command = self.nodes[node.name].commands[self.nodes[node.name].running_command_index + 1]
+            self.logger.debug("next_node={node}, timeout={timeout}, command='{command}'".format(
+                node=node.name, command=command.command, timeout=command.timeout))
+            Task.task_self().shell(
+                command.command, nodes=NodeSet.NodeSet(node.name), handler=timer.eh, timeout=command.timeout)
             return
 
         # No more nodes were left for the execution of the current command
@@ -582,7 +613,7 @@ class SyncEventHandler(BaseEventHandler):
             accounted = len(pending) + self.counters['failed'] + self.counters['success'] + self.counters['timeout']
 
             # Avoid race conditions
-            if self.aborted or accounted != self.counters['total'] or command is None:
+            if self.aborted or accounted != self.counters['total'] or command is None or self.global_timedout:
                 self.logger.debug("skipped timer")
                 return
 
@@ -682,8 +713,9 @@ class AsyncEventHandler(BaseEventHandler):
 
         if schedule_next:
             # Schedule the execution of the next command on this node with ClusterShell
-            worker.task.shell(node.commands[node.running_command_index + 1].command,
-                              nodes=NodeSet.NodeSet(worker.current_node), handler=worker.eh)
+            command = node.commands[node.running_command_index + 1]
+            worker.task.shell(command.command, nodes=NodeSet.NodeSet(worker.current_node), handler=worker.eh,
+                              timeout=command.timeout)
         elif schedule_timer:
             # Schedule a timer to allow to run all the commands in the next available node
             worker.task.timer(self.kwargs.get('batch_sleep', 0.0), worker.eh)
@@ -696,7 +728,7 @@ class AsyncEventHandler(BaseEventHandler):
         Arguments: according to EventHandler interface
         """
         success_threshold = self.kwargs.get('success_threshold', 1)
-        success_ratio = 1 - (float(self.counters['failed']) / self.counters['total'])
+        success_ratio = 1 - (float(self.counters['failed'] + self.counters['timeout']) / self.counters['total'])
 
         node = None
         if success_ratio >= success_threshold:
@@ -714,9 +746,11 @@ class AsyncEventHandler(BaseEventHandler):
 
         if node is not None:
             # Schedule the exeuction of the first command to the next node with ClusterShell
-            command = node.commands[0].command
-            self.logger.debug("next_node={node}, command='{command}'".format(node=node.name, command=command))
-            Task.task_self().shell(command, nodes=NodeSet.NodeSet(node.name), handler=timer.eh)
+            command = node.commands[0]
+            self.logger.debug("next_node={node}, timeout={timeout}, command='{command}'".format(
+                node=node.name, command=command.command, timeout=command.timeout))
+            Task.task_self().shell(
+                command.command, nodes=NodeSet.NodeSet(node.name), handler=timer.eh, timeout=command.timeout)
         else:
             self.logger.debug('No more nodes left')
 
