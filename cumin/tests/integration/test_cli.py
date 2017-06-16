@@ -22,7 +22,7 @@ for key, value in _ENV.iteritems():
 _EXPECTED_LINES = {
     'all_targeted': '5 hosts will be targeted',
     'failed': 'failed',
-    'timeout': 'timeout',
+    'global_timeout': 'global timeout',
     'successfully': 'successfully',
     'dry_run': 'DRY-RUN mode enabled, aborting',
     'subfanout_targeted': '2 hosts will be targeted',
@@ -30,7 +30,7 @@ _EXPECTED_LINES = {
     'ls_success_threshold': "100.0% (5/5) success ratio (>= 50.0% threshold) for command: 'ls -la /tmp'.",
     'ls_partial_success': "/5) of nodes failed to execute command 'ls -la /tmp/maybe'",
     'ls_partial_success_ratio_re':
-        r"[4-6]0.0% \([2-3]/5\) success ratio \(< 100.0% threshold\) for command: 'ls -la /tmp/maybe'. Aborting.",
+        r"[4-6]0\.0% \([2-3]/5\) success ratio \(< 100\.0% threshold\) for command: 'ls -la /tmp/maybe'\. Aborting.",
     'ls_partial_success_threshold_ratio':
         "60.0% (3/5) success ratio (>= 50.0% threshold) for command: 'ls -la /tmp/maybe'.",
     'ls_failure_batch': "40.0% (2/5) of nodes failed to execute command 'ls -la /tmp/non_existing'",
@@ -51,13 +51,19 @@ _EXPECTED_LINES = {
         '0.0% (0/5) success ratio (< 100.0% threshold) of nodes successfully executed all commands. Aborting.',
     'all_failure_threshold':
         '0.0% (0/5) success ratio (< 50.0% threshold) of nodes successfully executed all commands. Aborting.',
-    'timeout_executing_re': r'([2-6]|)0.0% \([0-3]/5\) of nodes were executing a command when the timeout occurred',
-    'timeout_executing_threshold_re':
-        r'([2-6]|)0.0% \([0-3]/5\) of nodes were executing a command when the timeout occurred',
-    'timeout_pending_re': r'([2-6]|)0.0% \([0-3]/5\) of nodes were pending execution when the timeout occurred',
-    'timeout_pending_threshold_re':
-        r'([2-6]|)0.0% \([0-3]/5\) of nodes were pending execution when the timeout occurred',
+    'global_timeout_executing_re': (r'([2-6]|)0\.0% \([0-3]/5\) of nodes were executing a command when the global '
+                                    r'timeout occurred'),
+    'global_timeout_executing_threshold_re':
+        r'([2-6]|)0\.0% \([0-3]/5\) of nodes were executing a command when the global timeout occurred',
+    'global_timeout_pending_re': (r'([2-6]|)0\.0% \([0-3]/5\) of nodes were pending execution when the global timeout '
+                                  r'occurred'),
+    'global_timeout_pending_threshold_re':
+        r'([2-6]|)0\.0% \([0-3]/5\) of nodes were pending execution when the global timeout occurred',
     'sleep_total_failure': "0.0% (0/5) success ratio (< 100.0% threshold) for command: 'sleep 2'. Aborting.",
+    'sleep_success': "100.0% (5/5) success ratio (>= 100.0% threshold) for command: 'sleep 0.5'.",
+    'sleep_success_threshold': "100.0% (5/5) success ratio (>= 50.0% threshold) for command: 'sleep 0.5'.",
+    'sleep_timeout': "100.0% (5/5) of nodes timeout to execute command 'sleep 2'",
+    'sleep_timeout_threshold_re': r"[4-8]0\.0% \([2-4]/5\) of nodes timeout to execute command 'sleep 2'",
     'sync': {
         'ls_total_failure_ratio':
             "0.0% (0/5) success ratio (< 100.0% threshold) for command: 'ls -la /tmp/non_existing'. Aborting.",
@@ -76,14 +82,18 @@ _EXPECTED_LINES = {
 # additional_params: list of additional parameters to pass to the CLI. [optional]
 _VARIANTS_COMMANDS = (
     {'rc': 0, 'commands': ['ls -la /tmp', 'date'], 'assert_true': ['all_success'],
-     'assert_false': ['failed', 'timeout']},
+     'assert_false': ['failed', 'global_timeout']},
     {'rc': None, 'commands': ['ls -la /tmp/maybe', 'date']},
     {'rc': 2, 'commands': ['ls -la /tmp/non_existing', 'date'], 'assert_true': ['all_failure'],
-     'assert_false': ['timeout']},
+     'assert_false': ['global_timeout']},
     {'rc': 0, 'commands': ['date', 'date', 'date'], 'assert_true': ['all_success'],
-     'assert_false': ['failed', 'timeout']},
-    {'rc': 2, 'additional_params': ['-t', '1'], 'commands': ['date', 'sleep 2']},
-    {'rc': None, 'additional_params': ['-t', '1'], 'commands': ['sleep 0.99', 'date']},
+     'assert_false': ['failed', 'global_timeout']},
+    {'rc': 2, 'additional_params': ['--global-timeout', '1'], 'commands': ['date', 'sleep 2']},
+    {'rc': None, 'additional_params': ['--global-timeout', '1'], 'commands': ['sleep 0.99', 'date']},
+    {'rc': 2, 'additional_params': ['-t', '1'], 'commands': ['sleep 2', 'date'],
+     'assert_false': ['failed', 'global_timeout', 'date_success']},
+    {'rc': 0, 'additional_params': ['-t', '1'], 'commands': ['sleep 0.5', 'date'],
+     'assert_false': ['failed', 'global_timeout']},
 )
 
 # Tuple of lists of additional parameters to pass to the CLI.
@@ -156,13 +166,14 @@ def make_method(name, commands_set):
         self.assertIn(_EXPECTED_LINES['all_targeted'], err, msg=_EXPECTED_LINES['all_targeted'])
 
         labels = params.get('assert_true', [])
-        labels += self._get_timeout_expected_lines(params)
+        labels += self._get_global_timeout_expected_lines(params)
 
         if 'async' in params['params']:
             mode = 'async'
         else:
             mode = 'sync'
-            labels += self._get_ls_expected_lines(params) + self._get_date_expected_lines(params)
+            labels += (self._get_ls_expected_lines(params) + self._get_date_expected_lines(params) +
+                       self._get_timeout_expected_lines(params))
 
         for label in labels:
             if label in ('all_success', 'all_failure') and '-p' in params['params']:
@@ -233,10 +244,27 @@ class TestCLI(unittest.TestCase):
         params -- a dictionary with all the parameters passed to the variant_function
         """
         return_value = 2
-        if '-p' in params['params'] and '-t' not in params['params']:
+        if '-p' in params['params'] and '--global-timeout' not in params['params']:
             return_value = 1
 
         return return_value
+
+    def _get_global_timeout_expected_lines(self, params):
+        """Return a list of expected lines labels for global timeout-based tests.
+
+        Arguments:
+        params -- a dictionary with all the parameters passed to the variant_function
+        """
+        expected = []
+        if '--global-timeout' not in params['params']:
+            return expected
+
+        if '-p' in params['params']:
+            expected = ['global_timeout_executing_threshold_re', 'global_timeout_pending_threshold_re']
+        else:
+            expected = ['global_timeout_executing_re', 'global_timeout_pending_re']
+
+        return expected
 
     def _get_timeout_expected_lines(self, params):
         """Return a list of expected lines labels for timeout-based tests.
@@ -248,10 +276,18 @@ class TestCLI(unittest.TestCase):
         if '-t' not in params['params']:
             return expected
 
-        if '-p' in params['params']:
-            expected = ['timeout_executing_threshold_re', 'timeout_pending_threshold_re']
+        if params['rc'] == 0:
+            # Test successful cases
+            if '-p' in params['params']:
+                expected = ['sleep_success_threshold', 'date_success_threshold']
+            else:
+                expected = ['date_success', 'sleep_success']
         else:
-            expected = ['timeout_executing_re', 'timeout_pending_re']
+            # Test timeout cases
+            if '--batch-size' in params['params']:
+                expected = ['sleep_timeout_threshold_re']
+            else:
+                expected = ['sleep_timeout']
 
         return expected
 
@@ -318,7 +354,7 @@ class TestCLI(unittest.TestCase):
         self.assertIn(_EXPECTED_LINES['date_success_subfanout'], err, msg=_EXPECTED_LINES['date_success_subfanout'])
         self.assertIn(_EXPECTED_LINES['all_success_subfanout'], err, msg=_EXPECTED_LINES['all_success_subfanout'])
         self.assertNotIn(_EXPECTED_LINES['failed'], err, msg=_EXPECTED_LINES['failed'])
-        self.assertNotIn(_EXPECTED_LINES['timeout'], err, msg=_EXPECTED_LINES['timeout'])
+        self.assertNotIn(_EXPECTED_LINES['global_timeout'], err, msg=_EXPECTED_LINES['global_timeout'])
         self.assertEqual(rc, 0)
 
     @capture_output
@@ -331,7 +367,7 @@ class TestCLI(unittest.TestCase):
         self.assertIn(_EXPECTED_LINES['date_success'], err, msg=_EXPECTED_LINES['date_success'])
         self.assertIn(_EXPECTED_LINES['all_success'], err, msg=_EXPECTED_LINES['all_success'])
         self.assertNotIn(_EXPECTED_LINES['failed'], err, msg=_EXPECTED_LINES['failed'])
-        self.assertNotIn(_EXPECTED_LINES['timeout'], err, msg=_EXPECTED_LINES['timeout'])
+        self.assertNotIn(_EXPECTED_LINES['global_timeout'], err, msg=_EXPECTED_LINES['global_timeout'])
         self.assertEqual(rc, 0)
 
     @capture_output
@@ -344,20 +380,22 @@ class TestCLI(unittest.TestCase):
         self.assertIn(_EXPECTED_LINES['dry_run'], err, msg=_EXPECTED_LINES['dry_run'])
         self.assertNotIn(_EXPECTED_LINES['successfully'], err, msg=_EXPECTED_LINES['successfully'])
         self.assertNotIn(_EXPECTED_LINES['failed'], err, msg=_EXPECTED_LINES['failed'])
-        self.assertNotIn(_EXPECTED_LINES['timeout'], err, msg=_EXPECTED_LINES['timeout'])
+        self.assertNotIn(_EXPECTED_LINES['global_timeout'], err, msg=_EXPECTED_LINES['global_timeout'])
         self.assertEqual(rc, 0)
 
     @capture_output
-    def test_timeout(self, stdout, stderr):
-        """With a timeout shorter than a command it should fail."""
-        params = ['-t', '1', self.all_nodes, 'sleep 2']
+    def test_global_timeout(self, stdout, stderr):
+        """With a global timeout shorter than a command it should fail."""
+        params = ['--global-timeout', '1', self.all_nodes, 'sleep 2']
         rc = cli.main(argv=self.default_params + params)
         err = stderr.getvalue()
         self.assertIn(_EXPECTED_LINES['all_targeted'], err, msg=_EXPECTED_LINES['all_targeted'])
         self.assertIsNotNone(
-            re.search(_EXPECTED_LINES['timeout_executing_re'], err), msg=_EXPECTED_LINES['timeout_executing_re'])
+            re.search(_EXPECTED_LINES['global_timeout_executing_re'], err),
+            msg=_EXPECTED_LINES['global_timeout_executing_re'])
         self.assertIsNotNone(
-            re.search(_EXPECTED_LINES['timeout_pending_re'], err), msg=_EXPECTED_LINES['timeout_pending_re'])
+            re.search(_EXPECTED_LINES['global_timeout_pending_re'], err),
+            msg=_EXPECTED_LINES['global_timeout_pending_re'])
         self.assertIn(_EXPECTED_LINES['sleep_total_failure'], err, msg=_EXPECTED_LINES['sleep_total_failure'])
         self.assertIn(_EXPECTED_LINES['all_failure'], err, msg=_EXPECTED_LINES['all_failure'])
         self.assertNotIn(_EXPECTED_LINES['failed'], err, msg=_EXPECTED_LINES['failed'])

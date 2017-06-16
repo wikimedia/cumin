@@ -20,6 +20,7 @@ from tqdm import tqdm
 from cumin import CuminError
 from cumin.query import QueryBuilder
 from cumin.transport import Transport
+from cumin.transports import Command
 
 logger = logging.getLogger(__name__)
 OUTPUT_FORMATS = ('txt', 'json')
@@ -71,8 +72,11 @@ def parse_args(argv=None):
         epilog='More details at https://wikitech.wikimedia.org/wiki/Cumin')
     parser.add_argument('-c', '--config', default='/etc/cumin/config.yaml',
                         help='configuration file. [default: /etc/cumin/config.yaml]')
-    parser.add_argument('-t', '--timeout', type=int, default=None,
+    parser.add_argument('--global-timeout', type=int, default=None,
                         help='Global timeout in seconds (int) for the whole execution. [default: None (unlimited)]')
+    parser.add_argument('-t', '--timeout', type=int, default=None,
+                        help=('Timeout in seconds (int) for the the execution of every command in each host. '
+                              '[default: None (unlimited)]'))
     parser.add_argument('-m', '--mode', choices=(sync_mode, async_mode),
                         help=('Execution mode, required when there are multiple COMMANDS to be executed. In sync mode, '
                               'execute the first command on all hosts, then proceed with the next one only if '
@@ -325,8 +329,13 @@ def run(args, config):
 
     worker = Transport.new(config, logger)
     worker.hosts = hosts
-    worker.commands = args.commands
-    worker.timeout = args.timeout
+
+    if args.timeout is not None:
+        worker.commands = [Command(command, timeout=args.timeout) for command in args.commands]
+    else:
+        worker.commands = args.commands
+
+    worker.timeout = args.global_timeout
     worker.handler = args.mode
     worker.success_threshold = args.success_percentage / float(100)
     worker.batch_size = args.batch_size
