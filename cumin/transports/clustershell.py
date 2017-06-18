@@ -27,14 +27,14 @@ class ClusterShellWorker(BaseWorker):
 
         # Set any ClusterShell task options
         for key, value in config.get('clustershell', {}).items():
-            if type(value) == list:
+            if isinstance(value, list):
                 self.task.set_info(key, ' '.join(value))
             else:
                 self.task.set_info(key, value)
 
     def execute(self):
         """Required by BaseWorker."""
-        if len(self.commands) == 0:
+        if not self.commands:
             self.logger.warning('No commands provided')
             return
 
@@ -45,7 +45,7 @@ class ClusterShellWorker(BaseWorker):
         first_batch = NodeSet.NodeSet.fromlist(self.hosts[:self.batch_size])
 
         # Instantiate handler
-        self._handler_instance = self.handler(
+        self._handler_instance = self.handler(  # pylint: disable=not-callable
             self.hosts, self.commands, success_threshold=self.success_threshold, batch_size=self.batch_size,
             batch_sleep=self.batch_sleep, logger=self.logger, first_batch=first_batch)
 
@@ -86,7 +86,7 @@ class ClusterShellWorker(BaseWorker):
 
         The available default handlers are defined in DEFAULT_HANDLERS.
         """
-        if type(value) == type and issubclass(value, BaseEventHandler):
+        if isinstance(value, type) and issubclass(value, BaseEventHandler):
             self._handler = value
         elif value in DEFAULT_HANDLERS.keys():
             self._handler = DEFAULT_HANDLERS[value]
@@ -285,7 +285,7 @@ class BaseEventHandler(Event.EventHandler):
 
         return (log_message, str(nodes_string))
 
-    def _print_report_line(self, message, color=colorama.Fore.RED, nodes_string=''):
+    def _print_report_line(self, message, color=colorama.Fore.RED, nodes_string=''):  # pylint: disable=no-self-use
         """Helper to print a tqdm-friendly colored status line with success/failure ratio and optional list of nodes.
 
         Arguments:
@@ -617,7 +617,7 @@ class SyncEventHandler(BaseEventHandler):
                 self.logger.debug("skipped timer")
                 return
 
-            if len(pending) > 0:
+            if pending:
                 # This usually happens when executing in batches
                 self.logger.warning("command '{command}' was not executed on: {nodes}".format(
                     command=command, nodes=NodeSet.NodeSet.fromlist(pending)))
@@ -632,7 +632,7 @@ class SyncEventHandler(BaseEventHandler):
                         # Only nodes in pending state will be scheduled for the next command
                         node.state.update(State.pending)
         finally:
-                self.lock.release()
+            self.lock.release()
 
         if restart:
             self.start_command(schedule=True)
@@ -780,5 +780,6 @@ class AsyncEventHandler(BaseEventHandler):
             self.return_value = 1
 
 
-worker_class = ClusterShellWorker  # Required by the auto-loader in the cumin.transport.Transport factory
+# Required by the auto-loader in the cumin.transport.Transport factory
+worker_class = ClusterShellWorker  # pylint: disable=invalid-name
 DEFAULT_HANDLERS = {'sync': SyncEventHandler, 'async': AsyncEventHandler}  # Available default EventHandler classes

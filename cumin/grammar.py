@@ -3,12 +3,12 @@
 import pyparsing as pp
 
 # Available categories
-categories = (
+CATEGORIES = (
     'F',  # Fact
     'R',  # Resource
 )
 # Available operators
-operators = ('=', '!=', '>=', '<=', '<', '>', '~')
+OPERATORS = ('=', '!=', '>=', '<=', '<', '>', '~')
 
 
 def _grammar():
@@ -35,7 +35,7 @@ def _grammar():
     and_or = (pp.Keyword('and', caseless=True) | pp.Keyword('or', caseless=True))('bool')
     neg = pp.Keyword('not', caseless=True)('neg')  # 'neg' is used to allow the use of dot notation, 'not' is reserved
 
-    operator = pp.oneOf(operators, caseless=True)('operator')  # Comparison operators
+    operator = pp.oneOf(OPERATORS, caseless=True)('operator')  # Comparison operators
     quoted_string = pp.quotedString.addParseAction(pp.removeQuotes)  # Both single and double quotes are allowed
 
     # Parentheses
@@ -48,7 +48,7 @@ def _grammar():
 
     # Key-value token for allowed categories using the available comparison operators
     # i.e. F:key = value
-    category = pp.oneOf(categories, caseless=True)('category')
+    category = pp.oneOf(CATEGORIES, caseless=True)('category')
     key = pp.Word(pp.alphanums + '-_.%@:')('key')
     selector = pp.Combine(category + ':' + key)  # i.e. F:key
     # All printables characters except the parentheses that are part of the grammar
@@ -58,12 +58,12 @@ def _grammar():
 
     # Final grammar, see the docstring for it's BNF based on the tokens defined above
     # Groups are used to split the parsed results for an easy access
-    grammar = pp.Forward()
+    full_grammar = pp.Forward()
     item = pp.Group(pp.Optional(neg) + (token | hosts('hosts'))) | pp.Group(
-        pp.Optional(neg) + lpar + grammar + rpar)
-    grammar << item + pp.ZeroOrMore(pp.Group(and_or) + grammar)
+        pp.Optional(neg) + lpar + full_grammar + rpar)
+    full_grammar << item + pp.ZeroOrMore(pp.Group(and_or) + full_grammar)  # pylint: disable=expression-not-assigned
 
-    return grammar
+    return full_grammar
 
 
-grammar = _grammar()
+grammar = _grammar()  # pylint: disable=invalid-name

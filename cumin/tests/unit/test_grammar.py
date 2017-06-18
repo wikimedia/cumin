@@ -6,14 +6,15 @@ from cumin.grammar import grammar
 from cumin.tests import get_fixture
 
 
+def _get_category_key_token(category='F', key='key1', operator='=', value='value1'):
+    """Generate and return a category token string and it's expected dictionary of tokens when parsed."""
+    expected = {'category': category, 'key': key, 'operator': operator, 'value': value}
+    token = '{category}:{key} {operator} {value}'.format(**expected)
+    return token, expected
+
+
 class TestGrammar(unittest.TestCase):
     """Grammar class tests."""
-
-    def _get_category_key_token(self, category='F', key='key1', operator='=', value='value1'):
-        """Generate and return a category token string and it's expected dictionary of tokens when parsed."""
-        expected = {'category': category, 'key': key, 'operator': operator, 'value': value}
-        token = '{category}:{key} {operator} {value}'.format(**expected)
-        return token, expected
 
     def test_valid_strings(self):
         """Run quick pyparsing test over valid grammar strings."""
@@ -27,7 +28,7 @@ class TestGrammar(unittest.TestCase):
 
     def test_single_category_key_token(self):
         """A valid single token with a category that has key is properly parsed and interpreted."""
-        token, expected = self._get_category_key_token()
+        token, expected = _get_category_key_token()
         parsed = grammar.parseString(token, parseAll=True)
         self.assertDictEqual(parsed[0].asDict(), expected)
 

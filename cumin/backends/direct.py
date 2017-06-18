@@ -60,4 +60,5 @@ class DirectQuery(BaseQuery):
         return list(self.hosts)
 
 
-query_class = DirectQuery  # Required by the auto-loader in the cumin.query.Query factory
+# Required by the auto-loader in the cumin.query.Query factory
+query_class = DirectQuery  # pylint: disable=invalid-name

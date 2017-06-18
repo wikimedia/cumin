@@ -1,4 +1,5 @@
 """Transport tests."""
+# pylint: disable=protected-access
 import unittest
 
 import mock
@@ -19,16 +20,6 @@ class ConcreteBaseWorker(transports.BaseWorker):
         yield "node", "output"
 
     @property
-    def mode(self):
-        """Required by BaseWorker"""
-        return self._mode
-
-    @mode.setter
-    def mode(self, value):
-        """Required by BaseWorker"""
-        self._mode = value
-
-    @property
     def handler(self):
         """Required by BaseWorker"""
         return self._handler
@@ -43,10 +34,11 @@ class TestCommand(unittest.TestCase):
     """Command class tests."""
 
     def setUp(self):
-        command_with_options = 'command --with "options" -a -n -d params with\ spaces'
+        """Initialize test commands."""
+        command_with_options = r'command --with "options" -a -n -d params with\ spaces'
         self.same_command_a = transports.Command(command_with_options)
-        self.same_command_b = "command  --with  'options'  -a  -n  -d  params  with\ spaces"
-        command_with_nested_quotes = 'command --with \'nested "quotes"\' -a -n -d params with\ spaces'
+        self.same_command_b = r"command  --with  'options'  -a  -n  -d  params  with\ spaces"
+        command_with_nested_quotes = 'command --with \'nested "quotes"\' -a -n -d params with\\ spaces'
 
         self.commands = [
             {'command': 'command1'},
@@ -62,7 +54,7 @@ class TestCommand(unittest.TestCase):
             {'command': command_with_nested_quotes, 'ok_codes': [0, 255]},
             {'command': command_with_nested_quotes, 'timeout': 5, 'ok_codes': [0, 255]},
         ]
-        self.different_command = "command  --with  'other options'  -a  -n  -d  other_params  with\ spaces"
+        self.different_command = r"command  --with  'other options'  -a  -n  -d  other_params  with\ spaces"
         for command in self.commands:
             command['obj'] = transports.Command(
                 command['command'], timeout=command.get('timeout', None), ok_codes=command.get('ok_codes', None))
@@ -78,7 +70,8 @@ class TestCommand(unittest.TestCase):
     def test_repr(self):
         """A repr of a Command should allow to instantiate an instance with the same properties."""
         for command in self.commands:
-            command_instance = eval(repr(command['obj']))
+            # Bandit and pylint would require to use ast.literal_eval, but it will not work with objects
+            command_instance = eval(repr(command['obj']))  # nosec pylint: disable=eval-used
             self.assertIsInstance(command_instance, transports.Command)
             self.assertEqual(repr(command_instance), repr(command['obj']))
             self.assertEqual(command_instance.command, command['obj'].command)
@@ -100,7 +93,7 @@ class TestCommand(unittest.TestCase):
                 self.assertEqual(command['obj'], command['command'])
 
             with self.assertRaisesRegexp(ValueError, 'Unable to compare instance of'):
-                command['obj'] == 1
+                command['obj'] == 1  # pylint: disable=pointless-statement
 
         self.assertEqual(self.same_command_a, self.same_command_b)
 
@@ -129,7 +122,7 @@ class TestCommand(unittest.TestCase):
                 self.assertNotEqual(command['obj'], command['command'])
 
             with self.assertRaisesRegexp(ValueError, 'Unable to compare instance of'):
-                command['obj'] == 1
+                command['obj'] == 1  # pylint: disable=pointless-statement
 
     def test_timeout_getter(self):
         """Should return the timeout set, None otherwise."""
@@ -226,7 +219,7 @@ class TestState(unittest.TestCase):
         """Accessing a property with an invalid name should raise AttributeError."""
         state = transports.State(init=transports.State.failed)
         with self.assertRaisesRegexp(AttributeError, 'object has no attribute'):
-            state.invalid_property
+            state.invalid_property  # pylint: disable=pointless-statement
 
     def test_repr(self):
         """A State repr should return its representation that allows to recreate the same State instance."""
@@ -309,7 +302,7 @@ class TestBaseWorker(unittest.TestCase):
     def test_instantiation(self):
         """Raise if instantiated directly, should return an instance of BaseWorker if inherited."""
         with self.assertRaises(TypeError):
-            transports.BaseWorker({})
+            transports.BaseWorker({})  # pylint: disable=abstract-class-instantiated
 
         self.assertIsInstance(ConcreteBaseWorker({}), transports.BaseWorker)
 

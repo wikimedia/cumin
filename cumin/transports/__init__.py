@@ -204,7 +204,7 @@ class State(object):
         if isinstance(other, int):
             return self._state - other
         elif isinstance(other, State):
-            return self._state - other._state
+            return self._state - other._state  # pylint: disable=protected-access
         else:
             raise ValueError("Unable to compare instance of '{other}' with State instance".format(other=type(other)))
 
@@ -357,7 +357,8 @@ class BaseWorker(object):
         value -- The success ratio threshold that must be reached to consider the run successful. A float between 0
                  and 1 or None. The specific meaning might change based on the chosen transport. [default: 1]
         """
-        if value is not None and (not isinstance(value, float) or not (0.0 <= value <= 1.0)):
+        if value is not None and (not isinstance(value, float) or
+                                  not (0.0 <= value <= 1.0)):  # pylint: disable=superfluous-parens
             raise WorkerError("success_threshold must be a float beween 0 and 1, got '{value_type}': {value}".format(
                 value_type=type(value), value=value))
 

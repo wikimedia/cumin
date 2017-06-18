@@ -1,5 +1,6 @@
 """Query handling tests."""
 
+import logging
 import os
 import pkgutil
 import unittest
@@ -19,6 +20,9 @@ class QueryFactory(object):
     @staticmethod
     def new(config, logger=None):
         """Return an instance of the mocked query class."""
+        if logger is not None and not isinstance(logger, logging.Logger):
+            raise AssertionError('Expected logger parameter to be None or logging instance, got: {logger}'.format(
+                logger=logger))
         if not isinstance(config, dict):
             raise AssertionError("Expected instance of dict, got type '{type}' for config.".format(type=type(config)))
         return mock.MagicMock(spec_set=BaseQuery)
@@ -98,4 +102,4 @@ class TestQueryBuilder(unittest.TestCase):
         """QueryBuilder._parse_token() should raise RuntimeError for an invalid token."""
         query_builder = QueryBuilder(self.invalid_query_string, self.config)
         with self.assertRaisesRegexp(RuntimeError, r"Invalid query string syntax"):
-            query_builder._parse_token('invalid_token')
+            query_builder._parse_token('invalid_token')  # pylint: disable=protected-access

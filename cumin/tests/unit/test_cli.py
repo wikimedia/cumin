@@ -105,6 +105,7 @@ class TestCLI(unittest.TestCase):
         mocked_os.path.exists.return_value = True
         cli.setup_logging('filename', debug=True)
         logging.setLevel.assert_called_with(DEBUG)
+        self.assertTrue(file_handler.called)
 
     def test_parse_config_ok(self):
         """The configuration file is properly parsed and accessible."""
@@ -133,7 +134,7 @@ class TestCLI(unittest.TestCase):
     @mock.patch('cumin.cli.raw_input')
     @mock.patch('cumin.cli.sys.stdout.isatty')
     @mock.patch('cumin.cli.logger')
-    def test_sigint_handler(self, logging, isatty, mocked_raw_input, stderr):
+    def test_sigint_handler(self, logging, isatty, mocked_raw_input, stderr):  # pylint: disable=unused-argument
         """Calling the SIGINT handler should raise KeyboardInterrupt or not based on tty and answer."""
         # Signal handler called without a tty
         isatty.return_value = False
@@ -198,6 +199,8 @@ class TestCLI(unittest.TestCase):
         with self.assertRaises(cli.KeyboardInterruptError):
             cli.get_hosts(args, config)
 
+        self.assertTrue(stderr.called)
+
     @mock.patch('cumin.cli.stderr')
     @mock.patch('cumin.cli.sys.stdout.isatty')
     def test_get_hosts_no_tty_ko(self, isatty, stderr):
@@ -239,3 +242,4 @@ class TestCLI(unittest.TestCase):
         config = {'backend': 'direct', 'transport': 'clustershell'}
         cli.run(args, config)
         transport.new.assert_called_once_with(config, cli.logger)
+        self.assertTrue(stderr.called)

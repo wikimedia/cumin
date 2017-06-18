@@ -1,5 +1,5 @@
 """ClusterShell transport tests."""
-
+# pylint: disable=invalid-name,no-member,protected-access
 import unittest
 
 import mock
@@ -32,7 +32,7 @@ class TestClusterShellWorker(unittest.TestCase):
     """ClusterShell backend worker test class."""
 
     @mock.patch('cumin.transports.clustershell.Task.task_self')
-    def setUp(self, task_self):
+    def setUp(self, task_self):  # pylint: disable=arguments-differ
         """Initialize default properties and instances"""
         self.config = {
             'clustershell': {
@@ -126,6 +126,8 @@ class TestClusterShellWorker(unittest.TestCase):
         self.worker.task.iter_buffers = TestClusterShellWorker.iter_buffers
         self.worker.handler = 'async'
         self.worker.execute()
+        nodes = None
+        output = None
         for nodes, output in self.worker.get_results():
             pass
         self.assertEqual(str(nodes), 'node[90-92]')
@@ -140,6 +142,8 @@ class TestClusterShellWorker(unittest.TestCase):
     def test_handler_setter_invalid(self):
         """Raise WorkerError if trying to set it to an invalid class or value"""
         class InvalidClass(object):
+            """Invalid class."""
+
             pass
 
         with self.assertRaisesRegexp(WorkerError, r'handler must be one of'):
@@ -173,7 +177,7 @@ class TestClusterShellWorker(unittest.TestCase):
 class TestBaseEventHandler(unittest.TestCase):
     """BaseEventHandler test class."""
 
-    def setUp(self, *args):
+    def setUp(self, *args):  # pylint: disable=arguments-differ
         """Initialize default properties and instances."""
         self.nodes = ['node1', 'node2']
         self.commands = [Command('command1', ok_codes=[0, 100]), Command('command2', timeout=5)]
@@ -182,6 +186,7 @@ class TestBaseEventHandler(unittest.TestCase):
         self.worker.command = 'command1'
         self.worker.nodes = clustershell.NodeSet.NodeSet.fromlist(self.nodes)
         self.handler = None
+        self.args = args
 
     @mock.patch('cumin.transports.clustershell.colorama')
     def test_close(self, colorama):
@@ -201,7 +206,7 @@ class ConcreteBaseEventHandler(clustershell.BaseEventHandler):
         self.pbar_ok = mock.Mock()
         self.pbar_ko = mock.Mock()
 
-    def close(self, worker):
+    def close(self, task):
         """Required by the BaseEventHandler class."""
 
 
@@ -210,7 +215,7 @@ class TestConcreteBaseEventHandler(TestBaseEventHandler):
 
     @mock.patch('cumin.transports.clustershell.colorama')
     @mock.patch('cumin.transports.clustershell.tqdm')
-    def setUp(self, tqdm, colorama):
+    def setUp(self, tqdm, colorama):  # pylint: disable=arguments-differ
         """Initialize default properties and instances."""
         super(TestConcreteBaseEventHandler, self).setUp()
         self.handler = ConcreteBaseEventHandler(
@@ -237,6 +242,7 @@ class TestConcreteBaseEventHandler(TestBaseEventHandler):
         self.handler.on_timeout(self.worker.task)
         self.assertTrue(self.handler.pbar_ko.update.called)
         self.assertTrue(self.handler.global_timedout)
+        self.assertTrue(tqdm.write.called)
 
     def test_ev_pickup(self):
         """Calling ev_pickup() should set the state of the current node to running."""
@@ -288,7 +294,7 @@ class TestSyncEventHandler(TestBaseEventHandler):
     @mock.patch('cumin.transports.clustershell.logging')
     @mock.patch('cumin.transports.clustershell.colorama')
     @mock.patch('cumin.transports.clustershell.tqdm')
-    def setUp(self, tqdm, colorama, logger):
+    def setUp(self, tqdm, colorama, logger):  # pylint: disable=arguments-differ
         """Initialize default properties and instances."""
         super(TestSyncEventHandler, self).setUp()
         self.handler = clustershell.SyncEventHandler(
@@ -297,6 +303,7 @@ class TestSyncEventHandler(TestBaseEventHandler):
         self.worker.eh = self.handler
         self.tqdm = tqdm
         self.colorama = colorama
+        self.logger = logger
 
     def test_instantiation(self):
         """An instance of SyncEventHandler should be an instance of BaseEventHandler."""
@@ -373,7 +380,7 @@ class TestSyncEventHandler(TestBaseEventHandler):
         self.assertTrue(self.handler.nodes[self.worker.current_node].state.is_failed)
 
     @mock.patch('cumin.transports.clustershell.tqdm')
-    def test_close(self, tqdm):
+    def test_close(self, tqdm):  # pylint: disable=arguments-differ
         """Calling close should print the report when needed."""
         self.handler.current_command_index = 2
         self.handler.close(self.worker)
@@ -386,11 +393,14 @@ class TestAsyncEventHandler(TestBaseEventHandler):
     @mock.patch('cumin.transports.clustershell.logging')
     @mock.patch('cumin.transports.clustershell.colorama')
     @mock.patch('cumin.transports.clustershell.tqdm')
-    def setUp(self, tqdm, colorama, logger):
+    def setUp(self, tqdm, colorama, logger):  # pylint: disable=arguments-differ
         """Initialize default properties and instances."""
         super(TestAsyncEventHandler, self).setUp()
         self.handler = clustershell.AsyncEventHandler(self.nodes, self.commands)
         self.worker.eh = self.handler
+        self.tqdm = tqdm
+        self.colorama = colorama
+        self.logger = logger
 
     def test_instantiation(self):
         """An instance of AsyncEventHandler should be an instance of BaseEventHandler and initialize progress bars."""
@@ -430,7 +440,7 @@ class TestAsyncEventHandler(TestBaseEventHandler):
         self.handler.ev_timer(mock.Mock())
 
     @mock.patch('cumin.transports.clustershell.tqdm')
-    def test_close(self, tqdm):
+    def test_close(self, tqdm):  # pylint: disable=arguments-differ
         """Calling close with a worker should close progress bars."""
         self.worker.task.iter_buffers = TestClusterShellWorker.iter_buffers
         self.worker.num_timeout.return_value = 0

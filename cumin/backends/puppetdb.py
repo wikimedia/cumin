@@ -1,3 +1,5 @@
+# pylint: skip-file
+# See https://github.com/PyCQA/astroid/issues/437
 """PuppetDB backend."""
 from string import capwords
 
@@ -75,7 +77,7 @@ class PuppetDBQuery(BaseQuery):
 
     def add_hosts(self, hosts, neg=False):
         """Required by BaseQuery."""
-        if len(hosts) == 0:
+        if not hosts:
             return
 
         hosts_tokens = []
@@ -122,13 +124,13 @@ class PuppetDBQuery(BaseQuery):
 
         return unique_hosts
 
-    def _get_resource_query(self, key, value=None, operator='='):
+    def _get_resource_query(self, key, value=None, operator='='):  # pylint: disable=no-self-use
         """Build a resource query based on the parameters, resolving the special cases for %params and @field.
 
         Arguments:
         key      -- the key of the resource
         value    -- the value to match, if not specified the key itself will be matched [optional, default: None]
-        operator -- the comparison operator to use, one of cumin.grammar.operators [optional: default: =]
+        operator -- the comparison operator to use, one of cumin.grammar.OPERATORS [optional: default: =]
         """
         if all(char in key for char in ('%', '@')):
             raise InvalidQueryError(("Resource key cannot contain both '%' (query a resource's parameter) and '@' "
@@ -210,4 +212,5 @@ class PuppetDBQuery(BaseQuery):
         return resources.json()
 
 
-query_class = PuppetDBQuery  # Required by the auto-loader in the cumin.query.Query factory
+# Required by the auto-loader in the cumin.query.Query factory
+query_class = PuppetDBQuery  # pylint: disable=invalid-name

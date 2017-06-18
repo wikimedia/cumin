@@ -11,4 +11,4 @@ class TestBaseQuery(unittest.TestCase):
     def test_instantiation(self):
         """Class BaseQuery is not instantiable being an abstract class."""
         with self.assertRaises(TypeError):
-            BaseQuery({})
+            BaseQuery({})  # pylint: disable=abstract-class-instantiated

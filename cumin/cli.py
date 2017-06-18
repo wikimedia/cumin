@@ -9,7 +9,7 @@ import pkgutil
 import signal
 import sys
 
-from logging.handlers import RotatingFileHandler
+from logging.handlers import RotatingFileHandler  # pylint: disable=ungrouped-imports
 
 import colorama
 import yaml
@@ -22,7 +22,7 @@ from cumin.query import QueryBuilder
 from cumin.transport import Transport
 from cumin.transports import Command
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 OUTPUT_FORMATS = ('txt', 'json')
 INTERACTIVE_BANNER = """===== Cumin Interactive REPL =====
 # Press Ctrl+d or type exit() to exit the program.
@@ -192,14 +192,14 @@ def parse_config(config_file):
     return config
 
 
-def sigint_handler(*args):
+def sigint_handler(*args):  # pylint: disable=unused-argument
     """Signal handler for Ctrl+c / SIGINT, raises KeyboardInterruptError.
 
     Arguments (as defined in https://docs.python.org/2/library/signal.html):
     signum -- the signal number
     frame  -- the current stack frame
     """
-    if not sys.stdout.isatty():
+    if not sys.stdout.isatty():  # pylint: disable=no-member
         logger.warning('Execution interrupted by Ctrl+c/SIGINT')
         raise KeyboardInterruptError
 
@@ -254,7 +254,7 @@ def get_hosts(args, config):
     query = QueryBuilder(args.hosts, config, logger).build()
     hosts = query.execute()
 
-    if len(hosts) == 0:
+    if not hosts:
         stderr('No hosts found that matches the query')
         return hosts
 
@@ -267,7 +267,7 @@ def get_hosts(args, config):
     elif args.force:
         stderr('FORCE mode enabled, continuing without confirmation')
         return hosts
-    elif not sys.stdout.isatty():
+    elif not sys.stdout.isatty():  # pylint: disable=no-member
         message = 'Not in a TTY but neither DRY-RUN nor FORCE mode were specified.'
         stderr(message)
         raise CuminError(message)
@@ -324,7 +324,7 @@ def run(args, config):
     config -- a dictionary with the parsed configuration file
     """
     hosts = get_hosts(args, config)
-    if len(hosts) == 0:
+    if not hosts:
         return 0
 
     worker = Transport.new(config, logger)
@@ -345,7 +345,9 @@ def run(args, config):
     if args.interactive:
         # Define a help function h() that will be available in the interactive shell to print the help message.
         # The name is to not shadow the Python built-in help() that might be usefult too to inspect objects.
-        def h(): tqdm.write(INTERACTIVE_BANNER)
+        def h():  # pylint: disable=unused-variable,invalid-name
+            """Helper function for the interactive shell."""
+            tqdm.write(INTERACTIVE_BANNER)
         code.interact(banner=INTERACTIVE_BANNER, local=locals())
     elif args.output is not None:
         tqdm.write('_____FORMATTED_OUTPUT_____')
@@ -372,7 +374,7 @@ def main(argv=None):
     except CuminError as e:
         stderr(e)
         return 2
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-except
         stderr('Caught {name} exception: {msg}'.format(name=e.__class__.__name__, msg=e))
         return 3
 
@@ -390,7 +392,7 @@ def main(argv=None):
     except KeyboardInterruptError:
         stderr('Execution interrupted by Ctrl+c/SIGINT/Aborted')
         exit_code = 98
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-except
         stderr('Caught {name} exception: {msg}'.format(name=e.__class__.__name__, msg=e))
         logger.exception('Failed to execute')
         exit_code = 99

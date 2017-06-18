@@ -206,6 +206,8 @@ def add_variants_methods(indexes):
             for j, commands_set in enumerate(_VARIANTS_COMMANDS):
                 commands_set['params'] = _VARIANTS_PARAMETERS[i] + commands_set.get('additional_params', [])
                 test_input = make_method('params{i:02d}_commands{j:02d}'.format(i=i, j=j), commands_set)
+                if test_input.__doc__ is None:
+                    raise AssertionError("Missing __doc__ for test {name}".format(name=test_input.__name__))
                 setattr(cls, test_input.__name__, test_input)
         return cls
 
@@ -220,8 +222,9 @@ class TestCLI(unittest.TestCase):
 
     def setUp(self):
         """Set default properties."""
-        self.identifier = os.environ.get('CUMIN_IDENTIFIER')
-        self.config = os.path.join(os.environ.get('CUMIN_TMPDIR'), 'config.yaml')
+        self.identifier = os.getenv('CUMIN_IDENTIFIER')
+        self.assertIsNotNone(self.identifier, msg='Unable to find CUMIN_IDENTIFIER environmental variable')
+        self.config = os.path.join(os.getenv('CUMIN_TMPDIR', ''), 'config.yaml')
         self.default_params = ['--force', '-d', '-c', self.config]
         self.nodes_prefix = '{identifier}-'.format(identifier=self.identifier)
         self.all_nodes = '{prefix}[1-5]'.format(prefix=self.nodes_prefix)

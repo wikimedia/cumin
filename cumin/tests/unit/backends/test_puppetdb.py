@@ -1,5 +1,5 @@
 """PuppetDB backend tests."""
-
+# pylint: disable=invalid-name
 import unittest
 
 import requests_mock
@@ -217,7 +217,7 @@ class TestPuppetDBQueryExecute(unittest.TestCase):
     def _register_uris(self, requests):
         """Setup the requests library mock for each test."""
         # Register a requests valid response for each endpoint
-        for category in self.query.endpoints.keys():
+        for category in self.query.endpoints:
             endpoint = self.query.endpoints[category]
             key = self.query.hosts_keys[category]
             requests.register_uri('GET', self.query.url + endpoint + '?query=', status_code=200, json=[

@@ -31,10 +31,10 @@ class BaseQuery(object):
         """Add a category token to the query 'F:key = value'.
 
         Arguments:
-        category -- the category of the token, one of cumin.grammar.categories
+        category -- the category of the token, one of cumin.grammar.CATEGORIES
         key      -- the key for this category
         value    -- the value to match, if not specified the key itself will be matched [optional, default: None]
-        operator -- the comparison operator to use, one of cumin.grammar.operators [optional: default: =]
+        operator -- the comparison operator to use, one of cumin.grammar.OPERATORS [optional: default: =]
         neg      -- whether the token must be negated [optional, default: False]
         """
 
