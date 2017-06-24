@@ -3,9 +3,9 @@
 import logging
 import os
 import pkgutil
-import unittest
 
 import mock
+import pytest
 
 from ClusterShell.NodeSet import NodeSet
 from pyparsing import ParseException
@@ -28,12 +28,14 @@ class QueryFactory(object):
         return mock.MagicMock(spec_set=BaseQuery)
 
 
-class TestQuery(unittest.TestCase):
+class TestQuery(object):
     """Query factory class tests."""
+
+    # pylint: disable=no-self-use
 
     def test_invalid_backend(self):
         """Passing an invalid backend should raise RuntimeError."""
-        with self.assertRaisesRegexp(RuntimeError, r"ImportError\('No module named non_existent_backend'"):
+        with pytest.raises(RuntimeError, match=r"ImportError\('No module named non_existent_backend'"):
             Query.new({'backend': 'non_existent_backend'})
 
     def test_missing_query_class(self):
@@ -41,17 +43,17 @@ class TestQuery(unittest.TestCase):
         module = mock.MagicMock()
         del module.query_class
         with mock.patch('importlib.import_module', lambda _: module):
-            with self.assertRaisesRegexp(RuntimeError, r"AttributeError\('query_class'"):
+            with pytest.raises(RuntimeError, match=r"AttributeError\('query_class'"):
                 Query.new({'backend': 'invalid_backend'})
 
     def test_valid_backend(self):
         """Passing a valid backend should return an instance of BaseQuery."""
         backends = [name for _, name, _ in pkgutil.iter_modules([os.path.join('cumin', 'backends')])]
         for backend in backends:
-            self.assertIsInstance(Query.new({'backend': backend}), BaseQuery)
+            assert isinstance(Query.new({'backend': backend}), BaseQuery)
 
 
-class TestQueryBuilder(unittest.TestCase):
+class TestQueryBuilder(object):
     """Class QueryBuilder tests."""
 
     query_string = 'host1 or (not F:key1 = value and R:key2 ~ regex) or host2'
@@ -62,10 +64,10 @@ class TestQueryBuilder(unittest.TestCase):
     def test_instantiation(self):
         """Class QueryBuilder should create an instance of a query_class for the given backend."""
         query_builder = QueryBuilder(self.query_string, self.config)
-        self.assertIsInstance(query_builder, QueryBuilder)
-        self.assertIsInstance(query_builder.query, BaseQuery)
-        self.assertEqual(query_builder.query_string, self.query_string)
-        self.assertEqual(query_builder.level, 0)
+        assert isinstance(query_builder, QueryBuilder)
+        assert isinstance(query_builder.query, BaseQuery)
+        assert query_builder.query_string == self.query_string
+        assert query_builder.level == 0
 
     @mock.patch('cumin.query.Query', QueryFactory)
     def test_build_valid(self):
@@ -94,12 +96,12 @@ class TestQueryBuilder(unittest.TestCase):
     def test_build_invalid(self):
         """QueryBuilder.build() should raise ParseException for an invalid query."""
         query_builder = QueryBuilder(self.invalid_query_string, self.config)
-        with self.assertRaisesRegexp(ParseException, r"Expected end of text"):
+        with pytest.raises(ParseException, match='Expected end of text'):
             query_builder.build()
 
     @mock.patch('cumin.query.Query', QueryFactory)
     def test__parse_token(self):
         """QueryBuilder._parse_token() should raise RuntimeError for an invalid token."""
         query_builder = QueryBuilder(self.invalid_query_string, self.config)
-        with self.assertRaisesRegexp(RuntimeError, r"Invalid query string syntax"):
+        with pytest.raises(RuntimeError, match='Invalid query string syntax'):
             query_builder._parse_token('invalid_token')  # pylint: disable=protected-access

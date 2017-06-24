@@ -1,14 +1,11 @@
 """Abstract query tests."""
 
-import unittest
+import pytest
 
 from cumin.backends import BaseQuery
 
 
-class TestBaseQuery(unittest.TestCase):
-    """Class BaseQuery tests."""
-
-    def test_instantiation(self):
-        """Class BaseQuery is not instantiable being an abstract class."""
-        with self.assertRaises(TypeError):
-            BaseQuery({})  # pylint: disable=abstract-class-instantiated
+def test_base_query_instantiation():
+    """Class BaseQuery is not instantiable being an abstract class."""
+    with pytest.raises(TypeError):
+        BaseQuery({})  # pylint: disable=abstract-class-instantiated

@@ -1,7 +1,5 @@
 """Grammar tests."""
 
-import unittest
-
 from cumin.grammar import grammar
 from cumin.tests import get_fixture
 
@@ -13,27 +11,27 @@ def _get_category_key_token(category='F', key='key1', operator='=', value='value
     return token, expected
 
 
-class TestGrammar(unittest.TestCase):
-    """Grammar class tests."""
+def test_valid_strings():
+    """Run quick pyparsing test over valid grammar strings."""
+    results = grammar.runTests(get_fixture('valid_grammars.txt', as_string=True))
+    assert results[0]
 
-    def test_valid_strings(self):
-        """Run quick pyparsing test over valid grammar strings."""
-        results = grammar.runTests(get_fixture('valid_grammars.txt', as_string=True))
-        self.assertTrue(results[0])
 
-    def test_invalid_strings(self):
-        """Run quick pyparsing test over invalid grammar strings."""
-        results = grammar.runTests(get_fixture('invalid_grammars.txt', as_string=True), failureTests=True)
-        self.assertTrue(results[0])
+def test_invalid_strings():
+    """Run quick pyparsing test over invalid grammar strings."""
+    results = grammar.runTests(get_fixture('invalid_grammars.txt', as_string=True), failureTests=True)
+    assert results[0]
 
-    def test_single_category_key_token(self):
-        """A valid single token with a category that has key is properly parsed and interpreted."""
-        token, expected = _get_category_key_token()
-        parsed = grammar.parseString(token, parseAll=True)
-        self.assertDictEqual(parsed[0].asDict(), expected)
 
-    def test_hosts_selection(self):
-        """A host selection is properly parsed and interpreted."""
-        hosts = {'hosts': 'host[10-20,30-40].domain'}
-        parsed = grammar.parseString(hosts['hosts'], parseAll=True)
-        self.assertDictEqual(parsed[0].asDict(), hosts)
+def test_single_category_key_token():
+    """A valid single token with a category that has key is properly parsed and interpreted."""
+    token, expected = _get_category_key_token()
+    parsed = grammar.parseString(token, parseAll=True)
+    assert parsed[0].asDict() == expected
+
+
+def test_hosts_selection():
+    """A host selection is properly parsed and interpreted."""
+    hosts = {'hosts': 'host[10-20,30-40].domain'}
+    parsed = grammar.parseString(hosts['hosts'], parseAll=True)
+    assert parsed[0].asDict() == hosts
