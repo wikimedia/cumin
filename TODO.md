@@ -18,7 +18,6 @@ and there is no guarantee that any item listed will be implemented in the nearby
 * global: allow to log the whole output to a specific file, to allow multiple people follow the progress
 * global: allow to randomize the list hosts before execution [T164587](https://phabricator.wikimedia.org/T164587)
 * CLI: `--batch-size` allow to specify percentage too
-* CLI: automatically select async mode if only one host is targeted with multiple commands
 * CLI: improve the dry-run mode to show what would have been done
 * CLI: add a `--color` or a `--no-color` option to manage the output color
 * CLI: read commands from a file, one per line
