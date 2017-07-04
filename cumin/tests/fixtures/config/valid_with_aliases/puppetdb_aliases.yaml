@@ -1,0 +1,3 @@
+role1: R:Class = Role::Role1
+dc1: '*.dc1.example.org'
+group_all: A:role1 AND A:dc1

@@ -1,5 +1,7 @@
 """Grammar tests."""
 
+import os
+
 from cumin.grammar import grammar
 from cumin.tests import get_fixture
 
@@ -13,13 +15,14 @@ def _get_category_key_token(category='F', key='key1', operator='=', value='value
 
 def test_valid_strings():
     """Run quick pyparsing test over valid grammar strings."""
-    results = grammar.runTests(get_fixture('valid_grammars.txt', as_string=True))
+    results = grammar.runTests(get_fixture(os.path.join('grammar', 'valid_grammars.txt'), as_string=True))
     assert results[0]
 
 
 def test_invalid_strings():
     """Run quick pyparsing test over invalid grammar strings."""
-    results = grammar.runTests(get_fixture('invalid_grammars.txt', as_string=True), failureTests=True)
+    results = grammar.runTests(
+        get_fixture(os.path.join('grammar', 'invalid_grammars.txt'), as_string=True), failureTests=True)
     assert results[0]
 
 
