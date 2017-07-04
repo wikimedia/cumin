@@ -1,7 +1,4 @@
 """CLI tests."""
-import os
-import tempfile
-
 from logging import DEBUG, INFO
 
 import mock
@@ -78,32 +75,6 @@ def test_setup_logging(logging, file_handler, mocked_os):
     cli.setup_logging('filename', debug=True)
     logging.setLevel.assert_called_with(DEBUG)
     assert file_handler.called
-
-
-def test_parse_config_ok():
-    """The configuration file is properly parsed and accessible."""
-    config = cli.parse_config('doc/examples/config.yaml')
-    assert 'log_file' in config
-
-
-def test_parse_config_non_existent():
-    """A CuminError is raised if the configuration file is not available."""
-    with pytest.raises(CuminError, match='Unable to read configuration file'):
-        cli.parse_config('not_existent_config.yaml')
-
-
-def test_parse_config_invalid():
-    """A CuminError is raised if the configuration cannot be parsed."""
-    invalid_yaml = '\n'.join((
-        'foo:',
-        '  bar: baz',
-        '  - foobar',
-    ))
-    tmpfile, tmpfilepath = tempfile.mkstemp(suffix='config.yaml', prefix='cumin', text=True)
-    os.write(tmpfile, invalid_yaml)
-
-    with pytest.raises(CuminError, match='Unable to parse configuration file'):
-        cli.parse_config(tmpfilepath)
 
 
 @mock.patch('cumin.cli.stderr')

@@ -12,7 +12,6 @@ import sys
 from logging.handlers import RotatingFileHandler  # pylint: disable=ungrouped-imports
 
 import colorama
-import yaml
 
 from ClusterShell.NodeSet import NodeSet
 from tqdm import tqdm
@@ -171,27 +170,6 @@ def setup_logging(filename, debug=False):
         logger.setLevel(logging.DEBUG)
     else:
         logger.setLevel(logging.INFO)
-
-
-def parse_config(config_file):
-    """Parse the YAML configuration file.
-
-    Arguments:
-    config_file -- the path of the configuration file to load
-    """
-    try:
-        with open(config_file, 'r') as f:
-            config = yaml.safe_load(f)
-    except IOError as e:
-        raise cumin.CuminError('Unable to read configuration file: {message}'.format(message=e))
-    except yaml.parser.ParserError as e:
-        raise cumin.CuminError("Unable to parse configuration file '{config}':\n{message}".format(
-            config=config_file, message=e))
-
-    if config is None:
-        raise cumin.CuminError("Empty configuration found in '{config}'".format(config=config_file))
-
-    return config
 
 
 def sigint_handler(*args):  # pylint: disable=unused-argument
@@ -375,7 +353,7 @@ def main(argv=None):
             return 0
 
         user = get_running_user()
-        config = parse_config(args.config)
+        config = cumin.Config(args.config)
         setup_logging(config['log_file'], debug=args.debug)
     except cumin.CuminError as e:
         stderr(e)
