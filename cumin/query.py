@@ -6,6 +6,7 @@ import logging
 from ClusterShell.NodeSet import NodeSet
 from pyparsing import ParseResults
 
+from cumin.backends import InvalidQueryError
 from cumin.grammar import grammar
 
 
@@ -45,6 +46,7 @@ class QueryBuilder(object):
         self.logger = logger or logging.getLogger(__name__)
         self.query_string = query_string.strip()
         self.query = Query.new(config, logger=self.logger)
+        self.aliases = config.get(config['backend'], {}).get('aliases', {})
         self.level = 0  # Nesting level for sub-groups
 
     def build(self):
@@ -60,10 +62,10 @@ class QueryBuilder(object):
 
         Arguments:
         token -- a single token returned by the grammar parsing
-        level -- Nesting level in case of sub-groups in the query [optional, default: 0]
+        level -- nesting level in case of sub-groups in the query [optional, default: 0]
         """
         if not isinstance(token, ParseResults):
-            raise RuntimeError("Invalid query string syntax '{query}'. Token is '{token}'".format(
+            raise InvalidQueryError("Invalid query string syntax '{query}'. Token is '{token}'".format(
                 query=self.query_string, token=token))
 
         token_dict = token.asDict()
@@ -71,14 +73,15 @@ class QueryBuilder(object):
             for subtoken in token:
                 self._parse_token(subtoken, level=(level + 1))
         else:
-            self._build_token(token_dict, level)
+            if not self._replace_alias(token_dict, level):
+                self._build_token(token_dict, level)
 
     def _build_token(self, token_dict, level):
         """Build a token into the query object for the configured backend.
 
         Arguments:
         token_dict -- the dictionary of the parsed token returned by the grammar parsing
-        level      -- Nesting level in the query
+        level      -- nesting level in the query
         """
         keys = token_dict.keys()
 
@@ -103,3 +106,32 @@ class QueryBuilder(object):
 
         elif 'category' in keys:
             self.query.add_category(**token_dict)
+
+    def _replace_alias(self, token_dict, level):
+        """Replace any alias in the query in a recursive way, alias can reference other aliases.
+
+        Return True if a replacement was made, False otherwise. Raise InvalidQueryError on failure.
+
+        Arguments:
+        token_dict -- the dictionary of the parsed token returned by the grammar parsing
+        level      -- nesting level in the query
+        """
+        keys = token_dict.keys()
+        if 'category' not in keys or token_dict['category'] != 'A':
+            return False
+
+        if 'operator' in keys or 'value' in keys:
+            raise InvalidQueryError('Invalid alias syntax, aliases can be only of the form: A:alias_name')
+
+        alias_name = token_dict['key']
+        if alias_name not in self.aliases:
+            raise InvalidQueryError("Unable to find alias replacement for '{alias}' in the configuration".format(
+                alias=alias_name))
+
+        neg = 'not ' if 'neg' in keys and token_dict['neg'] else ''
+        alias = '{neg}({alias})'.format(neg=neg, alias=self.aliases[alias_name])
+        parsed_alias = grammar.parseString(alias, parseAll=True)
+        for token in parsed_alias:
+            self._parse_token(token, level=level)
+
+        return True

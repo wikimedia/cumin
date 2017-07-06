@@ -10,7 +10,7 @@ import pytest
 from ClusterShell.NodeSet import NodeSet
 from pyparsing import ParseException
 
-from cumin.backends import BaseQuery
+from cumin.backends import BaseQuery, InvalidQueryError
 from cumin.query import Query, QueryBuilder
 
 
@@ -58,7 +58,15 @@ class TestQueryBuilder(object):
 
     query_string = 'host1 or (not F:key1 = value and R:key2 ~ regex) or host2'
     invalid_query_string = 'host1 and or not F:key1 value'
-    config = {'backend': 'test_backend'}
+    config = {
+        'backend': 'test_backend',
+        'test_backend': {
+            'aliases': {
+                'group1': 'host1 or host10[10-22]',
+                'nested_group': 'host10[40-42] or A:group1',
+            },
+        },
+    }
 
     @mock.patch('cumin.query.Query', QueryFactory)
     def test_instantiation(self):
@@ -76,7 +84,7 @@ class TestQueryBuilder(object):
         query_builder.build()
 
         query_builder.query.add_hosts.assert_has_calls(
-            [mock.call(hosts=NodeSet.fromlist(['host1'])), mock.call(hosts=NodeSet.fromlist(['host2']))])
+            [mock.call(hosts=NodeSet('host1')), mock.call(hosts=NodeSet('host2'))])
         query_builder.query.add_or.assert_has_calls([mock.call(), mock.call()])
         query_builder.query.open_subgroup.assert_called_once_with()
         query_builder.query.add_category.assert_has_calls([
@@ -86,11 +94,50 @@ class TestQueryBuilder(object):
         query_builder.query.close_subgroup.assert_called_once_with()
 
     @mock.patch('cumin.query.Query', QueryFactory)
+    def test_build_valid_with_aliases(self):
+        """QueryBuilder.build() should replace any aliases and build the query object for a valid query."""
+        query_builder = QueryBuilder('host100 or A:group1 or host2', self.config)
+        query_builder.build()
+
+        query_builder.query.add_hosts.assert_has_calls(
+            [mock.call(hosts=NodeSet('host100')), mock.call(hosts=NodeSet('host1')),
+             mock.call(hosts=NodeSet('host10[10-22]')), mock.call(hosts=NodeSet('host2'))])
+        query_builder.query.add_or.assert_has_calls([mock.call(), mock.call(), mock.call()])
+        query_builder.query.open_subgroup.assert_called_once_with()
+        query_builder.query.close_subgroup.assert_called_once_with()
+
+    @mock.patch('cumin.query.Query', QueryFactory)
+    def test_build_valid_with_nested_aliases(self):  # pylint: disable=invalid-name
+        """QueryBuilder.build() should replace any aliases and build the query object for a valid query."""
+        query_builder = QueryBuilder('host100 or A:nested_group', self.config)
+        query_builder.build()
+
+        query_builder.query.add_hosts.assert_has_calls(
+            [mock.call(hosts=NodeSet('host100')), mock.call(hosts=NodeSet('host10[40-42]')),
+             mock.call(hosts=NodeSet('host1')), mock.call(hosts=NodeSet('host10[10-22]'))])
+        query_builder.query.add_or.assert_has_calls([mock.call(), mock.call()])
+        query_builder.query.open_subgroup.assert_has_calls([mock.call(), mock.call()])
+
+    @mock.patch('cumin.query.Query', QueryFactory)
+    def test_build_invalid_alias_syntax(self):
+        """QueryBuilder.build() should raise InvalidQueryError if an alias has invalid syntax."""
+        query_builder = QueryBuilder('host1 or A:name = value', self.config)
+        with pytest.raises(InvalidQueryError, match='Invalid alias syntax, aliases can be only of the form'):
+            query_builder.build()
+
+    @mock.patch('cumin.query.Query', QueryFactory)
+    def test_build_missing_alias(self):
+        """QueryBuilder.build() should raise InvalidQueryError if a non existent alias is found."""
+        query_builder = QueryBuilder('host1 or A:non_existent_group', self.config)
+        with pytest.raises(InvalidQueryError, match='Unable to find alias replacement for'):
+            query_builder.build()
+
+    @mock.patch('cumin.query.Query', QueryFactory)
     def test_build_glob_host(self):
         """QueryBuilder.build() should parse a glob host."""
         query_builder = QueryBuilder('host1*', self.config)
         query_builder.build()
-        query_builder.query.add_hosts.assert_called_once_with(hosts=NodeSet.fromlist(['host1*']))
+        query_builder.query.add_hosts.assert_called_once_with(hosts=NodeSet('host1*'))
 
     @mock.patch('cumin.query.Query', QueryFactory)
     def test_build_invalid(self):
@@ -103,5 +150,5 @@ class TestQueryBuilder(object):
     def test__parse_token(self):
         """QueryBuilder._parse_token() should raise RuntimeError for an invalid token."""
         query_builder = QueryBuilder(self.invalid_query_string, self.config)
-        with pytest.raises(RuntimeError, match='Invalid query string syntax'):
+        with pytest.raises(InvalidQueryError, match='Invalid query string syntax'):
             query_builder._parse_token('invalid_token')  # pylint: disable=protected-access

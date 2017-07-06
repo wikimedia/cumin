@@ -39,6 +39,9 @@ features:
 
 The available categories are:
 
+- `A`: for aliases. Aliases are automatically loaded from `{backend_name}_aliases.yaml` files, if they are present in
+  the same directory of the main configuration file. They are also automatically replaced with their values and nesting
+  aliases is allowed.
 - `F`: for querying facts
 - `R`: for querying resources
 
@@ -64,6 +67,7 @@ Some query examples:
 - Category based key-value selection: `R:ResourceName = ResourceValue`
 - A complex selection for facts:
   `host10[10-42].*.domain or (not F:key1 = value1 and host10*) or (F:key2 > value2 and F:key3 ~ '^value[0-9]+')`
+- Alias selection: `A:group1`
 
 Backus-Naur form (BNF) of the grammar:
 

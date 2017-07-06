@@ -4,6 +4,7 @@ import pyparsing as pp
 
 # Available categories
 CATEGORIES = (
+    'A',  # Alias, it will be automatically replaced, the backends will never see it.
     'F',  # Fact
     'R',  # Resource
 )
