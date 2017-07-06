@@ -35,23 +35,26 @@ class QueryBuilder(object):
     Parse a given query string and converts it into a query object for the configured backend
     """
 
-    def __init__(self, query_string, config, logger=None):
+    def __init__(self, config, logger=None):
         """Query builder constructor.
 
         Arguments:
-        query_string -- the query string to be parsed and passed to the query builder
         config       -- the configuration dictionary
         logger       -- an optional logging instance [optional, default: None]
         """
         self.logger = logger or logging.getLogger(__name__)
-        self.query_string = query_string.strip()
         self.query = Query.new(config, logger=self.logger)
         self.aliases = config.get(config['backend'], {}).get('aliases', {})
-        self.level = 0  # Nesting level for sub-groups
+        self.level = None  # Nesting level for sub-groups
 
-    def build(self):
-        """Parse the query string according to the grammar and build the query object for the configured backend."""
-        parsed = grammar.parseString(self.query_string, parseAll=True)
+    def build(self, query_string):
+        """Parse the query string according to the grammar and build the query object for the configured backend.
+
+        Arguments:
+        query_string -- the query string to be parsed and passed to the query builder
+        """
+        self.level = 0
+        parsed = grammar.parseString(query_string.strip(), parseAll=True)
         for token in parsed:
             self._parse_token(token)
 
@@ -64,9 +67,9 @@ class QueryBuilder(object):
         token -- a single token returned by the grammar parsing
         level -- nesting level in case of sub-groups in the query [optional, default: 0]
         """
-        if not isinstance(token, ParseResults):
-            raise InvalidQueryError("Invalid query string syntax '{query}'. Token is '{token}'".format(
-                query=self.query_string, token=token))
+        if not isinstance(token, ParseResults):  # Non-testable block, this should never happen
+            raise InvalidQueryError('Expected an instance of pyparsing.ParseResults, got {instance}: {token}'.format(
+                instance=type(token), token=token))
 
         token_dict = token.asDict()
         if not token_dict:
@@ -103,6 +106,8 @@ class QueryBuilder(object):
                 self.query.add_and()
             elif token_dict['bool'] == 'or':
                 self.query.add_or()
+            else:  # Non-testable block, this should never happen with the current grammar
+                raise InvalidQueryError("Got bool '{bool}', one of and|or expected".format(bool=token_dict['bool']))
 
         elif 'hosts' in keys:
             token_dict['hosts'] = NodeSet(token_dict['hosts'])
@@ -110,6 +115,10 @@ class QueryBuilder(object):
 
         elif 'category' in keys:
             self.query.add_category(**token_dict)
+
+        else:  # Non-testable block, this should never happen with the current grammar
+            raise InvalidQueryError(
+                "No valid key found in token, one of bool|hosts|category expected: {token}".format(token=token_dict))
 
     def _replace_alias(self, token_dict, level):
         """Replace any alias in the query in a recursive way, alias can reference other aliases.

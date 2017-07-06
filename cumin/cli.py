@@ -231,7 +231,7 @@ def get_hosts(args, config):
     args   -- ArgumentParser instance with parsed command line arguments
     config -- a dictionary with the parsed configuration file
     """
-    query = QueryBuilder(args.hosts, config, logger).build()
+    query = QueryBuilder(config, logger).build(args.hosts)
     hosts = query.execute()
 
     if not hosts:
