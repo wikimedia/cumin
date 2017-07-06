@@ -76,6 +76,10 @@ class QueryBuilder(object):
             if not self._replace_alias(token_dict, level):
                 self._build_token(token_dict, level)
 
+        while self.level > level:
+            self.query.close_subgroup()
+            self.level -= 1
+
     def _build_token(self, token_dict, level):
         """Build a token into the query object for the configured backend.
 
