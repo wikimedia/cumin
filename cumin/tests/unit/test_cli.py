@@ -187,7 +187,7 @@ def test_get_hosts_no_tty_force(isatty, stderr):
     assert stderr.called
 
 
-@mock.patch('cumin.cli.Transport')
+@mock.patch('cumin.cli.cumin.transport.Transport')
 @mock.patch('cumin.cli.stderr')
 def test_run(stderr, transport):
     """Calling run() should query the hosts and execute the commands on the transport."""

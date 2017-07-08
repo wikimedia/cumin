@@ -18,9 +18,8 @@ from tqdm import tqdm
 
 import cumin
 
-from cumin.query import QueryBuilder
-from cumin.transport import Transport
-from cumin.transports import Command
+from cumin import backends, query, transport, transports
+
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 OUTPUT_FORMATS = ('txt', 'json')
@@ -63,9 +62,8 @@ def parse_args(argv=None):
     async_mode = 'async'
 
     # Get the list of existing backends and transports
-    abs_path = os.path.dirname(os.path.abspath(__file__))
-    backends = [name for _, name, _ in pkgutil.iter_modules([os.path.join(abs_path, 'backends')])]
-    transports = [name for _, name, _ in pkgutil.iter_modules([os.path.join(abs_path, 'transports')])]
+    backends_names = [name for _, name, ispkg in pkgutil.iter_modules(backends.__path__) if not ispkg]
+    transports_names = [name for _, name, ispkg in pkgutil.iter_modules(transports.__path__) if not ispkg]
 
     parser = argparse.ArgumentParser(
         description='Cumin CLI - Automation and orchestration framework written in Python',
@@ -99,11 +97,11 @@ def parse_args(argv=None):
     parser.add_argument('-o', '--output', choices=OUTPUT_FORMATS, help='Specify a different output format.')
     parser.add_argument('--force', action='store_true',
                         help='USE WITH CAUTION! Force the execution without confirmation of the affected hosts. ')
-    parser.add_argument('--backend', choices=backends,
+    parser.add_argument('--backend', choices=backends_names,
                         help=('Override the default backend selected in the configuration file for this execution. The '
                               'backend-specific configuration must be already present in the configuration file. '
                               '[optional]'))
-    parser.add_argument('--transport', choices=transports,
+    parser.add_argument('--transport', choices=transports_names,
                         help=('Override the default transport selected in the configuration file for this execution. '
                               'The transport-specific configuration must already be present in the configuration file. '
                               '[optional]'))
@@ -231,8 +229,8 @@ def get_hosts(args, config):
     args   -- ArgumentParser instance with parsed command line arguments
     config -- a dictionary with the parsed configuration file
     """
-    query = QueryBuilder(config, logger).build(args.hosts)
-    hosts = query.execute()
+    backend_query = query.QueryBuilder(config, logger).build(args.hosts)
+    hosts = backend_query.execute()
 
     if not hosts:
         stderr('No hosts found that matches the query')
@@ -307,11 +305,11 @@ def run(args, config):
     if not hosts:
         return 0
 
-    worker = Transport.new(config, logger)
+    worker = transport.Transport.new(config, logger)
     worker.hosts = hosts
 
     if args.timeout is not None:
-        worker.commands = [Command(command, timeout=args.timeout) for command in args.commands]
+        worker.commands = [transports.Command(command, timeout=args.timeout) for command in args.commands]
     else:
         worker.commands = args.commands
 
