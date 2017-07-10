@@ -109,6 +109,8 @@ def parse_args(argv=None):
                         help='Do not execute any command, just return the list of matching hosts and exit.')
     parser.add_argument('--version', action='store_true', help='Print current version and exit.')
     parser.add_argument('-d', '--debug', action='store_true', help='Set log level to DEBUG.')
+    parser.add_argument('--trace', action='store_true',
+                        help='Set log level to TRACE, a custom logging level intended for development debugging.')
     parser.add_argument('-i', '--interactive', action='store_true', help='Drop into a Python shell with the results.')
     parser.add_argument('hosts', metavar='HOSTS_QUERY', help='Hosts selection query')
     parser.add_argument('commands', metavar='COMMAND', nargs='*',
@@ -146,7 +148,7 @@ def get_running_user():
     return os.getenv('SUDO_USER')
 
 
-def setup_logging(filename, debug=False):
+def setup_logging(filename, debug=False, trace=False):
     """Setup the logger instance.
 
     Arguments:
@@ -164,7 +166,9 @@ def setup_logging(filename, debug=False):
     logger.addHandler(log_handler)
     logger.raiseExceptions = False
 
-    if debug:
+    if trace:
+        logger.setLevel(cumin.LOGGING_TRACE_LEVEL_NUMBER)
+    elif debug:
         logger.setLevel(logging.DEBUG)
     else:
         logger.setLevel(logging.INFO)
@@ -352,7 +356,7 @@ def main(argv=None):
 
         user = get_running_user()
         config = cumin.Config(args.config)
-        setup_logging(config['log_file'], debug=args.debug)
+        setup_logging(config['log_file'], debug=args.debug, trace=args.trace)
     except cumin.CuminError as e:
         stderr(e)
         return 2

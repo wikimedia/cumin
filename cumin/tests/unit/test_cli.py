@@ -4,7 +4,7 @@ from logging import DEBUG, INFO
 import mock
 import pytest
 
-from cumin import cli, CuminError
+from cumin import cli, CuminError, LOGGING_TRACE_LEVEL_NUMBER
 
 # Environment variables
 _ENV = {'USER': 'root', 'SUDO_USER': 'user'}
@@ -70,11 +70,15 @@ def test_setup_logging(logging, file_handler, mocked_os):
     mocked_os.path.exists.return_value = False
     cli.setup_logging('/path/to/filename')
     logging.setLevel.assert_called_with(INFO)
+    assert file_handler.called
 
     mocked_os.path.exists.return_value = True
     cli.setup_logging('filename', debug=True)
     logging.setLevel.assert_called_with(DEBUG)
-    assert file_handler.called
+
+    mocked_os.path.exists.return_value = True
+    cli.setup_logging('filename', trace=True)
+    logging.setLevel.assert_called_with(LOGGING_TRACE_LEVEL_NUMBER)
 
 
 @mock.patch('cumin.cli.stderr')

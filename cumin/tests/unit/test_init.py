@@ -1,5 +1,6 @@
 """Cumin package tests."""
 # pylint: disable=invalid-name
+import logging
 import os
 
 import pytest
@@ -111,3 +112,49 @@ def test_load_backend_aliases_invalid():
     base_path = get_fixture_path(os.path.join('config', 'valid_with_invalid_aliases'))
     with pytest.raises(cumin.CuminError, match='Unable to parse configuration file'):
         cumin.load_backend_aliases({}, base_path)
+
+
+def test_trace_logging_level_conflict():
+    """If the logging level for trace is already registered, should raise CuminError."""
+    reload(logging)  # Avoid conflict given the singleton nature of this module
+    logging.addLevelName(cumin.LOGGING_TRACE_LEVEL_NUMBER, 'CONFLICT')
+    match = 'Unable to set custom logging for trace'
+    try:  # pytest.raises doesn't catch the reload exception
+        reload(cumin)
+    except cumin.CuminError as e:
+        assert str(e).startswith(match)
+    else:
+        raise AssertionError("Failed: DID NOT RAISE {exc} matching '{match}'".format(
+            exc=cumin.CuminError, match=match))
+
+
+def test_trace_logging_level_existing_same():
+    """If the custom logging level is registered on the same level, it should use it and add a trace method."""
+    reload(logging)  # Avoid conflict given the singleton nature of this module
+    logging.addLevelName(cumin.LOGGING_TRACE_LEVEL_NUMBER, cumin.LOGGING_TRACE_LEVEL_NAME)
+    assert not hasattr(logging.Logger, 'trace')
+    reload(cumin)
+    assert logging.getLevelName(cumin.LOGGING_TRACE_LEVEL_NUMBER) == cumin.LOGGING_TRACE_LEVEL_NAME
+    assert logging.getLevelName(cumin.LOGGING_TRACE_LEVEL_NAME) == cumin.LOGGING_TRACE_LEVEL_NUMBER
+    assert hasattr(logging.Logger, 'trace')
+
+
+def test_trace_logging_level_existing_different():
+    """If the custom logging level is registered on a different level, it should use it and add a trace method."""
+    reload(logging)  # Avoid conflict given the singleton nature of this module
+    logging.addLevelName(cumin.LOGGING_TRACE_LEVEL_NUMBER - 1, cumin.LOGGING_TRACE_LEVEL_NAME)
+    assert not hasattr(logging.Logger, 'trace')
+    reload(cumin)
+    assert logging.getLevelName(cumin.LOGGING_TRACE_LEVEL_NAME) == cumin.LOGGING_TRACE_LEVEL_NUMBER - 1
+    assert logging.getLevelName(cumin.LOGGING_TRACE_LEVEL_NUMBER) != cumin.LOGGING_TRACE_LEVEL_NAME
+    assert hasattr(logging.Logger, 'trace')
+
+
+def test_trace_logging_method_existing():
+    """If there is already a trace method registered, it should use it without problems adding the level."""
+    reload(logging)  # Avoid conflict given the singleton nature of this module
+    logging.Logger.trace = cumin.trace
+    reload(cumin)
+    assert logging.getLevelName(cumin.LOGGING_TRACE_LEVEL_NUMBER) == cumin.LOGGING_TRACE_LEVEL_NAME
+    assert logging.getLevelName(cumin.LOGGING_TRACE_LEVEL_NAME) == cumin.LOGGING_TRACE_LEVEL_NUMBER
+    assert hasattr(logging.Logger, 'trace')

@@ -1,4 +1,5 @@
 """Automation and orchestration framework written in Python."""
+import logging
 import os
 import pkgutil
 
@@ -15,6 +16,36 @@ except DistributionNotFound:
 
 class CuminError(Exception):
     """Base Exception class for all Cumin's custom Exceptions."""
+
+
+##############################################################################
+# Add a custom log level TRACE to logging for development debugging
+
+LOGGING_TRACE_LEVEL_NUMBER = 8
+LOGGING_TRACE_LEVEL_NAME = 'TRACE'
+
+
+# Fail if the custom logging slot is already in use with a different name or
+# Access to a private property of logging was preferred over matching the default string returned by
+# logging.getLevelName() for unused custom slots.
+if (LOGGING_TRACE_LEVEL_NUMBER in logging._levelNames and  # pylint: disable=protected-access
+        LOGGING_TRACE_LEVEL_NAME not in logging._levelNames):  # pylint: disable=protected-access
+    raise CuminError("Unable to set custom logging for trace, logging level {level} is alredy set for '{name}'.".format(
+        level=LOGGING_TRACE_LEVEL_NUMBER, name=logging.getLevelName(LOGGING_TRACE_LEVEL_NUMBER)))
+
+
+def trace(self, msg, *args, **kwargs):
+    """Additional logging level for development debugging."""
+    if self.isEnabledFor(LOGGING_TRACE_LEVEL_NUMBER):
+        self._log(LOGGING_TRACE_LEVEL_NUMBER, msg, args, **kwargs)  # pylint: disable=protected-access
+
+
+# Install the trace method and it's logging level if not already present
+if LOGGING_TRACE_LEVEL_NAME not in logging._levelNames:  # pylint: disable=protected-access
+    logging.addLevelName(LOGGING_TRACE_LEVEL_NUMBER, LOGGING_TRACE_LEVEL_NAME)
+if not hasattr(logging.Logger, 'trace'):
+    logging.Logger.trace = trace
+##############################################################################
 
 
 class Config(dict):

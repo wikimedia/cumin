@@ -241,6 +241,8 @@ class BaseWorker(object):
         """
         self.config = config
         self.logger = logger or logging.getLogger(__name__)
+        self.logger.trace('Transport {name} created with config: {config}'.format(
+            name=type(self).__name__, config=config))
 
         # Initialize setters values
         self._hosts = None

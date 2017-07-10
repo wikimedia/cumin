@@ -25,6 +25,8 @@ class BaseQuery(object):
         """
         self.config = config
         self.logger = logger or logging.getLogger(__name__)
+        self.logger.trace('Backend {name} created with config: {config}'.format(
+            name=type(self).__name__, config=config))
 
     @abstractmethod
     def add_category(self, category, key, value=None, operator='=', neg=False):
