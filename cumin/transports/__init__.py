@@ -5,6 +5,8 @@ import shlex
 
 from abc import ABCMeta, abstractmethod, abstractproperty
 
+from ClusterShell.NodeSet import NodeSet
+
 from cumin import CuminError
 
 
@@ -274,9 +276,11 @@ class BaseWorker(object):
         """Setter for the hosts property with validation, raise WorkerError if not valid.
 
         Arguments:
-        value -- a list of hosts to target for the execution of the commands
+        value -- a ClusterShell.NodeSet.NodeSet instance or None to reset it.
         """
-        validate_list('hosts', value)
+        if value is not None and not isinstance(value, NodeSet):
+            raise_error('hosts', "must be an instance of ClusterShell's NodeSet or None", value)
+
         self._hosts = value
 
     @property

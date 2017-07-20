@@ -42,7 +42,7 @@ class ClusterShellWorker(BaseWorker):
             raise RuntimeError('An EventHandler is mandatory.')
 
         # Schedule only the first command for the first batch, the following ones must be handled by the EventHandler
-        first_batch = NodeSet.NodeSet.fromlist(self.hosts[:self.batch_size])
+        first_batch = self.hosts[:self.batch_size]
 
         # Instantiate handler
         self._handler_instance = self.handler(  # pylint: disable=not-callable
@@ -50,7 +50,7 @@ class ClusterShellWorker(BaseWorker):
             batch_sleep=self.batch_sleep, logger=self.logger, first_batch=first_batch)
 
         self.logger.info("Executing commands {commands} on '{num}' hosts: {hosts}".format(
-            commands=self.commands, num=len(self.hosts), hosts=NodeSet.NodeSet.fromlist(self.hosts)))
+            commands=self.commands, num=len(self.hosts), hosts=self.hosts))
         self.task.shell(self.commands[0].command, nodes=first_batch, handler=self._handler_instance,
                         timeout=self.commands[0].timeout)
 
@@ -130,7 +130,7 @@ class BaseEventHandler(Event.EventHandler):
         If subclasses defines a self.pbar_ko tqdm progress bar, it will be updated on timeout.
 
         Arguments:
-        nodes    -- the list of nodes with which this worker was initiliazed.
+        nodes    -- the ClusterShell's NodeSet with which this worker was initiliazed.
         commands -- the list of Command objects that has to be executed on the nodes.
         **kwargs -- optional additional keyword arguments that might be used by classes that extend this base class.
         """

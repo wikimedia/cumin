@@ -3,6 +3,8 @@
 import mock
 import pytest
 
+from ClusterShell.NodeSet import NodeSet
+
 import cumin  # noqa: F401 (dynamically used in TestCommand)
 
 from cumin import transports
@@ -332,7 +334,7 @@ class TestConcreteBaseWorker(object):
         """Initialize default properties and instances."""
         # pylint: disable=attribute-defined-outside-init
         self.worker = ConcreteBaseWorker({})
-        self.hosts = ['node1', 'node2']
+        self.hosts = NodeSet('node[1-2]')
         self.commands = [transports.Command('command1'), transports.Command('command2')]
 
     def test_hosts_getter(self):
@@ -343,7 +345,7 @@ class TestConcreteBaseWorker(object):
 
     def test_hosts_setter(self):
         """Raise WorkerError if trying to set it not to an iterable, set it otherwise."""
-        with pytest.raises(transports.WorkerError, match='hosts must be a list'):
+        with pytest.raises(transports.WorkerError, match="must be an instance of ClusterShell's NodeSet or None"):
             self.worker.hosts = 'not-list'
 
         self.worker.hosts = self.hosts

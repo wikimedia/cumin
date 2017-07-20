@@ -34,8 +34,7 @@ class TestClusterShellWorker(object):
                 'fanout': 3}}
 
         self.worker = clustershell.worker_class(self.config)
-        self.nodes = ['node1', 'node2']
-        self.nodes_set = clustershell.NodeSet.NodeSet.fromlist(self.nodes)
+        self.nodes = clustershell.NodeSet.NodeSet('node[1-2]')
         self.commands = [Command('command1'), Command('command2', ok_codes=[0, 100], timeout=5)]
         self.task_self = task_self
         # Mock default handlers
@@ -62,7 +61,7 @@ class TestClusterShellWorker(object):
         self.worker.handler = 'sync'
         self.worker.execute()
         self.worker.task.shell.assert_called_once_with(
-            'command1', nodes=self.nodes_set, handler=self.worker._handler_instance, timeout=None)
+            'command1', nodes=self.nodes, handler=self.worker._handler_instance, timeout=None)
         assert clustershell.DEFAULT_HANDLERS['sync'].called
 
     def test_execute_default_async_handler(self):
@@ -70,7 +69,7 @@ class TestClusterShellWorker(object):
         self.worker.handler = 'async'
         self.worker.execute()
         self.worker.task.shell.assert_called_once_with(
-            'command1', nodes=self.nodes_set, handler=self.worker._handler_instance, timeout=None)
+            'command1', nodes=self.nodes, handler=self.worker._handler_instance, timeout=None)
         assert clustershell.DEFAULT_HANDLERS['async'].called
 
     def test_execute_timeout(self):
@@ -86,7 +85,7 @@ class TestClusterShellWorker(object):
         self.worker.execute()
         assert isinstance(self.worker._handler_instance, ConcreteBaseEventHandler)
         self.worker.task.shell.assert_called_once_with(
-            'command1', nodes=self.nodes_set, handler=self.worker._handler_instance, timeout=None)
+            'command1', nodes=self.nodes, handler=self.worker._handler_instance, timeout=None)
 
     def test_execute_no_commands(self):
         """Calling execute() without commands should return without doing anything."""
@@ -112,8 +111,7 @@ class TestClusterShellWorker(object):
         self.worker.batch_size = 1
         self.worker.execute()
         self.worker.task.shell.assert_called_once_with(
-            'command1', nodes=clustershell.NodeSet.NodeSet(self.nodes[0]), handler=self.worker._handler_instance,
-            timeout=None)
+            'command1', nodes=self.nodes[:1], handler=self.worker._handler_instance, timeout=None)
 
     def test_get_results(self):
         """Calling get_results() should call ClusterShell iter_buffers with the right parameters."""
@@ -173,12 +171,12 @@ class TestBaseEventHandler(object):
 
     def setup_method(self, *args):  # pylint: disable=arguments-differ
         """Initialize default properties and instances."""
-        self.nodes = ['node1', 'node2']
+        self.nodes = clustershell.NodeSet.NodeSet('node[1-2]')
         self.commands = [Command('command1', ok_codes=[0, 100]), Command('command2', timeout=5)]
         self.worker = mock.MagicMock()
         self.worker.current_node = 'node1'
         self.worker.command = 'command1'
-        self.worker.nodes = clustershell.NodeSet.NodeSet.fromlist(self.nodes)
+        self.worker.nodes = self.nodes
         self.handler = None
         self.args = args
 
@@ -220,7 +218,7 @@ class TestConcreteBaseEventHandler(TestBaseEventHandler):
 
     def test_instantiation(self):
         """An instance of ConcreteBaseEventHandler should be an instance of BaseEventHandler and initialize colorama."""
-        assert sorted(self.handler.nodes.keys()) == self.nodes
+        assert sorted(self.handler.nodes.keys()) == list(self.nodes)
         self.colorama.init.assert_called_once_with()
 
     @mock.patch('cumin.transports.clustershell.tqdm')
@@ -258,14 +256,13 @@ class TestConcreteBaseEventHandler(TestBaseEventHandler):
     @mock.patch('cumin.transports.clustershell.tqdm')
     def test_ev_read_single_host(self, tqdm):
         """Calling ev_read() should print the worker message if matching a single host."""
-        nodes = ['node1']
-        self.nodes = nodes
+        self.nodes = clustershell.NodeSet.NodeSet('node1')
         self.handler = ConcreteBaseEventHandler(
-            nodes, self.commands, batch_size=len(self.nodes), batch_sleep=0.0, first_batch=self.nodes)
+            self.nodes, self.commands, batch_size=len(self.nodes), batch_sleep=0.0, first_batch=self.nodes)
 
         output = 'node1 output'
-        self.worker.nodes = clustershell.NodeSet.NodeSet.fromlist(nodes)
-        self.worker.current_node = nodes[0]
+        self.worker.nodes = self.nodes
+        self.worker.current_node = self.nodes[0]
         self.worker.current_msg = output
         self.handler.ev_read(self.worker)
         tqdm.write.assert_has_calls([mock.call(output)])

@@ -310,7 +310,7 @@ def run(args, config):
         return 0
 
     worker = transport.Transport.new(config, logger)
-    worker.hosts = hosts
+    worker.hosts = NodeSet.fromlist(hosts)
 
     if args.timeout is not None:
         worker.commands = [transports.Command(command, timeout=args.timeout) for command in args.commands]
