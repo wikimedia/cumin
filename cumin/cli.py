@@ -233,8 +233,7 @@ def get_hosts(args, config):
     args   -- ArgumentParser instance with parsed command line arguments
     config -- a dictionary with the parsed configuration file
     """
-    backend_query = query.QueryBuilder(config, logger).build(args.hosts)
-    hosts = backend_query.execute()
+    hosts = query.Query(config, logger).execute(args.hosts)
 
     if not hosts:
         stderr('No hosts found that matches the query')
@@ -310,7 +309,7 @@ def run(args, config):
         return 0
 
     worker = transport.Transport.new(config, logger)
-    worker.hosts = NodeSet.fromlist(hosts)
+    worker.hosts = hosts
 
     if args.timeout is not None:
         worker.commands = [transports.Command(command, timeout=args.timeout) for command in args.commands]
@@ -366,7 +365,7 @@ def main(argv=None):
 
     # Override config with command line arguments
     if args.backend is not None:
-        config['backend'] = args.backend
+        config['default_backend'] = args.backend
     if args.transport is not None:
         config['transport'] = args.transport
 

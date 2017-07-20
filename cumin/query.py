@@ -1,150 +1,119 @@
 """Query handling: factory and builder."""
+from pyparsing import ParseException, ParseResults
 
-import importlib
-import logging
-
-from ClusterShell.NodeSet import NodeSet
-from pyparsing import ParseResults
-
-from cumin.backends import InvalidQueryError
-from cumin.grammar import grammar
+from cumin.backends import BaseQuery, BaseQueryAggregator, InvalidQueryError
+from cumin.grammar import grammar, REGISTERED_BACKENDS
 
 
-class Query(object):
-    """Query factory class."""
+class Query(BaseQueryAggregator):
+    """Cumin main query class.
 
-    @staticmethod
-    def new(config, logger=None):
-        """Return an instance of the query class for the configured backend.
+    It has multi-query capability and allow to use a default backend, if set, without additional syntax.
+    If a default_backend is set in the configuration, it will try to execute the query string first with the default
+    backend and only if the query is not parsable with that backend will try to execute it with the multi-query grammar.
 
-        Arguments:
-        config - the configuration dictionary
-        logger - an optional logging instance [optional, default: None]
-        """
-        try:
-            module = importlib.import_module('cumin.backends.{backend}'.format(backend=config['backend']))
-            return module.query_class(config, logger)
-        except (AttributeError, ImportError) as e:
-            raise RuntimeError("Unable to load query class for backend '{backend}': {msg}".format(
-                backend=config['backend'], msg=repr(e)))
+    When a query is executed, a ClusterShell's NodeSet with the FQDN of the matched hosts is returned.
 
-
-class QueryBuilder(object):
-    """Query builder class.
-
-    Parse a given query string and converts it into a query object for the configured backend
+    Typical usage:
+    >>> config = cumin.Config(args.config)
+    >>> hosts = query.Query(config, logger=logger).execute(query_string)
     """
 
-    def __init__(self, config, logger=None):
-        """Query builder constructor.
+    grammar = grammar()
+
+    def execute(self, query_string):
+        """Override parent class execute method to implement the multi-query capability."""
+        if 'default_backend' not in self.config:
+            try:  # No default backend set, using directly the global grammar
+                return super(Query, self).execute(query_string)
+            except ParseException as e:
+                raise InvalidQueryError(("Unable to parse the query '{query}' with the global grammar and no "
+                                         "default backend is set:\n{error}").format(query=query_string, error=e))
+
+        try:  # Default backend set, trying it first
+            hosts = self._query_default_backend(query_string)
+        except ParseException as e_default:
+            try:  # Trying global grammar as a fallback
+                hosts = super(Query, self).execute(query_string)
+            except ParseException as e_global:
+                raise InvalidQueryError(
+                    ("Unable to parse the query '{query}' neither with the default backend '{name}' nor with the "
+                     "global grammar:\n{name}: {e_def}\nglobal: {e_glob}").format(
+                        query=query_string, name=self.config['default_backend'], e_def=e_default, e_glob=e_global))
+
+        return hosts
+
+    def _query_default_backend(self, query_string):
+        """Execute the query with the default backend, according to the configuration.
 
         Arguments:
-        config       -- the configuration dictionary
-        logger       -- an optional logging instance [optional, default: None]
+        query_string -- the query string to be parsed and executed with the default backend
         """
-        self.logger = logger or logging.getLogger(__name__)
-        self.query = Query.new(config, logger=self.logger)
-        self.aliases = config.get(config['backend'], {}).get('aliases', {})
-        self.level = None  # Nesting level for sub-groups
+        for registered_backend in REGISTERED_BACKENDS.values():
+            if registered_backend.name == self.config['default_backend']:
+                backend = registered_backend
+                break
+        else:
+            raise InvalidQueryError("Default backend '{name}' is not registered: {backends}".format(
+                name=self.config['default_backend'], backends=REGISTERED_BACKENDS))
 
-    def build(self, query_string):
-        """Parse the query string according to the grammar and build the query object for the configured backend.
+        query = backend.cls(self.config, logger=self.logger)
 
-        Arguments:
-        query_string -- the query string to be parsed and passed to the query builder
-        """
-        self.level = 0
-        parsed = grammar.parseString(query_string.strip(), parseAll=True)
-        for token in parsed:
-            self._parse_token(token)
+        return query.execute(query_string)
 
-        return self.query
-
-    def _parse_token(self, token, level=0):
-        """Recursively interpret the tokens returned by the grammar parsing.
-
-        Arguments:
-        token -- a single token returned by the grammar parsing
-        level -- nesting level in case of sub-groups in the query [optional, default: 0]
-        """
-        if not isinstance(token, ParseResults):  # Non-testable block, this should never happen
-            raise InvalidQueryError('Expected an instance of pyparsing.ParseResults, got {instance}: {token}'.format(
-                instance=type(token), token=token))
+    def _parse_token(self, token):
+        """Required by BaseQuery."""
+        if not isinstance(token, ParseResults):  # pragma: no cover - this should never happen
+            raise InvalidQueryError('Expecting ParseResults object, got {type}: {token}'.format(
+                type=type(token), token=token))
 
         token_dict = token.asDict()
-        if not token_dict:
+        self.logger.trace('Token is: {token}'.format(token=token_dict))
+
+        if self._replace_alias(token_dict):
+            return  # This token was an alias and got replaced
+
+        if 'backend' in token_dict and 'query' in token_dict:
+            element = self._get_stack_element()
+            query = REGISTERED_BACKENDS[token_dict['backend']].cls(self.config, logger=self.logger)
+            element['hosts'] = query.execute(token_dict['query'])
+            if 'bool' in token_dict:
+                element['bool'] = token_dict['bool']
+            self.stack_pointer['children'].append(element)
+        elif 'open_subgroup' in token_dict and 'close_subgroup' in token_dict:
+            self._open_subgroup()
+            if 'bool' in token_dict:
+                self.stack_pointer['bool'] = token_dict['bool']
             for subtoken in token:
-                self._parse_token(subtoken, level=(level + 1))
-        else:
-            if not self._replace_alias(token_dict, level):
-                self._build_token(token_dict, level)
+                if isinstance(subtoken, str):
+                    continue
+                self._parse_token(subtoken)
+            self._close_subgroup()
+        else:  # pragma: no cover - this should never happen
+            raise InvalidQueryError('Got unexpected token: {token}'.format(token=token))
 
-        while self.level > level:
-            self.query.close_subgroup()
-            self.level -= 1
-
-    def _build_token(self, token_dict, level):
-        """Build a token into the query object for the configured backend.
-
-        Arguments:
-        token_dict -- the dictionary of the parsed token returned by the grammar parsing
-        level      -- nesting level in the query
-        """
-        keys = token_dict.keys()
-
-        # Handle sub-groups
-        if level > self.level:
-            self.query.open_subgroup()
-        elif level < self.level:
-            self.query.close_subgroup()
-
-        self.level = level
-
-        # Based on the token type build the corresponding query object
-        if 'bool' in keys:
-            if token_dict['bool'] == 'and':
-                self.query.add_and()
-            elif token_dict['bool'] == 'or':
-                self.query.add_or()
-            else:  # Non-testable block, this should never happen with the current grammar
-                raise InvalidQueryError("Got bool '{bool}', one of and|or expected".format(bool=token_dict['bool']))
-
-        elif 'hosts' in keys:
-            token_dict['hosts'] = NodeSet(token_dict['hosts'])
-            self.query.add_hosts(**token_dict)
-
-        elif 'category' in keys:
-            self.query.add_category(**token_dict)
-
-        else:  # Non-testable block, this should never happen with the current grammar
-            raise InvalidQueryError(
-                "No valid key found in token, one of bool|hosts|category expected: {token}".format(token=token_dict))
-
-    def _replace_alias(self, token_dict, level):
+    def _replace_alias(self, token_dict):
         """Replace any alias in the query in a recursive way, alias can reference other aliases.
 
         Return True if a replacement was made, False otherwise. Raise InvalidQueryError on failure.
 
         Arguments:
         token_dict -- the dictionary of the parsed token returned by the grammar parsing
-        level      -- nesting level in the query
         """
-        keys = token_dict.keys()
-        if 'category' not in keys or token_dict['category'] != 'A':
+        if 'alias' not in token_dict:
             return False
 
-        if 'operator' in keys or 'value' in keys:
-            raise InvalidQueryError('Invalid alias syntax, aliases can be only of the form: A:alias_name')
-
-        alias_name = token_dict['key']
-        if alias_name not in self.aliases:
+        alias_name = token_dict['alias']
+        if alias_name not in self.config.get('aliases', {}):
             raise InvalidQueryError("Unable to find alias replacement for '{alias}' in the configuration".format(
                 alias=alias_name))
 
-        neg = 'not ' if 'neg' in keys and token_dict['neg'] else ''
-        alias = '{neg}({alias})'.format(neg=neg, alias=self.aliases[alias_name])
-        parsed_alias = grammar.parseString(alias, parseAll=True)
-        for token in parsed_alias:
-            self._parse_token(token, level=level)
+        self._open_subgroup()
+        if 'bool' in token_dict:
+            self.stack_pointer['bool'] = token_dict['bool']
+
+        # Calling BaseQuery._build() directly and not the parent's one to avoid resetting the stack
+        BaseQuery._build(self, self.config['aliases'][alias_name])  # pylint: disable=protected-access
+        self._close_subgroup()
 
         return True

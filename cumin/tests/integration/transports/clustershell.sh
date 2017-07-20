@@ -5,7 +5,7 @@ set -e
 function setup() {
     ssh-keygen -t ed25519 -N "" -f "${CUMIN_TMPDIR}/id_rsa" -C "cumin-integration-tests" > /dev/null
     cat <<EOF > "${CUMIN_TMPDIR}/config.yaml"
-backend: direct
+default_backend: direct
 transport: clustershell
 log_file: ${CUMIN_TMPDIR}/cumin.log
 

@@ -1,6 +1,8 @@
-backend: puppetdb  # Default backend to use, can be overriden by command line arguments
-transport: clustershell  # Default transport to use, can be overriden by command line arguments
+transport: clustershell  # Default transport to use, can be overriden by command line argument
 log_file: logs/cumin.log  # Absolute or relative path for the log file
+# If set, use this backend to parse the query first and only if it fails, fallback to parse it with the general
+# multi-query grammar [optional]
+default_backend: direct
 
 # Environment variables that will be defined [optional]
 environment:

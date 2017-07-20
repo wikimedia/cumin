@@ -133,12 +133,12 @@ def test_stderr(tqdm):
 @mock.patch('cumin.cli.sys.stdout.isatty')
 def test_get_hosts_ok(isatty, mocked_raw_input, stderr):
     """Calling get_hosts() should query the backend and return the list of hosts."""
-    args = cli.parse_args(argv=['host1', 'command1'])
+    args = cli.parse_args(argv=['D{host1}', 'command1'])
     config = {'backend': 'direct'}
     isatty.return_value = True
 
     mocked_raw_input.return_value = 'y'
-    assert cli.get_hosts(args, config) == ['host1']
+    assert cli.get_hosts(args, config) == cli.NodeSet('host1')
 
     mocked_raw_input.return_value = 'n'
     with pytest.raises(cli.KeyboardInterruptError):
@@ -159,7 +159,7 @@ def test_get_hosts_ok(isatty, mocked_raw_input, stderr):
 @mock.patch('cumin.cli.sys.stdout.isatty')
 def test_get_hosts_no_tty_ko(isatty, stderr):
     """Calling get_hosts() without a TTY should raise RuntimeError if --dry-run or --force are not specified."""
-    args = cli.parse_args(argv=['host1', 'command1'])
+    args = cli.parse_args(argv=['D{host1}', 'command1'])
     config = {'backend': 'direct'}
     isatty.return_value = False
     with pytest.raises(CuminError, match='Not in a TTY but neither DRY-RUN nor FORCE mode were specified'):
@@ -171,7 +171,7 @@ def test_get_hosts_no_tty_ko(isatty, stderr):
 @mock.patch('cumin.cli.sys.stdout.isatty')
 def test_get_hosts_no_tty_dry_run(isatty, stderr):
     """Calling get_hosts() with or without a TTY with --dry-run should return an empty list."""
-    args = cli.parse_args(argv=['--dry-run', 'host1', 'command1'])
+    args = cli.parse_args(argv=['--dry-run', 'D{host1}', 'command1'])
     config = {'backend': 'direct'}
     assert cli.get_hosts(args, config) == []
     isatty.return_value = True
@@ -183,11 +183,11 @@ def test_get_hosts_no_tty_dry_run(isatty, stderr):
 @mock.patch('cumin.cli.sys.stdout.isatty')
 def test_get_hosts_no_tty_force(isatty, stderr):
     """Calling get_hosts() with or without a TTY with --force should return the list of hosts."""
-    args = cli.parse_args(argv=['--force', 'host1', 'command1'])
+    args = cli.parse_args(argv=['--force', 'D{host1}', 'command1'])
     config = {'backend': 'direct'}
-    assert cli.get_hosts(args, config) == ['host1']
+    assert cli.get_hosts(args, config) == cli.NodeSet('host1')
     isatty.return_value = True
-    assert cli.get_hosts(args, config) == ['host1']
+    assert cli.get_hosts(args, config) == cli.NodeSet('host1')
     assert stderr.called
 
 
@@ -195,7 +195,7 @@ def test_get_hosts_no_tty_force(isatty, stderr):
 @mock.patch('cumin.cli.stderr')
 def test_run(stderr, transport):
     """Calling run() should query the hosts and execute the commands on the transport."""
-    args = cli.parse_args(argv=['--force', 'host1', 'command1'])
+    args = cli.parse_args(argv=['--force', 'D{host1}', 'command1'])
     config = {'backend': 'direct', 'transport': 'clustershell'}
     cli.run(args, config)
     transport.new.assert_called_once_with(config, cli.logger)

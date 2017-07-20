@@ -36,12 +36,9 @@ and there is no guarantee that any item listed will be implemented in the nearby
 * transports: allow to specify a rollback strategy to be executed in each host on failure
 * transports: add parallel execution of local commands on the master for each targeted host with the host as a parameter. Needs a new local transport with ExecWorker to shell out in parallel.
 * backends: generalize backends to allow to return other data too, not only the host certnames
-* backends: allow to query multiple backends in the same query (#A)
 * backends: add a new backend to support conftool
 * backends: add a new backed to query the known hosts file format
-* backends: allow to define aliases for complex common queries, depends on #A
 * puppetdb backend: add support for API v4
-* puppetdb backend: add support for mixed facts/resources queries, depends on #A
 * CLI: when `-i/--interactive` is used and no command or query is specified, drop into a REPL session allowing to easily setup them.
 
 

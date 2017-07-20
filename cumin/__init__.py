@@ -1,7 +1,6 @@
 """Automation and orchestration framework written in Python."""
 import logging
 import os
-import pkgutil
 
 from pkg_resources import DistributionNotFound, get_distribution
 
@@ -10,7 +9,7 @@ import yaml
 
 try:
     __version__ = get_distribution(__name__).version
-except DistributionNotFound:
+except DistributionNotFound:  # pragma: no cover - this should never happen during tests
     pass  # package is not installed
 
 
@@ -37,7 +36,7 @@ if (LOGGING_TRACE_LEVEL_NUMBER in logging._levelNames and  # pylint: disable=pro
 def trace(self, msg, *args, **kwargs):
     """Additional logging level for development debugging."""
     if self.isEnabledFor(LOGGING_TRACE_LEVEL_NUMBER):
-        self._log(LOGGING_TRACE_LEVEL_NUMBER, msg, args, **kwargs)  # pylint: disable=protected-access
+        self._log(LOGGING_TRACE_LEVEL_NUMBER, msg, args, **kwargs)  # pragma: no cover, pylint: disable=protected-access
 
 
 # Install the trace method and it's logging level if not already present
@@ -63,7 +62,9 @@ class Config(dict):
         """
         if config not in cls._instances:
             cls._instances[config] = parse_config(config)
-            load_backend_aliases(cls._instances[config], os.path.dirname(config))
+            alias_file = os.path.join(os.path.dirname(config), 'aliases.yaml')
+            if os.path.isfile(alias_file):  # Do not fail if the alias file doesn't exists
+                cls._instances[config]['aliases'] = parse_config(alias_file)
 
         return cls._instances[config]
 
@@ -87,26 +88,3 @@ def parse_config(config_file):
         raise CuminError("Empty configuration found in '{config}'".format(config=config_file))
 
     return config
-
-
-def load_backend_aliases(config, base_path):
-    """Given a configuration, automatically add backend aliases from configuration files in the base_path directory.
-
-    It will look for files named {backend}_aliases.yaml in the base_path directory and will load it's content into the
-    main configuration under the 'aliases' key under the backend specific configuration, so that it will be accessible
-    by config[backend]['aliases'].
-
-    Arguments:
-    config    -- the configuration object to add the aliases to.
-    base_path -- the base path where to look for the aliases files.
-    """
-    abs_path = os.path.dirname(os.path.abspath(__file__))
-    backends = [name for _, name, _ in pkgutil.iter_modules([os.path.join(abs_path, 'backends')])]
-
-    for backend in backends:
-        alias_file = os.path.join(base_path, '{backend}_aliases.yaml'.format(backend=backend))
-        if os.path.isfile(alias_file):  # Do not fail if the alias file doesn't exists
-            if config.get(backend) is None:
-                config[backend] = {}
-
-            config[backend]['aliases'] = parse_config(alias_file)

@@ -88,7 +88,7 @@ class ClusterShellWorker(BaseWorker):
         """
         if isinstance(value, type) and issubclass(value, BaseEventHandler):
             self._handler = value
-        elif value in DEFAULT_HANDLERS.keys():
+        elif value in DEFAULT_HANDLERS:
             self._handler = DEFAULT_HANDLERS[value]
         else:
             raise_error(

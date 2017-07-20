@@ -32,15 +32,14 @@ def test_config_class_invalid():
 
 
 def test_config_class_valid_with_aliases():
-    """Should return the config including the backend aliases."""
+    """Should return the config including the aliases."""
     config = cumin.Config(config=get_fixture_path(os.path.join('config', 'valid_with_aliases', 'config.yaml')))
     assert 'log_file' in config
-    assert 'aliases' in config['puppetdb']
-    assert 'role1' in config['puppetdb']['aliases']
-    assert config['puppetdb']['aliases']['role1'] == 'R:Class = Role::Role1'
-    assert 'aliases' in config['direct']
-    assert 'group1' in config['direct']['aliases']
-    assert config['direct']['aliases']['group1'] == 'host10[10-22].example.org'
+    assert 'aliases' in config
+    assert 'role1' in config['aliases']
+    assert config['aliases']['role1'] == 'P{R:Class = Role::Role1}'
+    assert 'group1' in config['aliases']
+    assert config['aliases']['group1'] == 'D{host10[10-22].example.org}'
 
 
 def test_config_class_empty_aliases():
@@ -77,41 +76,6 @@ def test_parse_config_empty():
     """A CuminError is raised if the configuration is empty."""
     with pytest.raises(cumin.CuminError, match='Empty configuration found in'):
         cumin.parse_config(get_fixture_path(os.path.join('config', 'empty', 'config.yaml')))
-
-
-def test_load_backend_aliases_missing():
-    """If no aliases file is present, load_backend_aliases() should not raise any error."""
-    base_path = get_fixture_path(os.path.join('config', 'valid'))
-    config = {}
-    cumin.load_backend_aliases(config, base_path)
-    assert config == {}
-
-
-def test_load_backend_aliases_valid():
-    """If valid aliases files are present, load_backend_aliases() should load them into the configuration."""
-    base_path = get_fixture_path(os.path.join('config', 'valid_with_aliases'))
-    config = {'direct': {}}
-    cumin.load_backend_aliases(config, base_path)
-    assert 'aliases' in config['puppetdb']
-    assert 'role1' in config['puppetdb']['aliases']
-    assert config['puppetdb']['aliases']['role1'] == 'R:Class = Role::Role1'
-    assert 'aliases' in config['direct']
-    assert 'group1' in config['direct']['aliases']
-    assert config['direct']['aliases']['group1'] == 'host10[10-22].example.org'
-
-
-def test_load_backend_aliases_empty():
-    """If empty aliases files are present, load_backend_aliases() should raise CuminError."""
-    base_path = get_fixture_path(os.path.join('config', 'valid_with_empty_aliases'))
-    with pytest.raises(cumin.CuminError, match='Empty configuration found in'):
-        cumin.load_backend_aliases({}, base_path)
-
-
-def test_load_backend_aliases_invalid():
-    """If invalid aliases files are present, load_backend_aliases() should raise CuminError."""
-    base_path = get_fixture_path(os.path.join('config', 'valid_with_invalid_aliases'))
-    with pytest.raises(cumin.CuminError, match='Unable to parse configuration file'):
-        cumin.load_backend_aliases({}, base_path)
 
 
 def test_trace_logging_level_conflict():

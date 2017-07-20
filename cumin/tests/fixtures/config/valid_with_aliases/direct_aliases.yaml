@@ -1,3 +1,0 @@
-group1: host10[10-22].example.org
-group2: host20[10-22].example.org
-group_all: A:group1 OR A:group2

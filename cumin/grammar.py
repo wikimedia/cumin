@@ -1,70 +1,85 @@
 """Query grammar definition."""
+import importlib
+import pkgutil
+
+from collections import namedtuple
 
 import pyparsing as pp
 
-# Available categories
-CATEGORIES = (
-    'A',  # Alias, it will be automatically replaced, the backends will never see it.
-    'F',  # Fact
-    'R',  # Resource
-)
-# Available operators
-OPERATORS = ('=', '!=', '>=', '<=', '<', '>', '~')
+
+from cumin import backends, CuminError
+
+# Backend object
+Backend = namedtuple('Backend', ['keyword', 'name', 'cls'])
 
 
-def _grammar():
-    """Define the query grammar.
+def get_registered_backends():
+    """Return a list of Backend objects for all the registered backends."""
+    available_backends = {}
+    backend_names = [name for _, name, ispkg in pkgutil.iter_modules(backends.__path__) if not ispkg]
 
-    Some query examples:
-    - All hosts: *
-    - Hosts globbing: host10*
-    - ClusterShell syntax for hosts expansion: host10[10-42].domain,host2010.other-domain
-    - Category based key-value selection: F:key = value
-    - A complex selection:
-      host10[10-42].*.domain or (not F:key1 = value1 and host10*) or (F:key2 > value2 and F:key3 ~ '[v]alue[0-9]+')
+    for name in backend_names:
+        backend = importlib.import_module('cumin.backends.{backend}'.format(backend=name))
+        keyword = backend.GRAMMAR_PREFIX
+        if keyword in available_backends:
+            raise CuminError("Unable to register backend {name}, keyword '{key}' already registered: {backends}".format(
+                name=name, key=keyword, backends=available_backends))
+
+        available_backends[keyword] = Backend(name=name, keyword=keyword, cls=backend.query_class)
+
+    return available_backends
+
+
+# Register all the backends only once
+REGISTERED_BACKENDS = get_registered_backends()
+
+
+def grammar():
+    """Define the main multi-query grammar.
+
+    Cumin provides a user-friendly and unified query language to select hosts using different backends with the
+    following features:
+
+    - Each query part can be composed with the others using boolean operators (`and`, `or`, `and not`, `xor`).
+    - Multiple query parts can be grouped together with parentheses (`(`, `)`).
+    - Specific backend query (`I{backend-specific query syntax}`, where `I` is an identifier for the specific backend).
+    - Alias replacement, according to aliases defined in the configuration file (`A:group1`).
+    - The identifier `A` is reserved for the aleases replacement and cannot be used to identify a backend.
+    - A complex query example: `(D{host1 or host2} and (P{R:Class = Role::MyClass} and not A:group1)) or D{host3}`
 
     Backus-Naur form (BNF) of the grammar:
-              <query> ::= <item> | <item> <and_or> <query>
-               <item> ::= [<neg>] <query-token> | [<neg>] "(" <query> ")"
-        <query-token> ::= <token> | <hosts>
-              <token> ::= <category>:<key> [<operator> <value>]
+            <grammar> ::= <item> | <item> <boolean> <grammar>
+               <item> ::= <backend_query> | <alias> | "(" <grammar> ")"
+      <backend_query> ::= <backend> "{" <query> "}"
+              <alias> ::= A:<alias_name>
+            <boolean> ::= "and not" | "and" | "xor" | "or"
 
     Given that the pyparsing library defines the grammar in a BNF-like style, for the details of the tokens not
     specified above check directly the code.
     """
     # Boolean operators
-    and_or = (pp.Keyword('and', caseless=True) | pp.Keyword('or', caseless=True))('bool')
-    neg = pp.Keyword('not', caseless=True)('neg')  # 'neg' is used to allow the use of dot notation, 'not' is reserved
-
-    operator = pp.oneOf(OPERATORS, caseless=True)('operator')  # Comparison operators
-    quoted_string = pp.quotedString.addParseAction(pp.removeQuotes)  # Both single and double quotes are allowed
+    boolean = (pp.CaselessKeyword('and not').leaveWhitespace() | pp.CaselessKeyword('and') |
+               pp.CaselessKeyword('xor') | pp.CaselessKeyword('or'))('bool')
 
     # Parentheses
-    lpar = pp.Literal('(').suppress()
-    rpar = pp.Literal(')').suppress()
+    lpar = pp.Literal('(')('open_subgroup')
+    rpar = pp.Literal(')')('close_subgroup')
 
-    # Hosts selection: glob (*) and clustershell (,!&^[]) syntaxes are allowed:
-    # i.e. host10[10-42].*.domain
-    hosts = quoted_string | (~(and_or | neg) + pp.Word(pp.alphanums + '-_.*,!&^[]'))
+    # Backend query: P{PuppetDB specific query}
+    query_start = pp.Combine(pp.oneOf(REGISTERED_BACKENDS.keys(), caseless=True)('backend') + pp.Literal('{'))
+    query_end = pp.Literal('}')
+    # Allow the backend specific query to use the end_query token as well, as long as it's in a quoted string
+    # and fail if there is a query_start token before the first query_end is reached
+    query = pp.SkipTo(query_end, ignore=pp.quotedString, failOn=query_start)('query')
+    backend_query = pp.Combine(query_start + query + query_end)
 
-    # Key-value token for allowed categories using the available comparison operators
-    # i.e. F:key = value
-    category = pp.oneOf(CATEGORIES, caseless=True)('category')
-    key = pp.Word(pp.alphanums + '-_.%@:')('key')
-    selector = pp.Combine(category + ':' + key)  # i.e. F:key
-    # All printables characters except the parentheses that are part of the grammar
-    all_but_par = ''.join([c for c in pp.printables if c not in ('(', ')')])
-    value = (quoted_string | pp.Word(all_but_par))('value')
-    token = selector + pp.Optional(operator + value)
+    # Alias
+    alias = pp.Combine(pp.CaselessKeyword('A') + ':' + pp.Word(pp.alphanums + '-_.+')('alias'))
 
-    # Final grammar, see the docstring for it's BNF based on the tokens defined above
-    # Groups are used to split the parsed results for an easy access
+    # Final grammar, see the docstring for its BNF based on the tokens defined above
+    # Group are used to have an easy dictionary access to the parsed results
     full_grammar = pp.Forward()
-    item = pp.Group(pp.Optional(neg) + (token | hosts('hosts'))) | pp.Group(
-        pp.Optional(neg) + lpar + full_grammar + rpar)
-    full_grammar << item + pp.ZeroOrMore(pp.Group(and_or) + full_grammar)  # pylint: disable=expression-not-assigned
+    item = backend_query | alias | lpar + full_grammar + rpar
+    full_grammar << pp.Group(item) + pp.ZeroOrMore(pp.Group(boolean + item))  # pylint: disable=expression-not-assigned
 
     return full_grammar
-
-
-grammar = _grammar()  # pylint: disable=invalid-name

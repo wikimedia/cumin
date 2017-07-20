@@ -1,10 +1,8 @@
 """Direct backend tests."""
 
-import pytest
-
 from ClusterShell.NodeSet import NodeSet
 
-from cumin.backends import BaseQuery, InvalidQueryError, direct
+from cumin.backends import BaseQuery, direct
 
 
 def test_direct_query_class():
@@ -25,53 +23,11 @@ class TestDirectQuery(object):
         assert isinstance(self.query, BaseQuery)
         assert self.query.config == {}
 
-    def test_add_category_fact(self):
-        """Calling add_category() should raise InvalidQueryError."""
-        with pytest.raises(InvalidQueryError, match='Category tokens are not supported'):
-            self.query.add_category('F', 'key', 'value')
-
-    def test_add_hosts(self):
-        """Calling add_hosts() should add the hosts to the NodeSet."""
-        assert list(self.query.hosts) == []
-        # No hosts
-        self.query.add_hosts(NodeSet.fromlist([]))
-        assert list(self.query.hosts) == []
-        # Single host
-        self.query.add_hosts(NodeSet.fromlist(['host']))
-        assert list(self.query.hosts) == ['host']
-        # Multiple hosts
-        self.query.add_hosts(NodeSet.fromlist(['host1', 'host2']))
-        assert list(self.query.hosts) == ['host', 'host1', 'host2']
-        # Negated query
-        self.query.add_hosts(NodeSet.fromlist(['host1']), neg=True)
-        assert list(self.query.hosts) == ['host', 'host2']
-        # Globbing is not supported
-        with pytest.raises(InvalidQueryError, match='Hosts globbing is not supported'):
-            self.query.add_hosts(NodeSet.fromlist(['host1*']))
-
-    def test_open_subgroup(self):
-        """Calling open_subgroup() should raise InvalidQueryError."""
-        with pytest.raises(InvalidQueryError, matach='Subgroups are not supported'):
-            self.query.open_subgroup()
-
-    def test_close_subgroup(self):
-        """Calling close_subgroup() should raise InvalidQueryError."""
-        with pytest.raises(InvalidQueryError, match='Subgroups are not supported'):
-            self.query.close_subgroup()
-
-    def test_add_and(self):
-        """Calling add_and() should raise InvalidQueryError."""
-        with pytest.raises(InvalidQueryError, match='Boolean AND operator is not supported'):
-            self.query.add_and()
-
-    def test_add_or(self):
-        """Calling add_or() should be a noop."""
-        assert list(self.query.hosts) == []
-        self.query.add_or()
-        assert list(self.query.hosts) == []
-
     def test_execute(self):
         """Calling execute() should return the list of hosts."""
-        assert list(self.query.hosts) == self.query.execute()
-        self.query.add_hosts(NodeSet.fromlist(['host1', 'host2']))
-        assert list(self.query.hosts) == self.query.execute()
+        assert self.query.execute('host1 or host2') == NodeSet('host[1-2]')
+        assert self.query.execute('host1 and host2') == NodeSet()
+        assert self.query.execute('host1 and not host2') == NodeSet('host1')
+        assert self.query.execute('host[1-5] xor host[3-7]') == NodeSet('host[1-2,6-7]')
+        assert self.query.execute('host1 or (host[10-20] and not host15)') == NodeSet('host[1,10-14,16-20]')
+        assert self.query.execute('(host1 or host[2-3]) and not (host[3-9] or host2)') == NodeSet('host1')

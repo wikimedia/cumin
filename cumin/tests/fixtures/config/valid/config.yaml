@@ -1,6 +1,6 @@
-backend: puppetdb
 transport: clustershell
 log_file: logs/cumin.log
+default_backend: puppetdb
 
 environment:
     ENV_VARIABLE: env_value
