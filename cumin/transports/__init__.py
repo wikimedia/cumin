@@ -32,7 +32,8 @@ class Command(object):
         command  -- the command to execute.
         timeout  -- the command's timeout in seconds. [optional, default: None]
         ok_codes -- a list of exit codes to be considered successful for the command. The exit code 0 is considered
-                    successful by default, this option allows to override it. [optional, default: None]
+                    successful by default, if this option is set it override it. If set to an empty list it means
+                    that any code is considered successful. [optional, default: None]
         """
         self.command = command
         self._timeout = None
@@ -127,7 +128,7 @@ class Command(object):
             self._ok_codes = value
             return
 
-        validate_list('ok_codes', value)
+        validate_list('ok_codes', value, allow_empty=True)
         for code in value:
             if not isinstance(code, int) or code < 0 or code > 255:
                 raise_error('ok_codes', 'must be a list of integers in the range 0-255 or None', value)
@@ -408,15 +409,18 @@ class BaseWorker(object):
         self._batch_sleep = value
 
 
-def validate_list(property_name, value):
-    """Helper to validate a list or None, raise WorkerError otherwise.
+def validate_list(property_name, value, allow_empty=False):
+    """Helper to validate a list, raise WorkerError otherwise.
 
     Arguments:
     property_name -- the name of the property to validate
     value         -- the value to validate
     """
-    if value is not None and not isinstance(value, list):
-        raise_error(property_name, 'must be a list or None', value)
+    if not isinstance(value, list):
+        raise_error(property_name, 'must be a list', value)
+
+    if not allow_empty and not value:
+        raise_error(property_name, 'must be a non-empty list', value)
 
 
 def validate_positive_integer(property_name, value):

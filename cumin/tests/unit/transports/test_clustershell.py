@@ -88,9 +88,9 @@ class TestClusterShellWorker(object):
             'command1', nodes=self.nodes, handler=self.worker._handler_instance, timeout=None)
 
     def test_execute_no_commands(self):
-        """Calling execute() without commands should return without doing anything."""
-        self.worker.commands = []
-        self.worker.execute()
+        """Calling execute() without commands should raise WorkerError."""
+        with pytest.raises(WorkerError, match=r'commands must be a non-empty list'):
+            self.worker.commands = []
         assert not self.worker.task.shell.called
 
     def test_execute_one_command_no_mode(self):

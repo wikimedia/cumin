@@ -547,7 +547,8 @@ class SyncEventHandler(BaseEventHandler):
         try:
             node = self.nodes[worker.current_node]
 
-            if worker.current_rc in node.commands[node.running_command_index].ok_codes:
+            ok_codes = node.commands[node.running_command_index].ok_codes
+            if worker.current_rc in ok_codes or not ok_codes:
                 self.pbar_ok.update()
                 self.counters['success'] += 1
                 new_state = State.success
@@ -691,7 +692,8 @@ class AsyncEventHandler(BaseEventHandler):
         try:
             node = self.nodes[worker.current_node]
 
-            if worker.current_rc in node.commands[node.running_command_index].ok_codes:
+            ok_codes = node.commands[node.running_command_index].ok_codes
+            if worker.current_rc in ok_codes or not ok_codes:
                 if node.running_command_index == (len(node.commands) - 1):
                     self.pbar_ok.update()
                     self.counters['success'] += 1

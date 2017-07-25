@@ -158,8 +158,11 @@ class TestCommand(object):
         """Should return the ok_codes set, [0] otherwise."""
         # Test empty list
         command = transports.Command('command1')
+        assert command.ok_codes == [0]
         command.ok_codes = []
         assert command.ok_codes == []
+        command.ok_codes = [1, 255]
+        assert command.ok_codes == [1, 255]
 
     def test_ok_codes_setter(self):
         """Should set the ok_codes to its value, unset it if None is passed."""
@@ -179,7 +182,7 @@ class TestCommand(object):
         command.ok_codes = []
         assert command._ok_codes == []
 
-        with pytest.raises(transports.WorkerError, match='ok_codes must be a list or None'):
+        with pytest.raises(transports.WorkerError, match='ok_codes must be a list'):
             command.ok_codes = 'invalid_value'
 
         message = 'must be a list of integers in the range'
@@ -460,14 +463,16 @@ class TestModuleFunctions(object):
     """Transports module functions test class."""
 
     def test_validate_list(self):
-        """Should raise a WorkerError if the argument is not a list or None."""
-        transports.validate_list('Test', None)
-        transports.validate_list('Test', [])
+        """Should raise a WorkerError if the argument is not a list."""
         transports.validate_list('Test', ['value1'])
         transports.validate_list('Test', ['value1', 'value2'])
+        transports.validate_list('Test', [], allow_empty=True)
+
+        with pytest.raises(transports.WorkerError, match=r'Test must be a non-empty list'):
+            transports.validate_list('Test', [])
 
         message = r'Test must be a list'
-        for invalid_value in (0, 'invalid_value', {'invalid': 'value'}):
+        for invalid_value in (0, None, 'invalid_value', {'invalid': 'value'}):
             with pytest.raises(transports.WorkerError, match=message):
                 transports.validate_list('Test', invalid_value)
 
