@@ -94,7 +94,10 @@ def parse_args(argv=None):
     parser.add_argument('-s', '--batch-sleep', type=float, default=None,
                         help=('Sleep in seconds (float) to wait before starting the execution on the next host when '
                               '-b/--batch-size is used. [default: None]'))
+    parser.add_argument('-x', '--ignore-exit-codes', action='store_true',
+                        help='USE WITH CAUTION! Treat any executed command as successful, ignoring the exit codes.')
     parser.add_argument('-o', '--output', choices=OUTPUT_FORMATS, help='Specify a different output format.')
+    parser.add_argument('-i', '--interactive', action='store_true', help='Drop into a Python shell with the results.')
     parser.add_argument('--force', action='store_true',
                         help='USE WITH CAUTION! Force the execution without confirmation of the affected hosts. ')
     parser.add_argument('--backend', choices=backends_names,
@@ -111,7 +114,6 @@ def parse_args(argv=None):
     parser.add_argument('-d', '--debug', action='store_true', help='Set log level to DEBUG.')
     parser.add_argument('--trace', action='store_true',
                         help='Set log level to TRACE, a custom logging level intended for development debugging.')
-    parser.add_argument('-i', '--interactive', action='store_true', help='Drop into a Python shell with the results.')
     parser.add_argument('hosts', metavar='HOSTS_QUERY', help='Hosts selection query')
     parser.add_argument('commands', metavar='COMMAND', nargs='*',
                         help='Command to be executed. If no commands are speficied, --dry-run is set.')
@@ -134,6 +136,9 @@ def parse_args(argv=None):
             parser.error('-i/--interactive can be used only with one command')
         if parsed_args.output is not None:
             parser.error('-o/--output can be used only with one command')
+
+    if parsed_args.ignore_exit_codes:
+        stderr('IGNORE EXIT CODES mode enabled, all commands executed will be considered successful')
 
     return parsed_args
 
@@ -311,11 +316,12 @@ def run(args, config):
     worker = transport.Transport.new(config, logger)
     worker.hosts = hosts
 
-    if args.timeout is not None:
-        worker.commands = [transports.Command(command, timeout=args.timeout) for command in args.commands]
-    else:
-        worker.commands = args.commands
+    ok_codes = None
+    if args.ignore_exit_codes:
+        ok_codes = []
 
+    worker.commands = [transports.Command(command, timeout=args.timeout, ok_codes=ok_codes)
+                       for command in args.commands]
     worker.timeout = args.global_timeout
     worker.handler = args.mode
     worker.success_threshold = args.success_percentage / float(100)
