@@ -314,7 +314,7 @@ def run(args, config):
         return 0
 
     worker = transport.Transport.new(config, logger)
-    worker.hosts = hosts
+    worker.target = transports.Target(hosts, batch_size=args.batch_size, batch_sleep=args.batch_sleep, logger=logger)
 
     ok_codes = None
     if args.ignore_exit_codes:
@@ -325,8 +325,6 @@ def run(args, config):
     worker.timeout = args.global_timeout
     worker.handler = args.mode
     worker.success_threshold = args.success_percentage / float(100)
-    worker.batch_size = args.batch_size
-    worker.batch_sleep = args.batch_sleep
     exit_code = worker.execute()
 
     if args.interactive:

@@ -15,6 +15,9 @@ whitelist_logging.raiseExceptions
 whitelist_cli = Whitelist()
 whitelist_cli.run.h
 
+whitelist_transports_clustershell = Whitelist()
+whitelist_transports_clustershell.BaseEventHandler.kwargs
+
 whitelist_tests_integration_conftest = Whitelist()
 whitelist_tests_integration_conftest.pytest_cmdline_preparse
 whitelist_tests_integration_conftest.pytest_runtest_makereport

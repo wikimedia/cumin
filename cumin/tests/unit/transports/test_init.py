@@ -307,15 +307,83 @@ class TestState(object):
         assert state.current == transports.State.pending
 
 
+class TestTarget(object):
+    """Target class tests."""
+
+    def setup_method(self, _):
+        """Initialize default properties and instances."""
+        # pylint: disable=attribute-defined-outside-init
+        self.hosts_list = ['host' + str(i) for i in xrange(10)]
+        self.hosts = NodeSet.fromlist(self.hosts_list)
+
+    def test_instantiation_nodeset(self):
+        """Creating a Target instance with a NodeSet and without optional parameter should return their defaults."""
+        target = transports.Target(self.hosts)
+        assert target.hosts == self.hosts
+        assert target.batch_size == len(self.hosts)
+        assert target.batch_sleep == 0.0
+
+    def test_instantiation_list(self):
+        """Creating a Target instance with a list and without optional parameter should return their defaults."""
+        target = transports.Target(self.hosts_list)
+        assert target.hosts == self.hosts
+        assert target.batch_size == len(self.hosts)
+        assert target.batch_sleep == 0.0
+
+    def test_instantiation_invalid(self):
+        """Creating a Target instance with invalid hosts should raise WorkerError."""
+        with pytest.raises(transports.WorkerError, match="must be a ClusterShell's NodeSet or a list"):
+            transports.Target(set(self.hosts_list))
+
+    @mock.patch('cumin.transports.logging.Logger.debug')
+    def test_instantiation_batch_size(self, mocked_logger):
+        """Creating a Target instance with a batch_size should set it to it's value, if valid."""
+        target = transports.Target(self.hosts, batch_size=5)
+        assert target.batch_size == 5
+
+        target = transports.Target(self.hosts, batch_size=len(self.hosts) + 1)
+        assert target.batch_size == len(self.hosts)
+        assert mocked_logger.called
+
+        target = transports.Target(self.hosts, batch_size=None)
+        assert target.batch_size == len(self.hosts)
+
+        with pytest.raises(transports.WorkerError):
+            transports.Target(self.hosts, batch_size=0)
+
+    def test_instantiation_batch_sleep(self):
+        """Creating a Target instance with a batch_sleep should set it to it's value, if valid."""
+        target = transports.Target(self.hosts, batch_sleep=5.0)
+        assert target.batch_sleep == pytest.approx(5.0)
+
+        target = transports.Target(self.hosts, batch_sleep=None)
+        assert target.batch_sleep == pytest.approx(0.0)
+
+        with pytest.raises(transports.WorkerError):
+            transports.Target(self.hosts, batch_sleep=0)
+
+        with pytest.raises(transports.WorkerError):
+            transports.Target(self.hosts, batch_sleep=-1.0)
+
+    def test_first_batch(self):
+        """The first_batch property should return the first_batch of hosts."""
+        size = 5
+        target = transports.Target(self.hosts, batch_size=size)
+        assert len(target.first_batch) == size
+        assert target.first_batch == NodeSet.fromlist(self.hosts[:size])
+        assert isinstance(target.first_batch, NodeSet)
+
+
 class TestBaseWorker(object):
     """Concrete BaseWorker class for tests."""
 
     def test_instantiation(self):
         """Raise if instantiated directly, should return an instance of BaseWorker if inherited."""
+        target = transports.Target(NodeSet('node1'))
         with pytest.raises(TypeError):
-            transports.BaseWorker({})  # pylint: disable=abstract-class-instantiated
+            transports.BaseWorker({}, target)  # pylint: disable=abstract-class-instantiated
 
-        assert isinstance(ConcreteBaseWorker({}), transports.BaseWorker)
+        assert isinstance(ConcreteBaseWorker({}, transports.Target(NodeSet('node[1-2]'))), transports.BaseWorker)
 
     @mock.patch.dict(transports.os.environ, {}, clear=True)
     def test_init(self):
@@ -325,7 +393,7 @@ class TestBaseWorker(object):
                   'environment': env_dict}
 
         assert transports.os.environ == {}
-        worker = ConcreteBaseWorker(config)
+        worker = ConcreteBaseWorker(config, transports.Target(NodeSet('node[1-2]')))
         assert transports.os.environ == env_dict
         assert worker.config == config
 
@@ -336,23 +404,8 @@ class TestConcreteBaseWorker(object):
     def setup_method(self, _):
         """Initialize default properties and instances."""
         # pylint: disable=attribute-defined-outside-init
-        self.worker = ConcreteBaseWorker({})
-        self.hosts = NodeSet('node[1-2]')
+        self.worker = ConcreteBaseWorker({}, transports.Target(NodeSet('node[1-2]')))
         self.commands = [transports.Command('command1'), transports.Command('command2')]
-
-    def test_hosts_getter(self):
-        """Access to hosts property should return an empty list if not set and the list of hosts otherwise."""
-        assert self.worker.hosts == []
-        self.worker._hosts = self.hosts
-        assert self.worker.hosts == self.hosts
-
-    def test_hosts_setter(self):
-        """Raise WorkerError if trying to set it not to an iterable, set it otherwise."""
-        with pytest.raises(transports.WorkerError, match="must be an instance of ClusterShell's NodeSet or None"):
-            self.worker.hosts = 'not-list'
-
-        self.worker.hosts = self.hosts
-        assert self.worker._hosts == self.hosts
 
     def test_commands_getter(self):
         """Access to commands property should return an empty list if not set and the list of commands otherwise."""
@@ -415,48 +468,6 @@ class TestConcreteBaseWorker(object):
 
         self.worker.success_threshold = 0.3
         assert self.worker._success_threshold == pytest.approx(0.3)
-
-    def test_batch_size_getter(self):
-        """Return default value if not set, the value otherwise."""
-        self.worker.hosts = self.hosts
-        assert self.worker.batch_size == len(self.hosts)
-        self.worker._batch_size = 1
-        assert self.worker.batch_size == 1
-
-    def test_batch_size_setter(self):
-        """Raise WorkerError if not positive integer, set it otherwise forcing it to len(hosts) if greater."""
-        with pytest.raises(transports.WorkerError, match='batch_size must be a positive integer'):
-            self.worker.batch_size = -1
-
-        with pytest.raises(transports.WorkerError, match='batch_size must be a positive integer'):
-            self.worker.batch_size = 0
-
-        self.worker.hosts = self.hosts
-        self.worker.batch_size = 10
-        assert self.worker._batch_size == len(self.hosts)
-        self.worker.batch_size = 1
-        assert self.worker._batch_size == 1
-
-    def test_batch_sleep_getter(self):
-        """Return default value if not set, the value otherwise."""
-        assert self.worker.batch_sleep == pytest.approx(0.0)
-        self.worker._batch_sleep = 10.0
-        assert self.worker.batch_sleep == pytest.approx(10.0)
-
-    def test_batch_sleep_setter(self):
-        """Raise WorkerError if not positive integer, set it otherwise."""
-        message = r'batch_sleep must be a positive float'
-        with pytest.raises(transports.WorkerError, match=message):
-            self.worker.batch_sleep = 1
-
-        with pytest.raises(transports.WorkerError, match=message):
-            self.worker.batch_sleep = '1'
-
-        with pytest.raises(transports.WorkerError, match=message):
-            self.worker.batch_sleep = -1.0
-
-        self.worker.batch_sleep = 10.0
-        assert self.worker._batch_sleep == pytest.approx(10.0)
 
 
 class TestModuleFunctions(object):

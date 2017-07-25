@@ -16,12 +16,12 @@ from cumin.transports import BaseWorker, raise_error, State
 class ClusterShellWorker(BaseWorker):
     """It provides a Cumin worker for SSH using the ClusterShell library."""
 
-    def __init__(self, config, logger=None):
+    def __init__(self, config, target, logger=None):
         """Worker ClusterShell constructor.
 
-        Arguments: according to BaseQuery interface
+        Arguments: according to BaseWorker
         """
-        super(ClusterShellWorker, self).__init__(config, logger)
+        super(ClusterShellWorker, self).__init__(config, target, logger)
         self.task = Task.task_self()  # Initialize a ClusterShell task
         self._handler_instance = None
 
@@ -41,17 +41,14 @@ class ClusterShellWorker(BaseWorker):
         if self.handler is None:
             raise RuntimeError('An EventHandler is mandatory.')
 
-        # Schedule only the first command for the first batch, the following ones must be handled by the EventHandler
-        first_batch = self.hosts[:self.batch_size]
-
         # Instantiate handler
+        # Schedule only the first command for the first batch, the following ones must be handled by the EventHandler
         self._handler_instance = self.handler(  # pylint: disable=not-callable
-            self.hosts, self.commands, success_threshold=self.success_threshold, batch_size=self.batch_size,
-            batch_sleep=self.batch_sleep, logger=self.logger, first_batch=first_batch)
+            self.target, self.commands, success_threshold=self.success_threshold, logger=self.logger)
 
         self.logger.info("Executing commands {commands} on '{num}' hosts: {hosts}".format(
-            commands=self.commands, num=len(self.hosts), hosts=self.hosts))
-        self.task.shell(self.commands[0].command, nodes=first_batch, handler=self._handler_instance,
+            commands=self.commands, num=len(self.target.hosts), hosts=self.target.hosts))
+        self.task.shell(self.commands[0].command, nodes=self.target.first_batch, handler=self._handler_instance,
                         timeout=self.commands[0].timeout)
 
         return_value = 0
@@ -124,18 +121,23 @@ class BaseEventHandler(Event.EventHandler):
 
     short_command_length = 35  # For logging and printing the commands are shortened to reach at most this length
 
-    def __init__(self, nodes, commands, **kwargs):
+    def __init__(self, target, commands, success_threshold=1.0, logger=None, **kwargs):
         """Event handler ClusterShell extension constructor.
 
         If subclasses defines a self.pbar_ko tqdm progress bar, it will be updated on timeout.
 
         Arguments:
-        nodes    -- the ClusterShell's NodeSet with which this worker was initiliazed.
-        commands -- the list of Command objects that has to be executed on the nodes.
-        **kwargs -- optional additional keyword arguments that might be used by classes that extend this base class.
+        target            -- a Target instance.
+        commands          -- the list of Command objects that has to be executed on the nodes.
+        success_threshold -- the success threshold, a float between 0 and 1, to consider the execution successful.
+                             [optional, default: 1.0]
+        **kwargs          -- additional keyword arguments that might be used by classes that extend this base class.
+                             [optional]
         """
         super(BaseEventHandler, self).__init__()
-        self.logger = kwargs.get('logger', None) or logging.getLogger(__name__)
+        self.success_threshold = success_threshold
+        self.logger = logger or logging.getLogger(__name__)
+        self.target = target
         self.lock = threading.Lock()  # Used to update instance variables coherently from within callbacks
 
         # Execution management variables
@@ -143,14 +145,14 @@ class BaseEventHandler(Event.EventHandler):
         self.commands = commands
         self.kwargs = kwargs  # Allow to store custom parameters from subclasses without changing the signature
         self.counters = Counter()
-        self.counters['total'] = len(nodes)
+        self.counters['total'] = len(target.hosts)
         self.deduplicate_output = self.counters['total'] > 1
         self.global_timedout = False
         # Instantiate all the node instances, slicing the commands list to get a copy
-        self.nodes = {node: Node(node, commands[:]) for node in nodes}
+        self.nodes = {node: Node(node, commands[:]) for node in target.hosts}
         # Move already all the nodes in the first_batch to the scheduled state, it means that ClusterShell was
         # already instructed to execute a command on those nodes
-        for node_name in kwargs.get('first_batch', []):
+        for node_name in target.first_batch:
             self.nodes[node_name].state.update(State.scheduled)
 
         # Initialize color and progress bar formats
@@ -260,7 +262,7 @@ class BaseEventHandler(Event.EventHandler):
             self.lock.release()
 
         # Schedule a timer to run the current command on the next node or start the next command
-        worker.task.timer(self.kwargs.get('batch_sleep', 0.0), worker.eh)
+        worker.task.timer(self.target.batch_sleep, worker.eh)
 
     def _get_log_message(self, num, message, nodes=None):
         """Helper to get a pre-formatted message suitable for logging or printing.
@@ -387,10 +389,9 @@ class BaseEventHandler(Event.EventHandler):
             num = self.counters['success']
 
         tot = self.counters['total']
-        success_threshold = self.kwargs.get('success_threshold', 1)
         success_ratio = float(num) / tot
 
-        if success_ratio < success_threshold:
+        if success_ratio < self.success_threshold:
             comp = '<'
             post = '. Aborting.'
         else:
@@ -406,14 +407,14 @@ class BaseEventHandler(Event.EventHandler):
             nodes = [node.name for node in self.nodes.itervalues() if node.state.is_success]
 
         message = "success ratio ({comp} {perc:.1%} threshold){message_string}{post}".format(
-            comp=comp, perc=success_threshold, message_string=message_string, post=post)
+            comp=comp, perc=self.success_threshold, message_string=message_string, post=post)
         log_message, nodes_string = self._get_log_message(num, message, nodes=nodes)
         final_message = '{message}{nodes}'.format(message=log_message, nodes=nodes_string)
 
         if num == tot:
             color = colorama.Fore.GREEN
             self.logger.info(final_message)
-        elif success_ratio >= success_threshold:
+        elif success_ratio >= self.success_threshold:
             color = colorama.Fore.YELLOW
             self.logger.warning(final_message)
         else:
@@ -438,12 +439,13 @@ class SyncEventHandler(BaseEventHandler):
     enough nodes before proceeding with the next one.
     """
 
-    def __init__(self, nodes, commands, **kwargs):
+    def __init__(self, target, commands, success_threshold=1.0, logger=None, **kwargs):
         """Custom ClusterShell synchronous event handler constructor.
 
         Arguments: according to BaseEventHandler interface
         """
-        super(SyncEventHandler, self).__init__(nodes, commands, **kwargs)
+        super(SyncEventHandler, self).__init__(
+            target, commands, success_threshold=success_threshold, logger=logger, **kwargs)
         self.current_command_index = 0  # Global pointer for the current command in execution across all nodes
         self.start_command()
         self.aborted = False
@@ -468,13 +470,11 @@ class SyncEventHandler(BaseEventHandler):
 
         # Schedule the next command, the first was already scheduled by ClusterShellWorker.execute()
         if schedule:
-            batch_size = self.kwargs.get('batch_size', self.counters['total'])
-
             self.lock.acquire()  # Avoid modifications of the same data from other callbacks triggered by ClusterShell
             try:
                 # Available nodes for the next command execution were already update back to the pending state
                 remaining_nodes = [node.name for node in self.nodes.itervalues() if node.state.is_pending]
-                first_batch = remaining_nodes[:batch_size]
+                first_batch = remaining_nodes[:self.target.batch_size]
                 first_batch_set = NodeSet.NodeSet.fromlist(first_batch)
                 for node_name in first_batch:
                     self.nodes[node_name].state.update(State.scheduled)
@@ -502,11 +502,10 @@ class SyncEventHandler(BaseEventHandler):
         self._failed_commands_report(filter_command_index=self.current_command_index)
         self._success_nodes_report(command=self.commands[self.current_command_index].command)
 
-        success_threshold = self.kwargs.get('success_threshold', 1)
         success_ratio = float(self.counters['success']) / self.counters['total']
 
         # Abort on failure
-        if success_ratio < success_threshold:
+        if success_ratio < self.success_threshold:
             self.return_value = 2
             self.aborted = True  # Tells other timers that might trigger after that the abort is already in progress
             return False
@@ -562,7 +561,7 @@ class SyncEventHandler(BaseEventHandler):
             self.lock.release()
 
         # Schedule a timer to run the current command on the next node or start the next command
-        worker.task.timer(self.kwargs.get('batch_sleep', 0.0), worker.eh)
+        worker.task.timer(self.target.batch_sleep, worker.eh)
 
     def ev_timer(self, timer):
         """Schedule the current command on the next node or the next command on the first batch of nodes.
@@ -571,11 +570,10 @@ class SyncEventHandler(BaseEventHandler):
 
         Arguments: according to EventHandler interface
         """
-        success_threshold = self.kwargs.get('success_threshold', 1)
         success_ratio = 1 - (float(self.counters['failed'] + self.counters['timeout']) / self.counters['total'])
 
         node = None
-        if success_ratio >= success_threshold:
+        if success_ratio >= self.success_threshold:
             # Success ratio is still good, looking for the next node
             self.lock.acquire()  # Avoid modifications of the same data from other callbacks triggered by ClusterShell
             try:
@@ -659,12 +657,13 @@ class AsyncEventHandler(BaseEventHandler):
     orchestration between the nodes.
     """
 
-    def __init__(self, nodes, commands, **kwargs):
+    def __init__(self, target, commands, success_threshold=1.0, logger=None, **kwargs):
         """Custom ClusterShell asynchronous event handler constructor.
 
         Arguments: according to BaseEventHandler interface
         """
-        super(AsyncEventHandler, self).__init__(nodes, commands, **kwargs)
+        super(AsyncEventHandler, self).__init__(
+            target, commands, success_threshold=success_threshold, logger=logger, **kwargs)
 
         self.pbar_ok = tqdm(desc='PASS', total=self.counters['total'], leave=True, unit='hosts', dynamic_ncols=True,
                             bar_format=colorama.Fore.GREEN + self.bar_format, file=sys.stderr)
@@ -716,7 +715,7 @@ class AsyncEventHandler(BaseEventHandler):
                               timeout=command.timeout)
         elif schedule_timer:
             # Schedule a timer to allow to run all the commands in the next available node
-            worker.task.timer(self.kwargs.get('batch_sleep', 0.0), worker.eh)
+            worker.task.timer(self.target.batch_sleep, worker.eh)
 
     def ev_timer(self, timer):
         """Schedule the current command on the next node or the next command on the first batch of nodes.
@@ -725,11 +724,10 @@ class AsyncEventHandler(BaseEventHandler):
 
         Arguments: according to EventHandler interface
         """
-        success_threshold = self.kwargs.get('success_threshold', 1)
         success_ratio = 1 - (float(self.counters['failed'] + self.counters['timeout']) / self.counters['total'])
 
         node = None
-        if success_ratio >= success_threshold:
+        if success_ratio >= self.success_threshold:
             # Success ratio is still good, looking for the next node
             self.lock.acquire()  # Avoid modifications of the same data from other callbacks triggered by ClusterShell
             try:
@@ -767,12 +765,11 @@ class AsyncEventHandler(BaseEventHandler):
 
         num = self.counters['success']
         tot = self.counters['total']
-        success_threshold = self.kwargs.get('success_threshold', 1)
         success_ratio = float(num) / tot
 
         if success_ratio == 1:
             self.return_value = 0
-        elif success_ratio < success_threshold:
+        elif success_ratio < self.success_threshold:
             self.return_value = 2
         else:
             self.return_value = 1

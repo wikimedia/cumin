@@ -230,31 +230,94 @@ class State(object):
         self._state = new
 
 
+class Target(object):
+    """Targets management class."""
+
+    def __init__(self, hosts, batch_size=None, batch_sleep=None, logger=None):
+        """Constructor, inizialize the Target with the list of hosts and additional parameters.
+
+        Arguments:
+        hosts       -- a ClusterShell's NodeSet or a list of hosts that will be targeted
+        batch_size  -- set the batch size so that no more that this number of hosts are targeted at any given time.
+                       If greater than the number of hosts it will be auto-resized to the number of hosts. It must be
+                       a positive integer or None to unset it. [optional, default: None]
+        batch_sleep -- sleep time in seconds between the end of execution of one host in the batch and the start in
+                       the next host. It must be a positive float or None to unset it. [optional, default: None]
+        logger      -- a logging.Logger instance [optional, default: None]
+        """
+        self.logger = logger or logging.getLogger(__name__)
+
+        if isinstance(hosts, NodeSet):
+            self.hosts = hosts
+        elif isinstance(hosts, list):
+            self.hosts = NodeSet.fromlist(hosts)
+        else:
+            raise_error('hosts', "must be a ClusterShell's NodeSet or a list", hosts)
+
+        self.batch_size = self._compute_batch_size(batch_size, self.hosts)
+        self.batch_sleep = Target._compute_batch_sleep(batch_sleep)
+
+    @property
+    def first_batch(self):
+        """Extract the first batch of hosts to execute."""
+        return self.hosts[:self.batch_size]
+
+    def _compute_batch_size(self, batch_size, hosts):
+        """Compute the batch_size based on the hosts size and return the value to be used.
+
+        Arguments:
+        batch_size -- a positive integer to indicate the batch_size to apply when executing the worker or None to get
+                      its default value. If greater than the number of hosts, the number of hosts will be used as value.
+        hosts      -- the list of hosts to use to calculate the batch size.
+        """
+        validate_positive_integer('batch_size', batch_size)
+        hosts_size = len(hosts)
+
+        if batch_size is None:
+            batch_size = hosts_size
+        elif batch_size > hosts_size:
+            self.logger.debug(("Provided batch_size '{batch_size}' is greater than the number of hosts '{hosts_size}'"
+                               ", using '{hosts_size}' as value").format(batch_size=batch_size, hosts_size=hosts_size))
+            batch_size = hosts_size
+
+        return batch_size
+
+    @staticmethod
+    def _compute_batch_sleep(batch_sleep):
+        """Validate batch_sleep and return its value or a default value.
+
+        Arguments:
+        batch_sleep -- a positive float indicating the sleep in seconds to apply between one batched host and the next,
+                       or None to get its default value.
+        """
+        validate_positive_float('batch_sleep', batch_sleep)
+        return batch_sleep or 0.0
+
+
 class BaseWorker(object):
     """Worker interface to be extended by concrete workers."""
 
     __metaclass__ = ABCMeta
 
-    def __init__(self, config, logger=None):
+    def __init__(self, config, target, logger=None):
         """Worker constructor. Setup environment variables and initialize properties.
 
         Arguments:
         config -- a dictionary with the parsed configuration file
+        target -- a Target instance
         logger -- an optional logger instance [optional, default: None]
         """
         self.config = config
+        self.target = target
         self.logger = logger or logging.getLogger(__name__)
         self.logger.trace('Transport {name} created with config: {config}'.format(
             name=type(self).__name__, config=config))
 
         # Initialize setters values
-        self._hosts = None
         self._commands = None
         self._handler = None
         self._timeout = None
         self._success_threshold = None
-        self._batch_size = None
-        self._batch_sleep = None
 
         for key, value in config.get('environment', {}).iteritems():
             os.environ[key] = value
@@ -266,23 +329,6 @@ class BaseWorker(object):
     @abstractmethod
     def get_results(self):
         """Generator that yields tuples '(node_name, result)' with the results of the current execution."""
-
-    @property
-    def hosts(self):
-        """Getter for the hosts property with a default value."""
-        return self._hosts or []
-
-    @hosts.setter
-    def hosts(self, value):
-        """Setter for the hosts property with validation, raise WorkerError if not valid.
-
-        Arguments:
-        value -- a ClusterShell.NodeSet.NodeSet instance or None to reset it.
-        """
-        if value is not None and not isinstance(value, NodeSet):
-            raise_error('hosts', "must be an instance of ClusterShell's NodeSet or None", value)
-
-        self._hosts = value
 
     @property
     def commands(self):
@@ -370,43 +416,6 @@ class BaseWorker(object):
                 value_type=type(value), value=value))
 
         self._success_threshold = value
-
-    @property
-    def batch_size(self):
-        """Getter for the batch_size property, default to the number of hosts if not set."""
-        return self._batch_size or len(self.hosts)
-
-    @batch_size.setter
-    def batch_size(self, value):
-        """Setter for the batch_size property with validation, raise WorkerError if not valid.
-
-        Arguments:
-        value -- the value to set the batch_size to, if greater than the number of hosts it will be auto-resized to the
-                 number of hosts. Must be a positive integer or None to unset it.
-        """
-        validate_positive_integer('batch_size', value)
-        hosts_size = len(self.hosts)
-        if value is not None and value > hosts_size:
-            self.logger.debug(("Provided batch_size '{batch_size}' is greater than the number of hosts '{hosts_size}'"
-                               ", using '{hosts_size}' as value").format(batch_size=value, hosts_size=hosts_size))
-            value = hosts_size
-
-        self._batch_size = value
-
-    @property
-    def batch_sleep(self):
-        """Getter for the batch_sleep property, default to 0.0 if not set."""
-        return self._batch_sleep or 0.0
-
-    @batch_sleep.setter
-    def batch_sleep(self, value):
-        """Setter for the batch_sleep property with validation, raise WorkerError if value is not valid.
-
-        Arguments:
-        value -- the value to set the batch_sleep to. Must be a positive float or None to unset it.
-        """
-        validate_positive_float('batch_sleep', value)
-        self._batch_sleep = value
 
 
 def validate_list(property_name, value, allow_empty=False):
