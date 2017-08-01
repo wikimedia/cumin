@@ -459,13 +459,11 @@ class SyncEventHandler(BaseEventHandler):
         """
         self.counters['success'] = 0
 
-        self.pbar_ok = tqdm(total=self.counters['total'], leave=True, unit='hosts', dynamic_ncols=True,
+        self.pbar_ok = tqdm(desc='PASS', total=self.counters['total'], leave=True, unit='hosts', dynamic_ncols=True,
                             bar_format=colorama.Fore.GREEN + self.bar_format, file=sys.stderr)
-        self.pbar_ok.desc = 'PASS'
         self.pbar_ok.refresh()
-        self.pbar_ko = tqdm(total=self.counters['total'], leave=True, unit='hosts', dynamic_ncols=True,
+        self.pbar_ko = tqdm(desc='FAIL', total=self.counters['total'], leave=True, unit='hosts', dynamic_ncols=True,
                             bar_format=colorama.Fore.RED + self.bar_format, file=sys.stderr)
-        self.pbar_ko.desc = 'FAIL'
         self.pbar_ko.refresh()
 
         # Schedule the next command, the first was already scheduled by ClusterShellWorker.execute()
@@ -667,13 +665,11 @@ class AsyncEventHandler(BaseEventHandler):
         """
         super(AsyncEventHandler, self).__init__(nodes, commands, **kwargs)
 
-        self.pbar_ok = tqdm(total=self.counters['total'], leave=True, unit='hosts', dynamic_ncols=True,
+        self.pbar_ok = tqdm(desc='PASS', total=self.counters['total'], leave=True, unit='hosts', dynamic_ncols=True,
                             bar_format=colorama.Fore.GREEN + self.bar_format, file=sys.stderr)
-        self.pbar_ok.desc = 'PASS'
         self.pbar_ok.refresh()
-        self.pbar_ko = tqdm(total=self.counters['total'], leave=True, unit='hosts', dynamic_ncols=True,
+        self.pbar_ko = tqdm(desc='FAIL', total=self.counters['total'], leave=True, unit='hosts', dynamic_ncols=True,
                             bar_format=colorama.Fore.RED + self.bar_format, file=sys.stderr)
-        self.pbar_ko.desc = 'FAIL'
         self.pbar_ko.refresh()
 
     def ev_hup(self, worker):

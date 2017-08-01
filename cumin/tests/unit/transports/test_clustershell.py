@@ -215,8 +215,8 @@ class TestConcreteBaseEventHandler(TestBaseEventHandler):
         self.handler = ConcreteBaseEventHandler(
             self.nodes, self.commands, batch_size=len(self.nodes), batch_sleep=0.0, first_batch=self.nodes)
         self.worker.eh = self.handler
-        self.tqdm = tqdm
         self.colorama = colorama
+        assert not tqdm.write.called
 
     def test_instantiation(self):
         """An instance of ConcreteBaseEventHandler should be an instance of BaseEventHandler and initialize colorama."""
@@ -295,9 +295,9 @@ class TestSyncEventHandler(TestBaseEventHandler):
             self.nodes, self.commands, success_threshold=1, batch_size=len(self.nodes), batch_sleep=0, logger=None,
             first_batch=self.nodes)
         self.worker.eh = self.handler
-        self.tqdm = tqdm
         self.colorama = colorama
         self.logger = logger
+        assert not tqdm.write.called
 
     def test_instantiation(self):
         """An instance of SyncEventHandler should be an instance of BaseEventHandler."""
@@ -392,9 +392,9 @@ class TestAsyncEventHandler(TestBaseEventHandler):
         super(TestAsyncEventHandler, self).setup_method()
         self.handler = clustershell.AsyncEventHandler(self.nodes, self.commands)
         self.worker.eh = self.handler
-        self.tqdm = tqdm
         self.colorama = colorama
         self.logger = logger
+        assert not tqdm.write.called
 
     def test_instantiation(self):
         """An instance of AsyncEventHandler should be an instance of BaseEventHandler and initialize progress bars."""
