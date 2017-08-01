@@ -29,106 +29,116 @@ class ConcreteBaseWorker(transports.BaseWorker):
         self._handler = value
 
 
-class TestCommand(object):
-    """Command class tests."""
+class Commands(object):
+    """Helper class to define a list of commands to test."""
 
-    def setup_method(self, _):
+    command_with_options = r'command --with "options" -a -n -d params with\ spaces'
+    command_with_options_equivalent = r"command  --with  'options'  -a  -n  -d  params  with\ spaces"
+    command_with_nested_quotes = 'command --with \'nested "quotes"\' -a -n -d params with\\ spaces'
+    different_command = r"command  --with  'other options'  -a  -n  -d  other_params  with\ spaces"
+
+    def __init__(self):
         """Initialize test commands."""
-        # pylint: disable=attribute-defined-outside-init
-        command_with_options = r'command --with "options" -a -n -d params with\ spaces'
-        self.same_command_a = transports.Command(command_with_options)
-        self.same_command_b = r"command  --with  'options'  -a  -n  -d  params  with\ spaces"
-        command_with_nested_quotes = 'command --with \'nested "quotes"\' -a -n -d params with\\ spaces'
-
         self.commands = [
             {'command': 'command1'},
             {'command': 'command1', 'timeout': 5},
             {'command': 'command1', 'ok_codes': [0, 255]},
             {'command': 'command1', 'timeout': 5, 'ok_codes': [0, 255]},
-            {'command': command_with_options},
-            {'command': command_with_options, 'timeout': 5},
-            {'command': command_with_options, 'ok_codes': [0, 255]},
-            {'command': command_with_options, 'timeout': 5, 'ok_codes': [0, 255]},
-            {'command': command_with_nested_quotes},
-            {'command': command_with_nested_quotes, 'timeout': 5},
-            {'command': command_with_nested_quotes, 'ok_codes': [0, 255]},
-            {'command': command_with_nested_quotes, 'timeout': 5, 'ok_codes': [0, 255]},
+            {'command': self.command_with_options},
+            {'command': self.command_with_options, 'timeout': 5},
+            {'command': self.command_with_options, 'ok_codes': [0, 255]},
+            {'command': self.command_with_options, 'timeout': 5, 'ok_codes': [0, 255]},
+            {'command': self.command_with_nested_quotes},
+            {'command': self.command_with_nested_quotes, 'timeout': 5},
+            {'command': self.command_with_nested_quotes, 'ok_codes': [0, 255]},
+            {'command': self.command_with_nested_quotes, 'timeout': 5, 'ok_codes': [0, 255]},
         ]
-        self.different_command = r"command  --with  'other options'  -a  -n  -d  other_params  with\ spaces"
+
         for command in self.commands:
             command['obj'] = transports.Command(
                 command['command'], timeout=command.get('timeout', None), ok_codes=command.get('ok_codes', None))
 
-    def test_instantiation(self):
+
+@pytest.mark.parametrize('command', Commands().commands)
+class TestCommandParametrized(object):
+    """Command class tests executed for each parametrized command."""
+
+    def test_instantiation(self, command):
         """A new Command instance should set the command property to the given command."""
-        for command in self.commands:
-            assert isinstance(command['obj'], transports.Command)
-            assert command['obj'].command == command['command']
-            assert command['obj']._timeout == command.get('timeout', None)
-            assert command['obj']._ok_codes == command.get('ok_codes', None)
+        assert isinstance(command['obj'], transports.Command)
+        assert command['obj'].command == command['command']
+        assert command['obj']._timeout == command.get('timeout', None)
+        assert command['obj']._ok_codes == command.get('ok_codes', None)
 
-    def test_repr(self):
+    def test_repr(self, command):
         """A repr of a Command should allow to instantiate an instance with the same properties."""
-        for command in self.commands:
-            # Bandit and pylint would require to use ast.literal_eval, but it will not work with objects
-            command_instance = eval(repr(command['obj']))  # nosec pylint: disable=eval-used
-            assert isinstance(command_instance, transports.Command)
-            assert repr(command_instance) == repr(command['obj'])
-            assert command_instance.command == command['obj'].command
-            assert command_instance._timeout == command['obj']._timeout
-            assert command_instance._ok_codes == command['obj']._ok_codes
+        # Bandit and pylint would require to use ast.literal_eval, but it will not work with objects
+        command_instance = eval(repr(command['obj']))  # nosec pylint: disable=eval-used
+        assert isinstance(command_instance, transports.Command)
+        assert repr(command_instance) == repr(command['obj'])
+        assert command_instance.command == command['obj'].command
+        assert command_instance._timeout == command['obj']._timeout
+        assert command_instance._ok_codes == command['obj']._ok_codes
 
-    def test_str(self):
+    def test_str(self, command):
         """A cast to string of a Command should return its command."""
-        for command in self.commands:
-            assert str(command['obj']) == command['command']
+        assert str(command['obj']) == command['command']
 
-    def test_eq(self):
+    def test_eq(self, command):
         """A Command instance can be compared to another or to a string with the equality operator."""
-        for command in self.commands:
-            assert command['obj'] == transports.Command(
-                command['command'], timeout=command.get('timeout', None), ok_codes=command.get('ok_codes', None))
+        assert command['obj'] == transports.Command(
+            command['command'], timeout=command.get('timeout', None), ok_codes=command.get('ok_codes', None))
 
-            if command.get('timeout', None) is None and command.get('ok_codes', None) is None:
-                assert command['obj'] == command['command']
+        if command.get('timeout', None) is None and command.get('ok_codes', None) is None:
+            assert command['obj'] == command['command']
 
-            with pytest.raises(ValueError, match='Unable to compare instance of'):
-                command['obj'] == 1  # pylint: disable=pointless-statement
+        with pytest.raises(ValueError, match='Unable to compare instance of'):
+            command['obj'] == 1  # pylint: disable=pointless-statement
 
-        assert self.same_command_a == self.same_command_b
-
-    def test_ne(self):
+    def test_ne(self, command):
         """A Command instance can be compared to another or to a string with the inequality operator."""
-        # Just a basic test, all the cases are covered by the test_eq test
-        for command in self.commands:
-            # Different command with same or differnt properties
-            assert command['obj'] != transports.Command(
-                self.different_command, timeout=command.get('timeout', None), ok_codes=command.get('ok_codes', None))
-            assert command['obj'] != transports.Command(
-                self.different_command, timeout=999, ok_codes=command.get('ok_codes', None))
-            assert command['obj'] != transports.Command(
-                self.different_command, timeout=command.get('timeout', None), ok_codes=[99])
-            assert command['obj'] != transports.Command(self.different_command, timeout=999, ok_codes=[99])
-            assert command['obj'] != self.different_command
+        # Different command with same or differnt properties
+        assert command['obj'] != transports.Command(
+            Commands.different_command, timeout=command.get('timeout', None),
+            ok_codes=command.get('ok_codes', None))
+        assert command['obj'] != transports.Command(
+            Commands.different_command, timeout=999, ok_codes=command.get('ok_codes', None))
+        assert command['obj'] != transports.Command(
+            Commands.different_command, timeout=command.get('timeout', None), ok_codes=[99])
+        assert command['obj'] != transports.Command(Commands.different_command, timeout=999, ok_codes=[99])
+        assert command['obj'] != Commands.different_command
 
-            # Same command, properties different
-            assert command['obj'] != transports.Command(
-                command['command'], timeout=999, ok_codes=command.get('ok_codes', None))
-            assert command['obj'] != transports.Command(
-                command['command'], timeout=command.get('timeout', None), ok_codes=[99])
-            assert command['obj'] != transports.Command(command['command'], timeout=999, ok_codes=[99])
+        # Same command, properties different
+        assert command['obj'] != transports.Command(
+            command['command'], timeout=999, ok_codes=command.get('ok_codes', None))
+        assert command['obj'] != transports.Command(
+            command['command'], timeout=command.get('timeout', None), ok_codes=[99])
+        assert command['obj'] != transports.Command(command['command'], timeout=999, ok_codes=[99])
 
-            if command.get('timeout', None) is not None or command.get('ok_codes', None) is not None:
-                assert command['obj'] != command['command']
+        if command.get('timeout', None) is not None or command.get('ok_codes', None) is not None:
+            assert command['obj'] != command['command']
 
-            with pytest.raises(ValueError, match='Unable to compare instance of'):
-                command['obj'] == 1  # pylint: disable=pointless-statement
+        with pytest.raises(ValueError, match='Unable to compare instance of'):
+            command['obj'] == 1  # pylint: disable=pointless-statement
 
-    def test_timeout_getter(self):
+    def test_timeout_getter(self, command):
         """Should return the timeout set, None otherwise."""
-        for command in self.commands:
-            if command['obj'].timeout is not None and command['obj']._timeout is not None:
-                assert command['obj'].timeout == pytest.approx(command['obj']._timeout)
+        if command['obj'].timeout is not None and command['obj']._timeout is not None:
+            assert command['obj'].timeout == pytest.approx(command['obj']._timeout)
+
+    def test_ok_codes_getter(self, command):
+        """Should return the ok_codes set, [0] otherwise."""
+        assert command['obj'].ok_codes == command.get('ok_codes', [0])
+
+
+class TestCommand(object):
+    """Command class non parametrized tests."""
+
+    def test_eq_equivalent(self):
+        """Two Commadn instances with equivalent comamnds just formatted differently should be considered equal."""
+        command1 = transports.Command(Commands.command_with_options)
+        command2 = transports.Command(Commands.command_with_options_equivalent)
+        assert command1 == command2
 
     def test_timeout_setter(self):
         """Should set the timeout to its value, converted to float if integer. Unset it if None is passed."""
@@ -142,15 +152,12 @@ class TestCommand(object):
         with pytest.raises(transports.WorkerError, match='timeout must be a positive float'):
             command.timeout = -1.0
 
-    def test_ok_codes_getter(self):
+    def test_ok_codes_getter_empty(self):
         """Should return the ok_codes set, [0] otherwise."""
         # Test empty list
         command = transports.Command('command1')
         command.ok_codes = []
         assert command.ok_codes == []
-
-        for command in self.commands:
-            assert command['obj'].ok_codes == command.get('ok_codes', [0])
 
     def test_ok_codes_setter(self):
         """Should set the ok_codes to its value, unset it if None is passed."""

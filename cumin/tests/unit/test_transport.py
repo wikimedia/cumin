@@ -1,13 +1,12 @@
 """Transport class tests."""
 
-import os
 import pkgutil
 
 import pytest
 import mock
 
+from cumin import transports
 from cumin.transport import Transport
-from cumin.transports import BaseWorker
 
 
 def test_invalid_transport():
@@ -25,8 +24,8 @@ def test_missing_worker_class():
             Transport.new({'transport': 'invalid_transport'})
 
 
-def test_valid_transport():
+@pytest.mark.parametrize('transport', [name for _, name, ispkg in pkgutil.iter_modules(transports.__path__)
+                                       if not ispkg])
+def test_valid_transport(transport):
     """Passing a valid transport should return an instance of BaseWorker."""
-    transports = [name for _, name, _ in pkgutil.iter_modules([os.path.join('cumin', 'transports')])]
-    for transport in transports:
-        assert isinstance(Transport.new({'transport': transport}), BaseWorker)
+    assert isinstance(Transport.new({'transport': transport}), transports.BaseWorker)

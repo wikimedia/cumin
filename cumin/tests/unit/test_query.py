@@ -1,7 +1,6 @@
 """Query handling tests."""
 
 import logging
-import os
 import pkgutil
 
 import mock
@@ -10,7 +9,7 @@ import pytest
 from ClusterShell.NodeSet import NodeSet
 from pyparsing import ParseException
 
-from cumin.backends import BaseQuery, InvalidQueryError
+from cumin import backends
 from cumin.query import Query, QueryBuilder
 
 
@@ -25,7 +24,7 @@ class QueryFactory(object):
                 logger=logger))
         if not isinstance(config, dict):
             raise AssertionError("Expected instance of dict, got type '{type}' for config.".format(type=type(config)))
-        return mock.MagicMock(spec_set=BaseQuery)
+        return mock.MagicMock(spec_set=backends.BaseQuery)
 
 
 class TestQuery(object):
@@ -46,11 +45,11 @@ class TestQuery(object):
             with pytest.raises(RuntimeError, match=r"AttributeError\('query_class'"):
                 Query.new({'backend': 'invalid_backend'})
 
-    def test_valid_backend(self):
+    @pytest.mark.parametrize('backend', [name for _, name, ispkg in pkgutil.iter_modules(backends.__path__)
+                                         if not ispkg])
+    def test_valid_backend(self, backend):
         """Passing a valid backend should return an instance of BaseQuery."""
-        backends = [name for _, name, _ in pkgutil.iter_modules([os.path.join('cumin', 'backends')])]
-        for backend in backends:
-            assert isinstance(Query.new({'backend': backend}), BaseQuery)
+        assert isinstance(Query.new({'backend': backend}), backends.BaseQuery)
 
 
 class TestQueryBuilder(object):
@@ -76,7 +75,7 @@ class TestQueryBuilder(object):
     def test_instantiation(self):
         """Class QueryBuilder should create an instance of a query_class for the given backend."""
         assert isinstance(self.query_builder, QueryBuilder)
-        assert isinstance(self.query_builder.query, BaseQuery)
+        assert isinstance(self.query_builder.query, backends.BaseQuery)
         assert self.query_builder.level is None
 
     def test_build_valid(self):
@@ -120,12 +119,12 @@ class TestQueryBuilder(object):
 
     def test_build_invalid_alias_syntax(self):
         """QueryBuilder.build() should raise InvalidQueryError if an alias has invalid syntax."""
-        with pytest.raises(InvalidQueryError, match='Invalid alias syntax, aliases can be only of the form'):
+        with pytest.raises(backends.InvalidQueryError, match='Invalid alias syntax, aliases can be only of the form'):
             self.query_builder.build('host1 or A:name = value')
 
     def test_build_missing_alias(self):
         """QueryBuilder.build() should raise InvalidQueryError if a non existent alias is found."""
-        with pytest.raises(InvalidQueryError, match='Unable to find alias replacement for'):
+        with pytest.raises(backends.InvalidQueryError, match='Unable to find alias replacement for'):
             self.query_builder.build('host1 or A:non_existent_group')
 
     def test_build_glob_host(self):
