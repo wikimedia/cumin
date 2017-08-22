@@ -31,6 +31,7 @@ tests_require = [
     'pytest-xdist>=1.15.0',
     'requests-mock>=0.7.0',
     'tox>=2.5.0',
+    'vulture>=0.6,<0.25',  # Required for https://github.com/landscapeio/prospector/issues/230
 ]
 
 setup(
