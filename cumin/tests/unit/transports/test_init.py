@@ -1,7 +1,11 @@
 """Transport tests."""
-import unittest
-
+# pylint: disable=protected-access,no-self-use
 import mock
+import pytest
+
+from ClusterShell.NodeSet import NodeSet
+
+import cumin  # noqa: F401 (dynamically used in TestCommand)
 
 from cumin import transports
 
@@ -17,16 +21,6 @@ class ConcreteBaseWorker(transports.BaseWorker):
         yield "node", "output"
 
     @property
-    def mode(self):
-        """Required by BaseWorker"""
-        return self._mode
-
-    @mode.setter
-    def mode(self, value):
-        """Required by BaseWorker"""
-        self._mode = value
-
-    @property
     def handler(self):
         """Required by BaseWorker"""
         return self._handler
@@ -37,56 +31,219 @@ class ConcreteBaseWorker(transports.BaseWorker):
         self._handler = value
 
 
-class TestState(unittest.TestCase):
+class Commands(object):
+    """Helper class to define a list of commands to test."""
+
+    command_with_options = r'command --with "options" -a -n -d params with\ spaces'
+    command_with_options_equivalent = r"command  --with  'options'  -a  -n  -d  params  with\ spaces"
+    command_with_nested_quotes = 'command --with \'nested "quotes"\' -a -n -d params with\\ spaces'
+    different_command = r"command  --with  'other options'  -a  -n  -d  other_params  with\ spaces"
+
+    def __init__(self):
+        """Initialize test commands."""
+        self.commands = [
+            {'command': 'command1'},
+            {'command': 'command1', 'timeout': 5},
+            {'command': 'command1', 'ok_codes': [0, 255]},
+            {'command': 'command1', 'timeout': 5, 'ok_codes': [0, 255]},
+            {'command': self.command_with_options},
+            {'command': self.command_with_options, 'timeout': 5},
+            {'command': self.command_with_options, 'ok_codes': [0, 255]},
+            {'command': self.command_with_options, 'timeout': 5, 'ok_codes': [0, 255]},
+            {'command': self.command_with_nested_quotes},
+            {'command': self.command_with_nested_quotes, 'timeout': 5},
+            {'command': self.command_with_nested_quotes, 'ok_codes': [0, 255]},
+            {'command': self.command_with_nested_quotes, 'timeout': 5, 'ok_codes': [0, 255]},
+        ]
+
+        for command in self.commands:
+            command['obj'] = transports.Command(
+                command['command'], timeout=command.get('timeout', None), ok_codes=command.get('ok_codes', None))
+
+
+@pytest.mark.parametrize('command', Commands().commands)
+class TestCommandParametrized(object):
+    """Command class tests executed for each parametrized command."""
+
+    def test_instantiation(self, command):
+        """A new Command instance should set the command property to the given command."""
+        assert isinstance(command['obj'], transports.Command)
+        assert command['obj'].command == command['command']
+        assert command['obj']._timeout == command.get('timeout', None)
+        assert command['obj']._ok_codes == command.get('ok_codes', None)
+
+    def test_repr(self, command):
+        """A repr of a Command should allow to instantiate an instance with the same properties."""
+        # Bandit and pylint would require to use ast.literal_eval, but it will not work with objects
+        command_instance = eval(repr(command['obj']))  # nosec pylint: disable=eval-used
+        assert isinstance(command_instance, transports.Command)
+        assert repr(command_instance) == repr(command['obj'])
+        assert command_instance.command == command['obj'].command
+        assert command_instance._timeout == command['obj']._timeout
+        assert command_instance._ok_codes == command['obj']._ok_codes
+
+    def test_str(self, command):
+        """A cast to string of a Command should return its command."""
+        assert str(command['obj']) == command['command']
+
+    def test_eq(self, command):
+        """A Command instance can be compared to another or to a string with the equality operator."""
+        assert command['obj'] == transports.Command(
+            command['command'], timeout=command.get('timeout', None), ok_codes=command.get('ok_codes', None))
+
+        if command.get('timeout', None) is None and command.get('ok_codes', None) is None:
+            assert command['obj'] == command['command']
+
+        with pytest.raises(ValueError, match='Unable to compare instance of'):
+            command['obj'] == 1  # pylint: disable=pointless-statement
+
+    def test_ne(self, command):
+        """A Command instance can be compared to another or to a string with the inequality operator."""
+        # Different command with same or differnt properties
+        assert command['obj'] != transports.Command(
+            Commands.different_command, timeout=command.get('timeout', None),
+            ok_codes=command.get('ok_codes', None))
+        assert command['obj'] != transports.Command(
+            Commands.different_command, timeout=999, ok_codes=command.get('ok_codes', None))
+        assert command['obj'] != transports.Command(
+            Commands.different_command, timeout=command.get('timeout', None), ok_codes=[99])
+        assert command['obj'] != transports.Command(Commands.different_command, timeout=999, ok_codes=[99])
+        assert command['obj'] != Commands.different_command
+
+        # Same command, properties different
+        assert command['obj'] != transports.Command(
+            command['command'], timeout=999, ok_codes=command.get('ok_codes', None))
+        assert command['obj'] != transports.Command(
+            command['command'], timeout=command.get('timeout', None), ok_codes=[99])
+        assert command['obj'] != transports.Command(command['command'], timeout=999, ok_codes=[99])
+
+        if command.get('timeout', None) is not None or command.get('ok_codes', None) is not None:
+            assert command['obj'] != command['command']
+
+        with pytest.raises(ValueError, match='Unable to compare instance of'):
+            command['obj'] == 1  # pylint: disable=pointless-statement
+
+    def test_timeout_getter(self, command):
+        """Should return the timeout set, None otherwise."""
+        if command['obj'].timeout is not None and command['obj']._timeout is not None:
+            assert command['obj'].timeout == pytest.approx(command['obj']._timeout)
+
+    def test_ok_codes_getter(self, command):
+        """Should return the ok_codes set, [0] otherwise."""
+        assert command['obj'].ok_codes == command.get('ok_codes', [0])
+
+
+class TestCommand(object):
+    """Command class non parametrized tests."""
+
+    def test_eq_equivalent(self):
+        """Two Commadn instances with equivalent comamnds just formatted differently should be considered equal."""
+        command1 = transports.Command(Commands.command_with_options)
+        command2 = transports.Command(Commands.command_with_options_equivalent)
+        assert command1 == command2
+
+    def test_timeout_setter(self):
+        """Should set the timeout to its value, converted to float if integer. Unset it if None is passed."""
+        command = transports.Command('command1')
+        command.timeout = 1.0
+        assert command._timeout == pytest.approx(1.0)
+        command.timeout = None
+        assert command._timeout is None
+        command.timeout = 1
+        assert command._timeout == pytest.approx(1.0)
+        with pytest.raises(transports.WorkerError, match='timeout must be a positive float'):
+            command.timeout = -1.0
+
+    def test_ok_codes_getter_empty(self):
+        """Should return the ok_codes set, [0] otherwise."""
+        # Test empty list
+        command = transports.Command('command1')
+        assert command.ok_codes == [0]
+        command.ok_codes = []
+        assert command.ok_codes == []
+        command.ok_codes = [1, 255]
+        assert command.ok_codes == [1, 255]
+
+    def test_ok_codes_setter(self):
+        """Should set the ok_codes to its value, unset it if None is passed."""
+        command = transports.Command('command1')
+        assert command._ok_codes is None
+        for i in xrange(256):
+            codes = [i]
+            command.ok_codes = codes
+            assert command._ok_codes == codes
+            codes.insert(0, 0)
+            command.ok_codes = codes
+            assert command._ok_codes == codes
+
+        command.ok_codes = None
+        assert command._ok_codes is None
+
+        command.ok_codes = []
+        assert command._ok_codes == []
+
+        with pytest.raises(transports.WorkerError, match='ok_codes must be a list'):
+            command.ok_codes = 'invalid_value'
+
+        message = 'must be a list of integers in the range'
+        for i in (-1, 0.0, 100.0, 256, 'invalid_value'):
+            codes = [i]
+            with pytest.raises(transports.WorkerError, match=message):
+                command.ok_codes = codes
+
+            codes.insert(0, 0)
+            with pytest.raises(transports.WorkerError, match=message):
+                command.ok_codes = codes
+
+
+class TestState(object):
     """State class tests."""
 
     def test_instantiation_no_init(self):
         """A new State without an init value should start in the pending state."""
         state = transports.State()
-        self.assertEqual(state._state, transports.State.pending)
+        assert state._state == transports.State.pending
 
     def test_instantiation_init_ok(self):
         """A new State with a valid init value should start in this state."""
         state = transports.State(init=transports.State.running)
-        self.assertEqual(state._state, transports.State.running)
+        assert state._state == transports.State.running
 
     def test_instantiation_init_ko(self):
         """A new State with an invalid init value should raise InvalidStateError."""
-        with self.assertRaisesRegexp(transports.InvalidStateError, 'is not a valid state'):
+        with pytest.raises(transports.InvalidStateError, match='is not a valid state'):
             transports.State(init='invalid_state')
 
     def test_getattr_current(self):
         """Accessing the 'current' property should return the current state."""
-        self.assertEqual(transports.State().current, transports.State.pending)
+        assert transports.State().current == transports.State.pending
 
     def test_getattr_is_valid_state(self):
         """Accessing a property named is_{a_valid_state_name} should return a boolean."""
         state = transports.State(init=transports.State.failed)
-        self.assertFalse(state.is_pending)
-        self.assertFalse(state.is_scheduled)
-        self.assertFalse(state.is_running)
-        self.assertFalse(state.is_timeout)
-        self.assertFalse(state.is_success)
-        self.assertTrue(state.is_failed)
+        assert not state.is_pending
+        assert not state.is_scheduled
+        assert not state.is_running
+        assert not state.is_timeout
+        assert not state.is_success
+        assert state.is_failed
 
     def test_getattr_invalid_property(self):
         """Accessing a property with an invalid name should raise AttributeError."""
         state = transports.State(init=transports.State.failed)
-        with self.assertRaisesRegexp(AttributeError, 'object has no attribute'):
-            state.invalid_property
+        with pytest.raises(AttributeError, match='object has no attribute'):
+            state.invalid_property  # pylint: disable=pointless-statement
 
     def test_repr(self):
         """A State repr should return its representation that allows to recreate the same State instance."""
-        self.assertEqual(
-            repr(transports.State()), 'cumin.transports.State(init={state})'.format(state=transports.State.pending))
+        assert repr(transports.State()) == 'cumin.transports.State(init={state})'.format(state=transports.State.pending)
         state = transports.State.running
-        self.assertEqual(
-            repr(transports.State(init=state)), 'cumin.transports.State(init={state})'.format(state=state))
+        assert repr(transports.State(init=state)) == 'cumin.transports.State(init={state})'.format(state=state)
 
     def test_str(self):
         """A State string should return its string representation."""
-        self.assertEqual(str(transports.State()), 'pending')
-        self.assertEqual(str(transports.State(init=transports.State.running)), 'running')
+        assert str(transports.State()) == 'pending'
+        assert str(transports.State(init=transports.State.running)) == 'running'
 
     def test_cmp_state(self):
         """Two State instance can be compared between each other."""
@@ -94,14 +251,14 @@ class TestState(unittest.TestCase):
         greater_state = transports.State(init=transports.State.failed)
         same_state = transports.State()
 
-        self.assertGreater(greater_state, state)
-        self.assertGreaterEqual(greater_state, state)
-        self.assertGreaterEqual(same_state, state)
-        self.assertLess(state, greater_state)
-        self.assertLessEqual(state, greater_state)
-        self.assertLessEqual(state, same_state)
-        self.assertEqual(state, same_state)
-        self.assertNotEqual(state, greater_state)
+        assert greater_state > state
+        assert greater_state >= state
+        assert same_state >= state
+        assert state < greater_state
+        assert state <= greater_state
+        assert state <= same_state
+        assert state == same_state
+        assert state != greater_state
 
     def test_cmp_int(self):
         """A State instance can be compared with integers."""
@@ -109,56 +266,124 @@ class TestState(unittest.TestCase):
         greater_state = transports.State.running
         same_state = transports.State.pending
 
-        self.assertGreater(greater_state, state)
-        self.assertGreaterEqual(greater_state, state)
-        self.assertGreaterEqual(same_state, state)
-        self.assertLess(state, greater_state)
-        self.assertLessEqual(state, greater_state)
-        self.assertLessEqual(state, same_state)
-        self.assertEqual(state, same_state)
-        self.assertNotEqual(state, greater_state)
+        assert greater_state > state
+        assert greater_state >= state
+        assert same_state >= state
+        assert state < greater_state
+        assert state <= greater_state
+        assert state <= same_state
+        assert state == same_state
+        assert state != greater_state
 
     def test_cmp_invalid(self):
         """Trying to compare a State instance with an invalid object should raise ValueError."""
         state = transports.State()
         invalid_state = 'invalid_state'
-        with self.assertRaisesRegexp(ValueError, 'Unable to compare instance'):
-            self.assertEqual(state, invalid_state)
+        with pytest.raises(ValueError, match='Unable to compare instance'):
+            state == invalid_state  # pylint: disable=pointless-statement
 
     def test_update_invalid_state(self):
         """Trying to update a State with an invalid value should raise ValueError."""
         state = transports.State()
-        with self.assertRaisesRegexp(ValueError, 'State must be one of'):
+        with pytest.raises(ValueError, match='State must be one of'):
             state.update('invalid_state')
 
     def test_update_invalid_transition(self):
         """Trying to update a State with an invalid transition should raise StateTransitionError."""
         state = transports.State()
-        with self.assertRaisesRegexp(transports.StateTransitionError, 'the allowed states are'):
+        with pytest.raises(transports.StateTransitionError, match='the allowed states are'):
             state.update(transports.State.failed)
 
     def test_update_ok(self):
         """Properly updating a State should update it without errors."""
         state = transports.State()
         state.update(transports.State.scheduled)
-        self.assertEqual(state.current, transports.State.scheduled)
+        assert state.current == transports.State.scheduled
         state.update(transports.State.running)
-        self.assertEqual(state.current, transports.State.running)
+        assert state.current == transports.State.running
         state.update(transports.State.success)
-        self.assertEqual(state.current, transports.State.success)
+        assert state.current == transports.State.success
         state.update(transports.State.pending)
-        self.assertEqual(state.current, transports.State.pending)
+        assert state.current == transports.State.pending
 
 
-class TestBaseWorker(unittest.TestCase):
+class TestTarget(object):
+    """Target class tests."""
+
+    def setup_method(self, _):
+        """Initialize default properties and instances."""
+        # pylint: disable=attribute-defined-outside-init
+        self.hosts_list = ['host' + str(i) for i in xrange(10)]
+        self.hosts = NodeSet.fromlist(self.hosts_list)
+
+    def test_instantiation_nodeset(self):
+        """Creating a Target instance with a NodeSet and without optional parameter should return their defaults."""
+        target = transports.Target(self.hosts)
+        assert target.hosts == self.hosts
+        assert target.batch_size == len(self.hosts)
+        assert target.batch_sleep == 0.0
+
+    def test_instantiation_list(self):
+        """Creating a Target instance with a list and without optional parameter should return their defaults."""
+        target = transports.Target(self.hosts_list)
+        assert target.hosts == self.hosts
+        assert target.batch_size == len(self.hosts)
+        assert target.batch_sleep == 0.0
+
+    def test_instantiation_invalid(self):
+        """Creating a Target instance with invalid hosts should raise WorkerError."""
+        with pytest.raises(transports.WorkerError, match="must be a ClusterShell's NodeSet or a list"):
+            transports.Target(set(self.hosts_list))
+
+    @mock.patch('cumin.transports.logging.Logger.debug')
+    def test_instantiation_batch_size(self, mocked_logger):
+        """Creating a Target instance with a batch_size should set it to it's value, if valid."""
+        target = transports.Target(self.hosts, batch_size=5)
+        assert target.batch_size == 5
+
+        target = transports.Target(self.hosts, batch_size=len(self.hosts) + 1)
+        assert target.batch_size == len(self.hosts)
+        assert mocked_logger.called
+
+        target = transports.Target(self.hosts, batch_size=None)
+        assert target.batch_size == len(self.hosts)
+
+        with pytest.raises(transports.WorkerError):
+            transports.Target(self.hosts, batch_size=0)
+
+    def test_instantiation_batch_sleep(self):
+        """Creating a Target instance with a batch_sleep should set it to it's value, if valid."""
+        target = transports.Target(self.hosts, batch_sleep=5.0)
+        assert target.batch_sleep == pytest.approx(5.0)
+
+        target = transports.Target(self.hosts, batch_sleep=None)
+        assert target.batch_sleep == pytest.approx(0.0)
+
+        with pytest.raises(transports.WorkerError):
+            transports.Target(self.hosts, batch_sleep=0)
+
+        with pytest.raises(transports.WorkerError):
+            transports.Target(self.hosts, batch_sleep=-1.0)
+
+    def test_first_batch(self):
+        """The first_batch property should return the first_batch of hosts."""
+        size = 5
+        target = transports.Target(self.hosts, batch_size=size)
+        assert len(target.first_batch) == size
+        assert target.first_batch == NodeSet.fromlist(self.hosts[:size])
+        assert isinstance(target.first_batch, NodeSet)
+
+
+class TestBaseWorker(object):
     """Concrete BaseWorker class for tests."""
 
     def test_instantiation(self):
         """Raise if instantiated directly, should return an instance of BaseWorker if inherited."""
-        with self.assertRaises(TypeError):
-            transports.BaseWorker({})
+        target = transports.Target(NodeSet('node1'))
+        with pytest.raises(TypeError):
+            transports.BaseWorker({}, target)  # pylint: disable=abstract-class-instantiated
 
-        self.assertIsInstance(ConcreteBaseWorker({}), transports.BaseWorker)
+        assert isinstance(ConcreteBaseWorker({}, transports.Target(NodeSet('node[1-2]'))), transports.BaseWorker)
 
     @mock.patch.dict(transports.os.environ, {}, clear=True)
     def test_init(self):
@@ -167,116 +392,113 @@ class TestBaseWorker(unittest.TestCase):
         config = {'transport': 'test_transport',
                   'environment': env_dict}
 
-        self.assertEqual(transports.os.environ, {})
-        worker = ConcreteBaseWorker(config)
-        self.assertEqual(transports.os.environ, env_dict)
-        self.assertEqual(worker.config, config)
+        assert transports.os.environ == {}
+        worker = ConcreteBaseWorker(config, transports.Target(NodeSet('node[1-2]')))
+        assert transports.os.environ == env_dict
+        assert worker.config == config
 
 
-class TestConcreteBaseWorker(unittest.TestCase):
+class TestConcreteBaseWorker(object):
     """BaseWorker test class."""
 
-    def setUp(self):
+    def setup_method(self, _):
         """Initialize default properties and instances."""
-        self.worker = ConcreteBaseWorker({})
-        self.hosts = ['node1', 'node2']
-        self.commands = ['command1', 'command2']
-
-    def test_hosts_getter(self):
-        """Access to hosts property should return an empty list if not set and the list of hosts otherwise."""
-        self.assertListEqual(self.worker.hosts, [])
-        self.worker._hosts = self.hosts
-        self.assertListEqual(self.worker.hosts, self.hosts)
-
-    def test_hosts_setter(self):
-        """Raise WorkerError if trying to set it not to an iterable, set it otherwise."""
-        with self.assertRaisesRegexp(transports.WorkerError, r'hosts must be a list'):
-            self.worker.hosts = 'not-list'
-
-        self.worker.hosts = self.hosts
-        self.assertListEqual(self.worker._hosts, self.hosts)
+        # pylint: disable=attribute-defined-outside-init
+        self.worker = ConcreteBaseWorker({}, transports.Target(NodeSet('node[1-2]')))
+        self.commands = [transports.Command('command1'), transports.Command('command2')]
 
     def test_commands_getter(self):
         """Access to commands property should return an empty list if not set and the list of commands otherwise."""
-        self.assertListEqual(self.worker.commands, [])
+        assert self.worker.commands == []
         self.worker._commands = self.commands
-        self.assertListEqual(self.worker.commands, self.commands)
+        assert self.worker.commands == self.commands
+        self.worker._commands = None
+        assert self.worker.commands == []
 
     def test_commands_setter(self):
         """Raise WorkerError if trying to set it not to a list, set it otherwise."""
-        with self.assertRaisesRegexp(transports.WorkerError, r'commands must be a list'):
-            self.worker.commands = 'not-list'
+        with pytest.raises(transports.WorkerError, match='commands must be a list'):
+            self.worker.commands = 'invalid_value'
+
+        with pytest.raises(transports.WorkerError, match='commands must be a list of Command objects'):
+            self.worker.commands = [1, 'command2']
 
         self.worker.commands = self.commands
-        self.assertListEqual(self.worker._commands, self.commands)
+        assert self.worker._commands == self.commands
+        self.worker.commands = None
+        assert self.worker._commands is None
+        self.worker.commands = ['command1', 'command2']
+        assert self.worker._commands == self.commands
 
     def test_timeout_getter(self):
         """Return default value if not set, the value otherwise."""
-        self.assertEqual(self.worker.timeout, 0)
+        assert self.worker.timeout == 0
         self.worker._timeout = 10
-        self.assertEqual(self.worker.timeout, 10)
+        assert self.worker.timeout == 10
 
     def test_timeout_setter(self):
-        """Raise WorkerError if not positive integer, set it otherwise."""
-        with self.assertRaisesRegexp(transports.WorkerError, r'timeout must be a positive integer'):
+        """Raise WorkerError if not a positive integer, set it otherwise."""
+        message = r'timeout must be a positive integer'
+        with pytest.raises(transports.WorkerError, match=message):
             self.worker.timeout = -1
 
-        with self.assertRaisesRegexp(transports.WorkerError, r'timeout must be a positive integer'):
-            self.worker.timeout = '1'
+        with pytest.raises(transports.WorkerError, match=message):
+            self.worker.timeout = 0
 
         self.worker.timeout = 10
-        self.assertEqual(self.worker._timeout, 10)
+        assert self.worker._timeout == 10
+        self.worker.timeout = None
+        assert self.worker._timeout is None
 
     def test_success_threshold_getter(self):
         """Return default value if not set, the value otherwise."""
-        self.assertAlmostEqual(self.worker.success_threshold, 1.0)
-        self.worker._success_threshold = 0.5
-        self.assertAlmostEqual(self.worker.success_threshold, 0.5)
+        assert self.worker.success_threshold == pytest.approx(1.0)
+        for success_threshold in (0.0, 0.0001, 0.5, 0.99):
+            self.worker._success_threshold = success_threshold
+            assert self.worker.success_threshold == pytest.approx(success_threshold)
 
     def test_success_threshold_setter(self):
         """Raise WorkerError if not float between 0 and 1, set it otherwise."""
         message = r'success_threshold must be a float beween 0 and 1'
-        with self.assertRaisesRegexp(transports.WorkerError, message):
+        with pytest.raises(transports.WorkerError, match=message):
             self.worker.success_threshold = 1
 
-        with self.assertRaisesRegexp(transports.WorkerError, message):
+        with pytest.raises(transports.WorkerError, match=message):
             self.worker.success_threshold = -0.1
 
         self.worker.success_threshold = 0.3
-        self.assertAlmostEqual(self.worker._success_threshold, 0.3)
+        assert self.worker._success_threshold == pytest.approx(0.3)
 
-    def test_batch_size_getter(self):
-        """Return default value if not set, the value otherwise."""
-        self.worker.hosts = self.hosts
-        self.assertEqual(self.worker.batch_size, len(self.hosts))
-        self.worker._batch_size = 1
-        self.assertEqual(self.worker.batch_size, 1)
 
-    def test_batch_size_setter(self):
-        """Raise WorkerError if not positive integer, set it otherwise forcing it to len(hosts) if greater."""
-        with self.assertRaisesRegexp(transports.WorkerError, r'batch_size must be a positive integer'):
-            self.worker.batch_size = -1
+class TestModuleFunctions(object):
+    """Transports module functions test class."""
 
-        self.worker.hosts = self.hosts
-        self.worker.batch_size = 10
-        self.assertEqual(self.worker._batch_size, len(self.hosts))
-        self.worker.batch_size = 1
-        self.assertEqual(self.worker._batch_size, 1)
+    def test_validate_list(self):
+        """Should raise a WorkerError if the argument is not a list."""
+        transports.validate_list('Test', ['value1'])
+        transports.validate_list('Test', ['value1', 'value2'])
+        transports.validate_list('Test', [], allow_empty=True)
 
-    def test_batch_sleep_getter(self):
-        """Return default value if not set, the value otherwise."""
-        self.assertAlmostEqual(self.worker.batch_sleep, 0.0)
-        self.worker._batch_sleep = 10.0
-        self.assertAlmostEqual(self.worker.batch_sleep, 10.0)
+        with pytest.raises(transports.WorkerError, match=r'Test must be a non-empty list'):
+            transports.validate_list('Test', [])
 
-    def test_batch_sleep_setter(self):
-        """Raise WorkerError if not positive integer, set it otherwise."""
-        message = r'batch_sleep must be a positive float'
-        with self.assertRaisesRegexp(transports.WorkerError, message):
-            self.worker.batch_sleep = -1
+        message = r'Test must be a list'
+        for invalid_value in (0, None, 'invalid_value', {'invalid': 'value'}):
+            with pytest.raises(transports.WorkerError, match=message):
+                transports.validate_list('Test', invalid_value)
 
-        with self.assertRaisesRegexp(transports.WorkerError, message):
-            self.worker.batch_sleep = '1'
+    def test_validate_positive_integer(self):
+        """Should raise a WorkerError if the argument is not a positive integer or None."""
+        transports.validate_positive_integer('Test', None)
+        transports.validate_positive_integer('Test', 1)
+        transports.validate_positive_integer('Test', 100)
 
-        self.worker.batch_sleep = 10.0
-        self.assertAlmostEqual(self.worker._batch_sleep, 10.0)
+        message = r'Test must be a positive integer'
+        for invalid_value in (0, -1, 'invalid_value', ['invalid_value']):
+            with pytest.raises(transports.WorkerError, match=message):
+                transports.validate_positive_integer('Test', invalid_value)
+
+    def test_raise_error(self):
+        """Should raise a WorkerError."""
+        with pytest.raises(transports.WorkerError, match='Test message'):
+            transports.raise_error('Test', 'message', 'value')

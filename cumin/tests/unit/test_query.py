@@ -1,101 +1,131 @@
 """Query handling tests."""
+# pylint: disable=invalid-name
 
-import os
-import pkgutil
-import unittest
-
-import mock
+import pytest
 
 from ClusterShell.NodeSet import NodeSet
-from pyparsing import ParseException
 
-from cumin.backends import BaseQuery
-from cumin.query import Query, QueryBuilder
-
-
-class QueryFactory(object):
-    """Query factory class."""
-
-    @staticmethod
-    def new(config, logger=None):
-        """Return an instance of the mocked query class."""
-        if not isinstance(config, dict):
-            raise AssertionError("Expected instance of dict, got type '{type}' for config.".format(type=type(config)))
-        return mock.MagicMock(spec_set=BaseQuery)
+from cumin import backends
+from cumin.query import Query
 
 
-class TestQuery(unittest.TestCase):
-    """Query factory class tests."""
-
-    def test_invalid_backend(self):
-        """Passing an invalid backend should raise RuntimeError."""
-        with self.assertRaisesRegexp(RuntimeError, r"ImportError\('No module named non_existent_backend'"):
-            Query.new({'backend': 'non_existent_backend'})
-
-    def test_missing_query_class(self):
-        """Passing a backend without a defined query_class should raise RuntimeError."""
-        module = mock.MagicMock()
-        del module.query_class
-        with mock.patch('importlib.import_module', lambda _: module):
-            with self.assertRaisesRegexp(RuntimeError, r"AttributeError\('query_class'"):
-                Query.new({'backend': 'invalid_backend'})
-
-    def test_valid_backend(self):
-        """Passing a valid backend should return an instance of BaseQuery."""
-        backends = [name for _, name, _ in pkgutil.iter_modules([os.path.join('cumin', 'backends')])]
-        for backend in backends:
-            self.assertIsInstance(Query.new({'backend': backend}), BaseQuery)
+def test_execute_valid_global():
+    """Executing a valid query should return the matching hosts."""
+    query = Query({})
+    hosts = query.execute('D{(host1 or host2) and host[1-5]}')
+    assert hosts == NodeSet('host[1-2]')
 
 
-class TestQueryBuilder(unittest.TestCase):
-    """Class QueryBuilder tests."""
+def test_execute_global_or():
+    """Executing an 'or' between two queries should return the union of the hosts."""
+    query = Query({})
+    hosts = query.execute('D{host1} or D{host2}')
+    assert hosts == NodeSet('host[1-2]')
 
-    query_string = 'host1 or (not F:key1 = value and R:key2 ~ regex) or host2'
-    invalid_query_string = 'host1 and or not F:key1 value'
-    config = {'backend': 'test_backend'}
 
-    @mock.patch('cumin.query.Query', QueryFactory)
-    def test_instantiation(self):
-        """Class QueryBuilder should create an instance of a query_class for the given backend."""
-        query_builder = QueryBuilder(self.query_string, self.config)
-        self.assertIsInstance(query_builder, QueryBuilder)
-        self.assertIsInstance(query_builder.query, BaseQuery)
-        self.assertEqual(query_builder.query_string, self.query_string)
-        self.assertEqual(query_builder.level, 0)
+def test_execute_global_and():
+    """Executing an 'and' between two queries should return the intersection of the hosts."""
+    query = Query({})
+    hosts = query.execute('D{host[1-5]} and D{host2}')
+    assert hosts == NodeSet('host2')
 
-    @mock.patch('cumin.query.Query', QueryFactory)
-    def test_build_valid(self):
-        """QueryBuilder.build() should parse and build the query object for a valid query."""
-        query_builder = QueryBuilder(self.query_string, self.config)
-        query_builder.build()
 
-        query_builder.query.add_hosts.assert_has_calls(
-            [mock.call(hosts=NodeSet.fromlist(['host1'])), mock.call(hosts=NodeSet.fromlist(['host2']))])
-        query_builder.query.add_or.assert_has_calls([mock.call(), mock.call()])
-        query_builder.query.open_subgroup.assert_called_once_with()
-        query_builder.query.add_category.assert_has_calls([
-            mock.call(category='F', key='key1', operator='=', value='value', neg='not'),
-            mock.call(category='R', key='key2', operator='~', value='regex')])
-        query_builder.query.add_and.assert_called_once_with()
-        query_builder.query.close_subgroup.assert_called_once_with()
+def test_execute_global_and_not():
+    """Executing an 'and not' between two queries should return the difference of the hosts."""
+    query = Query({})
+    hosts = query.execute('D{host[1-5]} and not D{host2}')
+    assert hosts == NodeSet('host[1,3-5]')
 
-    @mock.patch('cumin.query.Query', QueryFactory)
-    def test_build_glob_host(self):
-        """QueryBuilder.build() should parse a glob host."""
-        query_builder = QueryBuilder('host1*', self.config)
-        query_builder.build()
-        query_builder.query.add_hosts.assert_called_once_with(hosts=NodeSet.fromlist(['host1*']))
 
-    @mock.patch('cumin.query.Query', QueryFactory)
-    def test_build_invalid(self):
-        """QueryBuilder.build() should raise ParseException for an invalid query."""
-        query_builder = QueryBuilder(self.invalid_query_string, self.config)
-        with self.assertRaisesRegexp(ParseException, r"Expected end of text"):
-            query_builder.build()
+def test_execute_global_xor():
+    """Executing a 'xor' between two queries should return all the hosts that are in only in one of the queries."""
+    query = Query({})
+    hosts = query.execute('D{host[1-5]} xor D{host[3-7]}')
+    assert hosts == NodeSet('host[1-2,6-7]')
 
-    @mock.patch('cumin.query.Query', QueryFactory)
-    def test__parse_token(self):
-        """QueryBuilder._parse_token() should raise RuntimeError for an invalid token."""
-        query_builder = QueryBuilder(self.invalid_query_string, self.config)
-        with self.assertRaisesRegexp(RuntimeError, r"Invalid query string syntax"):
-            query_builder._parse_token('invalid_token')
+
+def test_execute_valid_global_with_aliases():
+    """Executing a valid query with aliases should return the matching hosts."""
+    query = Query({'aliases': {'group1': 'D{host1 or host2}'}})
+    hosts = query.execute('A:group1')
+    assert hosts == NodeSet('host[1-2]')
+
+
+def test_execute_valid_global_with_nested_aliases():
+    """Executing a valid query with nested aliases should return the matching hosts."""
+    query = Query({
+        'aliases': {
+            'group1': 'D{host1 or host2}',
+            'group2': 'D{host3 or host4}',
+            'all': 'A:group1 or A:group2',
+        }})
+    hosts = query.execute('A:all')
+    assert hosts == NodeSet('host[1-4]')
+
+
+def test_execute_missing_alias():
+    """Executing a valid query with a missing alias should raise InvalidQueryError."""
+    query = Query({})
+    with pytest.raises(backends.InvalidQueryError, match='Unable to find alias replacement for'):
+        query.execute('A:non_existent_group')
+
+    query = Query({'aliases': {}})
+    with pytest.raises(backends.InvalidQueryError, match='Unable to find alias replacement for'):
+        query.execute('A:non_existent_group')
+
+
+def test_execute_invalid_global():
+    """Executing a query with an invalid syntax should raise InvalidQueryError."""
+    query = Query({})
+    with pytest.raises(backends.InvalidQueryError, match='with the global grammar'):
+        query.execute('invalid syntax')
+
+
+def test_execute_subgroup():
+    """Executing a query with a single subgroup should return the matching hosts."""
+    query = Query({})
+    hosts = query.execute('(D{host1})')
+    assert hosts == NodeSet('host1')
+
+
+def test_execute_subgroups():
+    """Executing a query with multiple subgroups should return the matching hosts."""
+    query = Query({})
+    hosts = query.execute('(D{host1} or D{host2}) and not (D{host1})')
+    assert hosts == NodeSet('host2')
+
+
+def test_execute_missing_default_backend():
+    """Executing a valid query with a missing default backend should raise InvalidQueryError."""
+    query = Query({'default_backend': 'non_existent_backend'})
+    with pytest.raises(backends.InvalidQueryError, match='is not registered'):
+        query.execute('any_query')
+
+
+def test_execute_valid_default_backend():
+    """Executing a default backend valid query should return the matching hosts."""
+    query = Query({'default_backend': 'direct'})
+    hosts = query.execute('host1 or host2')
+    assert hosts == NodeSet('host[1-2]')
+
+
+def test_execute_invalid_default_valid_global():
+    """Executing a global grammar valid query in presence of a default backend should return the matching hosts."""
+    query = Query({'default_backend': 'direct'})
+    hosts = query.execute('D{host1 or host2}')
+    assert hosts == NodeSet('host[1-2]')
+
+
+def test_execute_invalid_default_invalid_global():
+    """Executing a query invalid for the default backend and the global grammar should raise InvalidQueryError."""
+    query = Query({'default_backend': 'direct'})
+    with pytest.raises(backends.InvalidQueryError, match='neither with the default backen'):
+        query.execute('invalid syntax')
+
+
+def test_execute_complex_global():
+    """Executing a valid complex query should return the matching hosts."""
+    query = Query({})
+    hosts = query.execute(
+        '(D{(host1 or host2) and host[1-5]}) or ((D{host[100-150]} and not D{host1[20-30]}) and D{host1[01,15,30]})')
+    assert hosts == NodeSet('host[1-2,101,115]')

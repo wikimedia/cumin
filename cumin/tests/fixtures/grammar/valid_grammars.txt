@@ -1,0 +1,21 @@
+# Valid grammars
+A:alias_name
+A:alias-name
+A:alias.name
+A:alias+name
+P{puppetdb query (with subgroups) "and even P{}}, if quoted"}
+D{direct (query) with and or ((subgroups[10-20]))}
+P{query1} and D{query2}
+P{query1} and not D{query2}
+P{query1} or D{query1}
+P{query1} xor D{query1}
+P{query} and A:alias
+P{query} and not A:alias
+P{query} or A:alias
+P{query} xor A:alias
+A:alias and P{query}
+A:alias and not P{query}
+A:alias or P{query}
+A:alias xor P{query}
+A:alias1 and (P{query1} or D{query2}) and not A:alias2 xor D{query3}
+A:alias1 and ((P{query1} or D{query2}) and not A:alias2) xor D{query3}

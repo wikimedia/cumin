@@ -1,31 +1,113 @@
+# pylint: skip-file
+# See https://github.com/PyCQA/astroid/issues/437
 """PuppetDB backend."""
 from string import capwords
 
+import pyparsing as pp
 import requests
 
+from ClusterShell.NodeSet import NodeSet
 from requests.packages import urllib3
 
 from cumin.backends import BaseQuery, InvalidQueryError
 
 
+# Available categories
+CATEGORIES = (
+    'F',  # Fact
+    'R',  # Resource
+)
+
+# Available operators
+OPERATORS = ('=', '>=', '<=', '<', '>', '~')
+
+
+def grammar():
+    """Define the query grammar.
+
+    Some query examples:
+    - All hosts: `*`
+    - Hosts globbing: `host10*`
+    - ClusterShell's NodeSet syntax (see https://clustershell.readthedocs.io/en/latest/api/NodeSet.html) for hosts
+      expansion: `host10[10-42].domain`
+    - Category based key-value selection:
+      - `R:Resource::Name`: query all the hosts that have a resource of type `Resource::Name`.
+      - `R:Resource::Name = 'resource-title'`: query all the hosts that have a resource of type `Resource::Name` whose
+        title is `resource-title`. For example `R:Class = MyModule::MyClass`.
+      - `R:Resource::Name@field = 'some-value'`: query all the hosts that have a resource of type `Resource::Name`
+        whose field `field` has the value `some-value`. The valid fields are: `tag`, `certname`, `type`, `title`,
+        `exported`, `file`, `line`. The previous syntax is a shortcut for this one with the field `title`.
+      - `R:Resource::Name%param = 'some-value'`: query all the hosts that have a resource of type `Resource::Name`
+        whose parameter `param` has the value `some-value`.
+      - Mixed facts/resources queries are not supported, but the same result can be achieved by the main grammar using
+        multiple subqueries.
+    - A complex selection for facts:
+      `host10[10-42].*.domain or (not F:key1 = value1 and host10*) or (F:key2 > value2 and F:key3 ~ '^value[0-9]+')`
+
+    Backus-Naur form (BNF) of the grammar:
+            <grammar> ::= <item> | <item> <and_or> <grammar>
+               <item> ::= [<neg>] <query-token> | [<neg>] "(" <grammar> ")"
+        <query-token> ::= <token> | <hosts>
+              <token> ::= <category>:<key> [<operator> <value>]
+
+    Given that the pyparsing library defines the grammar in a BNF-like style, for the details of the tokens not
+    specified above check directly the code.
+    """
+    # Boolean operators
+    and_or = (pp.CaselessKeyword('and') | pp.CaselessKeyword('or'))('bool')
+    # 'neg' is used as label to allow the use of dot notation, 'not' is a reserved word in Python
+    neg = pp.CaselessKeyword('not')('neg')
+
+    operator = pp.oneOf(OPERATORS, caseless=True)('operator')  # Comparison operators
+    quoted_string = pp.quotedString.addParseAction(pp.removeQuotes)  # Both single and double quotes are allowed
+
+    # Parentheses
+    lpar = pp.Literal('(')('open_subgroup')
+    rpar = pp.Literal(')')('close_subgroup')
+
+    # Hosts selection: glob (*) and clustershell (,!&^[]) syntaxes are allowed:
+    # i.e. host10[10-42].*.domain
+    hosts = quoted_string | (~(and_or | neg) + pp.Word(pp.alphanums + '-_.*,!&^[]'))
+
+    # Key-value token for allowed categories using the available comparison operators
+    # i.e. F:key = value
+    category = pp.oneOf(CATEGORIES, caseless=True)('category')
+    key = pp.Word(pp.alphanums + '-_.%@:')('key')
+    selector = pp.Combine(category + ':' + key)  # i.e. F:key
+    # All printables characters except the parentheses that are part of this or the global grammar
+    all_but_par = ''.join([c for c in pp.printables if c not in ('(', ')', '{', '}')])
+    value = (quoted_string | pp.Word(all_but_par))('value')
+    token = selector + pp.Optional(operator + value)
+
+    # Final grammar, see the docstring for its BNF based on the tokens defined above
+    # Groups are used to split the parsed results for an easy access
+    full_grammar = pp.Forward()
+    item = pp.Group(pp.Optional(neg) + (token | hosts('hosts'))) | pp.Group(
+        pp.Optional(neg) + lpar + full_grammar + rpar)
+    full_grammar << item + pp.ZeroOrMore(pp.Group(and_or) + full_grammar)  # pylint: disable=expression-not-assigned
+
+    return full_grammar
+
+
 class PuppetDBQuery(BaseQuery):
     """PuppetDB query builder.
 
-    The 'direct' backend allow to use an existing PuppetDB instance for the hosts selection.
+    The 'puppetdb' backend allow to use an existing PuppetDB instance for the hosts selection.
     At the moment only PuppetDB v3 API are implemented.
     """
 
     base_url_template = 'https://{host}:{port}/v3/'
     endpoints = {'R': 'resources', 'F': 'nodes'}
     hosts_keys = {'R': 'certname', 'F': 'name'}
+    grammar = grammar()
 
     def __init__(self, config, logger=None):
-        """Query Builder constructor.
+        """Query constructor for the PuppetDB backend.
 
         Arguments: according to BaseQuery interface
         """
-        super(PuppetDBQuery, self).__init__(config, logger)
-        self.grouped_tokens = {'parent': None, 'bool': None, 'tokens': []}
+        super(PuppetDBQuery, self).__init__(config, logger=logger)
+        self.grouped_tokens = None
         self.current_group = self.grouped_tokens
         self._category = None
         puppetdb_config = self.config.get('puppetdb', {})
@@ -48,34 +130,81 @@ class PuppetDBQuery(BaseQuery):
         Arguments:
         value -- the value to set the category to
         """
-        if value not in self.endpoints.keys():
-            raise RuntimeError("Invalid value '{category}' for category property".format(category=value))
+        if value not in self.endpoints:
+            raise InvalidQueryError("Invalid value '{category}' for category property".format(category=value))
         if self._category is not None and value != self._category:
-            raise RuntimeError('Mixed F: and R: queries are currently not supported')
+            raise InvalidQueryError('Mixed F: and R: queries are currently not supported')
 
         self._category = value
 
-    def add_category(self, category, key, value=None, operator='=', neg=False):
+    def _open_subgroup(self):
         """Required by BaseQuery."""
+        token = PuppetDBQuery._get_grouped_tokens()
+        token['parent'] = self.current_group
+        self.current_group['tokens'].append(token)
+        self.current_group = token
+
+    def _close_subgroup(self):
+        """Required by BaseQuery."""
+        self.current_group = self.current_group['parent']
+
+    @staticmethod
+    def _get_grouped_tokens():
+        """Return an empty grouped tokens structure."""
+        return {'parent': None, 'bool': None, 'tokens': []}
+
+    def _build(self, query_string):
+        """Override parent class _build method to reset tokens and add logging."""
+        self.grouped_tokens = PuppetDBQuery._get_grouped_tokens()
+        self.current_group = self.grouped_tokens
+        super(PuppetDBQuery, self)._build(query_string)
+        self.logger.trace('Query tokens: {tokens}'.format(tokens=self.grouped_tokens))
+
+    def _execute(self):
+        """Required by BaseQuery."""
+        query = self._get_query_string(group=self.grouped_tokens).format(host_key=self.hosts_keys[self.category])
+        hosts = self._api_call(query, self.endpoints[self.category])
+        unique_hosts = NodeSet.fromlist([host[self.hosts_keys[self.category]] for host in hosts])
+        self.logger.debug("Queried puppetdb for '{query}', got '{num}' results.".format(
+            query=query, num=len(unique_hosts)))
+
+        return unique_hosts
+
+    def _add_category(self, category, key, value=None, operator='=', neg=False):
+        """Add a category token to the query 'F:key = value'.
+
+        Arguments:
+        category -- the category of the token, one of CATEGORIES excluding the alias one.
+        key      -- the key for this category
+        value    -- the value to match, if not specified the key itself will be matched [optional, default: None]
+        operator -- the comparison operator to use, one of cumin.grammar.OPERATORS [optional: default: =]
+        neg      -- whether the token must be negated [optional, default: False]
+        """
         self.category = category
         if operator == '~':
             value = value.replace(r'\\', r'\\\\')  # Required by PuppetDB API
-        elif operator == '!=':
-            raise RuntimeError("PuppetDB backend doesn't support the '!=' operator")
 
         if category == 'R':
             query = self._get_resource_query(key, value, operator)
         elif category == 'F':
             query = '["{op}", ["fact", "{key}"], "{val}"]'.format(op=operator, key=key, val=value)
+        else:  # pragma: no cover - this should never happen
+            raise InvalidQueryError(
+                "Got invalid category '{category}', one of F|R expected".format(category=category))
 
         if neg:
             query = '["not", {query}]'.format(query=query)
 
         self.current_group['tokens'].append(query)
 
-    def add_hosts(self, hosts, neg=False):
-        """Required by BaseQuery."""
-        if len(hosts) == 0:
+    def _add_hosts(self, hosts, neg=False):
+        """Add a list of hosts to the query.
+
+        Arguments:
+        hosts -- a list of hosts to match
+        neg   -- whether the token must be negated [optional, default: False]
+        """
+        if not hosts:
             return
 
         hosts_tokens = []
@@ -94,48 +223,50 @@ class PuppetDBQuery(BaseQuery):
 
         self.current_group['tokens'].append(query)
 
-    def open_subgroup(self):
+    def _parse_token(self, token):
         """Required by BaseQuery."""
-        token = {'parent': self.current_group, 'bool': None, 'tokens': []}
-        self.current_group['tokens'].append(token)
-        self.current_group = token
+        if isinstance(token, str):
+            return
 
-    def close_subgroup(self):
-        """Required by BaseQuery."""
-        self.current_group = self.current_group['parent']
+        token_dict = token.asDict()
 
-    def add_and(self):
-        """Required by BaseQuery."""
-        self._add_bool('and')
+        # Based on the token type build the corresponding query object
+        if 'open_subgroup' in token_dict:
+            self._open_subgroup()
+            for subtoken in token:
+                self._parse_token(subtoken)
+            self._close_subgroup()
 
-    def add_or(self):
-        """Required by BaseQuery."""
-        self._add_bool('or')
+        elif 'bool' in token_dict:
+            self._add_bool(token_dict['bool'])
 
-    def execute(self):
-        """Required by BaseQuery."""
-        query = self._get_query_string(group=self.grouped_tokens).format(host_key=self.hosts_keys[self.category])
-        hosts = self._execute(query, self.endpoints[self.category])
-        unique_hosts = list({host[self.hosts_keys[self.category]] for host in hosts})  # Set comprehension
-        self.logger.debug("Queried puppetdb for '{query}', got '{num}' results.".format(
-            query=query, num=len(unique_hosts)))
+        elif 'hosts' in token_dict:
+            token_dict['hosts'] = NodeSet(token_dict['hosts'])
+            self._add_hosts(**token_dict)
 
-        return unique_hosts
+        elif 'category' in token_dict:
+            self._add_category(**token_dict)
 
-    def _get_resource_query(self, key, value=None, operator='='):
+        else:  # pragma: no cover - this should never happen
+            raise InvalidQueryError(
+                "No valid key found in token, one of bool|hosts|category expected: {token}".format(token=token_dict))
+
+    def _get_resource_query(self, key, value=None, operator='='):  # pylint: disable=no-self-use
         """Build a resource query based on the parameters, resolving the special cases for %params and @field.
 
         Arguments:
         key      -- the key of the resource
         value    -- the value to match, if not specified the key itself will be matched [optional, default: None]
-        operator -- the comparison operator to use, one of cumin.grammar.operators [optional: default: =]
+        operator -- the comparison operator to use, one of cumin.grammar.OPERATORS [optional: default: =]
         """
         if all(char in key for char in ('%', '@')):
-            raise RuntimeError(("Resource key cannot contain both '%' (query a resource's parameter) and '@' (query a "
-                                " resource's field)"))
+            raise InvalidQueryError(("Resource key cannot contain both '%' (query a resource's parameter) and '@' "
+                                     "(query a  resource's field)"))
 
         elif '%' in key:
             # Querying a specific parameter of the resource
+            if operator == '~':
+                raise InvalidQueryError('Regex operations are not supported in PuppetDB API v3 for resource parameters')
             key, param = key.split('%', 1)
             query_part = ', ["{op}", ["parameter", "{param}"], "{value}"]'.format(op=operator, param=param, value=value)
 
@@ -150,7 +281,7 @@ class PuppetDBQuery(BaseQuery):
 
         else:
             # Querying a specific resource title
-            if key.lower() == 'class':
+            if key.lower() == 'class' and operator != '~':
                 value = capwords(value, '::')  # Auto ucfirst the class title
             query_part = ', ["{op}", "title", "{value}"]'.format(op=operator, value=value)
 
@@ -192,11 +323,13 @@ class PuppetDBQuery(BaseQuery):
         """
         if self.current_group['bool'] is None:
             self.current_group['bool'] = bool_op
-        elif self.current_group['bool'] != bool_op:
+        elif self.current_group['bool'] == bool_op:
+            return
+        else:
             raise InvalidQueryError("Got unexpected '{bool}' boolean operator, current operator was '{current}'".format(
                 bool=bool_op, current=self.current_group['bool']))
 
-    def _execute(self, query, endpoint):
+    def _api_call(self, query, endpoint):
         """Execute a query to PuppetDB API and return the parsed JSON.
 
         Arguments:
@@ -208,4 +341,6 @@ class PuppetDBQuery(BaseQuery):
         return resources.json()
 
 
-query_class = PuppetDBQuery  # Required by the auto-loader in the cumin.query.Query factory
+# Required by the backend auto-loader in cumin.grammar.get_registered_backends()
+GRAMMAR_PREFIX = 'P'
+query_class = PuppetDBQuery  # pylint: disable=invalid-name

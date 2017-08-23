@@ -2,13 +2,9 @@ language: python
 python: 2.7
 before_install:
   - pip install --upgrade setuptools
-
 install:
-  - pip install --upgrade tox
-  - pip install --upgrade "clustershell==1.7.3" colorama "pyparsing==2.1.10" pyyaml requests tqdm
-  - pip install --upgrade mock nose requests-mock
-  - pip install --upgrade coveralls codecov
-script: coverage run --source=cumin --omit="cumin/tests/*" setup.py test
+    - pip install --upgrade coveralls codecov tox
+script: tox -e unit
 after_success:
   - coveralls
   - codecov

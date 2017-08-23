@@ -1,0 +1,10 @@
+# Invalid grammars
+A:alias/name
+P{puppetdb query with unquoted P{}
+P{puppetdb query with unquoted }}
+P{query1} or not D{query2}
+P{query} or not A:alias
+A:alias or not P{query}
+A:alias1 and (not P{query1} or D{query1}) and not A:alias2
+A:alias1 and ((P{query1} or (D{query1} or) not A:alias2)
+A:alias1 and ((P{query1} or (D{query1} or) not A:alias2))

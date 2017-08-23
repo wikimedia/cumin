@@ -1,28 +1,54 @@
 #!/usr/bin/python2
 """Cumin CLI entry point."""
 import argparse
+import code
+import json
 import logging
 import os
 import pkgutil
 import signal
 import sys
 
-from logging.handlers import RotatingFileHandler
+from logging.handlers import RotatingFileHandler  # pylint: disable=ungrouped-imports
 
 import colorama
-import yaml
 
 from ClusterShell.NodeSet import NodeSet
 from tqdm import tqdm
 
-from cumin import CuminError
-from cumin.query import QueryBuilder
-from cumin.transport import Transport
+import cumin
 
-logger = logging.getLogger(__name__)
+from cumin import backends, query, transport, transports
 
 
-class KeyboardInterruptError(CuminError):
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+OUTPUT_FORMATS = ('txt', 'json')
+INTERACTIVE_BANNER = """===== Cumin Interactive REPL =====
+# Press Ctrl+d or type exit() to exit the program.
+
+= Available variables =
+# hosts     -- the ClusterShell NodeSet of targeted hosts.
+# worker    -- the instance of the Transport worker that was used for the execution.
+# args      -- the parsed command line arguments, an argparse.Namespace instance.
+# config    -- the cofiguration dictionary.
+# exit_code -- the return code of the execution, that will be used as exit code.
+
+= Useful functions =
+# worker.get_results() -- generator that yields the tuple (nodes, output) for each grouped result, where:
+#                         - nodes  -- is a ClusterShell.NodeSet.NodeSet instance
+#                         - output -- is a ClusterShell.MsgTree.MsgTreeElem instance
+# h()                  -- print this help message.
+# help(object)         -- Python default interactive help and documentation of the given object.
+
+= Example usage:
+for nodes, output in worker.get_results():
+    print(nodes)
+    print(output)
+    print('-----')
+"""
+
+
+class KeyboardInterruptError(cumin.CuminError):
     """Custom KeyboardInterrupt exception class for the SIGINT signal handler."""
 
 
@@ -36,17 +62,19 @@ def parse_args(argv=None):
     async_mode = 'async'
 
     # Get the list of existing backends and transports
-    abs_path = os.path.dirname(os.path.abspath(__file__))
-    backends = [name for _, name, _ in pkgutil.iter_modules([os.path.join(abs_path, 'backends')])]
-    transports = [name for _, name, _ in pkgutil.iter_modules([os.path.join(abs_path, 'transports')])]
+    backends_names = [name for _, name, ispkg in pkgutil.iter_modules(backends.__path__) if not ispkg]
+    transports_names = [name for _, name, ispkg in pkgutil.iter_modules(transports.__path__) if not ispkg]
 
     parser = argparse.ArgumentParser(
         description='Cumin CLI - Automation and orchestration framework written in Python',
         epilog='More details at https://wikitech.wikimedia.org/wiki/Cumin')
     parser.add_argument('-c', '--config', default='/etc/cumin/config.yaml',
                         help='configuration file. [default: /etc/cumin/config.yaml]')
-    parser.add_argument('-t', '--timeout', type=int, default=0,
-                        help='Global timeout in seconds (int) for the whole execution. [default: 0 (unlimited)]')
+    parser.add_argument('--global-timeout', type=int, default=None,
+                        help='Global timeout in seconds (int) for the whole execution. [default: None (unlimited)]')
+    parser.add_argument('-t', '--timeout', type=int, default=None,
+                        help=('Timeout in seconds (int) for the the execution of every command in each host. '
+                              '[default: None (unlimited)]'))
     parser.add_argument('-m', '--mode', choices=(sync_mode, async_mode),
                         help=('Execution mode, required when there are multiple COMMANDS to be executed. In sync mode, '
                               'execute the first command on all hosts, then proceed with the next one only if '
@@ -63,24 +91,32 @@ def parse_args(argv=None):
                               'mode all commands are executed on the first batch of hosts, proceeding with the next '
                               'hosts as soon as one host completes all the commands. The -p/--success-percentage is '
                               'checked before starting the execution in each hosts.'))
-    parser.add_argument('-s', '--batch-sleep', type=float, default=0.0,
+    parser.add_argument('-s', '--batch-sleep', type=float, default=None,
                         help=('Sleep in seconds (float) to wait before starting the execution on the next host when '
-                              '-b/--batch-size is used. [default: 0.0]'))
+                              '-b/--batch-size is used. [default: None]'))
+    parser.add_argument('-x', '--ignore-exit-codes', action='store_true',
+                        help='USE WITH CAUTION! Treat any executed command as successful, ignoring the exit codes.')
+    parser.add_argument('-o', '--output', choices=OUTPUT_FORMATS, help='Specify a different output format.')
+    parser.add_argument('-i', '--interactive', action='store_true', help='Drop into a Python shell with the results.')
     parser.add_argument('--force', action='store_true',
                         help='USE WITH CAUTION! Force the execution without confirmation of the affected hosts. ')
-    parser.add_argument('--backend', choices=backends,
+    parser.add_argument('--backend', choices=backends_names,
                         help=('Override the default backend selected in the configuration file for this execution. The '
                               'backend-specific configuration must be already present in the configuration file. '
                               '[optional]'))
-    parser.add_argument('--transport', choices=transports,
+    parser.add_argument('--transport', choices=transports_names,
                         help=('Override the default transport selected in the configuration file for this execution. '
                               'The transport-specific configuration must already be present in the configuration file. '
                               '[optional]'))
     parser.add_argument('--dry-run', action='store_true',
                         help='Do not execute any command, just return the list of matching hosts and exit.')
+    parser.add_argument('--version', action='store_true', help='Print current version and exit.')
     parser.add_argument('-d', '--debug', action='store_true', help='Set log level to DEBUG.')
+    parser.add_argument('--trace', action='store_true',
+                        help='Set log level to TRACE, a custom logging level intended for development debugging.')
     parser.add_argument('hosts', metavar='HOSTS_QUERY', help='Hosts selection query')
-    parser.add_argument('commands', metavar='COMMAND', nargs='+', help='Command to be executed')
+    parser.add_argument('commands', metavar='COMMAND', nargs='*',
+                        help='Command to be executed. If no commands are speficied, --dry-run is set.')
 
     if argv is None:
         parsed_args = parser.parse_args()
@@ -88,11 +124,21 @@ def parse_args(argv=None):
         parsed_args = parser.parse_args(argv)
 
     # Validation and default values
-
-    if len(parsed_args.commands) == 1:
+    num_commands = len(parsed_args.commands)
+    if num_commands == 0:
+        parsed_args.dry_run = True
+    elif num_commands == 1:
         parsed_args.mode = 'sync'
-    elif len(parsed_args.commands) > 1 and parsed_args.mode is None:
-        parser.error('-m/--mode is required when there are multiple COMMANDS')
+    elif num_commands > 1:
+        if parsed_args.mode is None:
+            parser.error('-m/--mode is required when there are multiple COMMANDS')
+        if parsed_args.interactive:
+            parser.error('-i/--interactive can be used only with one command')
+        if parsed_args.output is not None:
+            parser.error('-o/--output can be used only with one command')
+
+    if parsed_args.ignore_exit_codes:
+        stderr('IGNORE EXIT CODES mode enabled, all commands executed will be considered successful')
 
     return parsed_args
 
@@ -100,14 +146,14 @@ def parse_args(argv=None):
 def get_running_user():
     """Ensure it's running as root and that the original user is detected and return it."""
     if os.getenv('USER') != 'root':
-        raise RuntimeError('Unsufficient privileges, run with sudo')
+        raise cumin.CuminError('Insufficient privileges, run with sudo')
     if os.getenv('SUDO_USER') in (None, 'root'):
-        raise RuntimeError('Unable to determine real user')
+        raise cumin.CuminError('Unable to determine real user, logged in as root?')
 
     return os.getenv('SUDO_USER')
 
 
-def setup_logging(filename, debug=False):
+def setup_logging(filename, debug=False, trace=False):
     """Setup the logger instance.
 
     Arguments:
@@ -125,32 +171,22 @@ def setup_logging(filename, debug=False):
     logger.addHandler(log_handler)
     logger.raiseExceptions = False
 
-    if debug:
+    if trace:
+        logger.setLevel(cumin.LOGGING_TRACE_LEVEL_NUMBER)
+    elif debug:
         logger.setLevel(logging.DEBUG)
     else:
         logger.setLevel(logging.INFO)
 
 
-def parse_config(config_file):
-    """Parse the YAML configuration file.
-
-    Arguments:
-    config_file -- the path of the configuration file to load
-    """
-    with open(config_file, 'r') as f:
-        config = yaml.safe_load(f)
-
-    return config
-
-
-def sigint_handler(*args):
+def sigint_handler(*args):  # pylint: disable=unused-argument
     """Signal handler for Ctrl+c / SIGINT, raises KeyboardInterruptError.
 
     Arguments (as defined in https://docs.python.org/2/library/signal.html):
     signum -- the signal number
     frame  -- the current stack frame
     """
-    if not sys.stdout.isatty():
+    if not sys.stdout.isatty():  # pylint: disable=no-member
         logger.warning('Execution interrupted by Ctrl+c/SIGINT')
         raise KeyboardInterruptError
 
@@ -202,10 +238,9 @@ def get_hosts(args, config):
     args   -- ArgumentParser instance with parsed command line arguments
     config -- a dictionary with the parsed configuration file
     """
-    query = QueryBuilder(args.hosts, config, logger).build()
-    hosts = query.execute()
+    hosts = query.Query(config, logger=logger).execute(args.hosts)
 
-    if len(hosts) == 0:
+    if not hosts:
         stderr('No hosts found that matches the query')
         return hosts
 
@@ -218,10 +253,10 @@ def get_hosts(args, config):
     elif args.force:
         stderr('FORCE mode enabled, continuing without confirmation')
         return hosts
-    elif not sys.stdout.isatty():
+    elif not sys.stdout.isatty():  # pylint: disable=no-member
         message = 'Not in a TTY but neither DRY-RUN nor FORCE mode were specified.'
         stderr(message)
-        raise RuntimeError(message)
+        raise cumin.CuminError(message)
 
     for i in xrange(10):
         stderr('Confirm to continue [y/n]?', end=' ')
@@ -241,6 +276,32 @@ def get_hosts(args, config):
     return hosts
 
 
+def print_output(output_format, worker):
+    """Print the execution results in a specific format.
+
+    Arguments:
+    output_format -- the output format to use, one of: 'txt', 'json'.
+    worker        -- the Transport worker instance to retrieve the results from.
+    """
+    if output_format not in OUTPUT_FORMATS:
+        raise RuntimeError("Got invalid output format '{fmt}', expected one of {allowed}".format(
+            fmt=output_format, allowed=OUTPUT_FORMATS))
+
+    out = {}
+    for nodeset, output in worker.get_results():
+        for node in nodeset:
+            if output_format == 'txt':
+                out[node] = '\n'.join(['{node}: {line}'.format(node=node, line=line) for line in output.lines()])
+            elif output_format == 'json':
+                out[node] = output.message()
+
+    if output_format == 'txt':
+        for node in sorted(out.keys()):
+            tqdm.write(out[node])
+    elif output_format == 'json':
+        tqdm.write(json.dumps(out, indent=4, sort_keys=True))
+
+
 def run(args, config):
     """Execute the commands on the selected hosts and print the results.
 
@@ -249,18 +310,35 @@ def run(args, config):
     config -- a dictionary with the parsed configuration file
     """
     hosts = get_hosts(args, config)
-    if len(hosts) == 0:
+    if not hosts:
         return 0
 
-    worker = Transport.new(config, logger)
-    worker.hosts = hosts
-    worker.commands = args.commands
-    worker.timeout = args.timeout
+    target = transports.Target(hosts, batch_size=args.batch_size, batch_sleep=args.batch_sleep, logger=logger)
+    worker = transport.Transport.new(config, target, logger=logger)
+
+    ok_codes = None
+    if args.ignore_exit_codes:
+        ok_codes = []
+
+    worker.commands = [transports.Command(command, timeout=args.timeout, ok_codes=ok_codes)
+                       for command in args.commands]
+    worker.timeout = args.global_timeout
     worker.handler = args.mode
     worker.success_threshold = args.success_percentage / float(100)
-    worker.batch_size = args.batch_size
-    worker.batch_sleep = args.batch_sleep
-    return worker.execute()
+    exit_code = worker.execute()
+
+    if args.interactive:
+        # Define a help function h() that will be available in the interactive shell to print the help message.
+        # The name is to not shadow the Python built-in help() that might be usefult too to inspect objects.
+        def h():  # pylint: disable=unused-variable,invalid-name
+            """Helper function for the interactive shell."""
+            tqdm.write(INTERACTIVE_BANNER)
+        code.interact(banner=INTERACTIVE_BANNER, local=locals())
+    elif args.output is not None:
+        tqdm.write('_____FORMATTED_OUTPUT_____')
+        print_output(args.output, worker)
+
+    return exit_code
 
 
 def main(argv=None):
@@ -275,16 +353,23 @@ def main(argv=None):
     # Setup
     try:
         args = parse_args(argv)
+        if args.version:
+            tqdm.write('cumin {version}'.format(version=cumin.__version__))
+            return 0
+
         user = get_running_user()
-        config = parse_config(args.config)
-        setup_logging(config['log_file'], debug=args.debug)
-    except Exception as e:
+        config = cumin.Config(args.config)
+        setup_logging(config['log_file'], debug=args.debug, trace=args.trace)
+    except cumin.CuminError as e:
+        stderr(e)
+        return 2
+    except Exception as e:  # pylint: disable=broad-except
         stderr('Caught {name} exception: {msg}'.format(name=e.__class__.__name__, msg=e))
         return 3
 
     # Override config with command line arguments
     if args.backend is not None:
-        config['backend'] = args.backend
+        config['default_backend'] = args.backend
     if args.transport is not None:
         config['transport'] = args.transport
 
@@ -296,7 +381,7 @@ def main(argv=None):
     except KeyboardInterruptError:
         stderr('Execution interrupted by Ctrl+c/SIGINT/Aborted')
         exit_code = 98
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-except
         stderr('Caught {name} exception: {msg}'.format(name=e.__class__.__name__, msg=e))
         logger.exception('Failed to execute')
         exit_code = 99

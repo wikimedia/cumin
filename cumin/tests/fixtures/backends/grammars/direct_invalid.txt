@@ -1,0 +1,7 @@
+# Invalid grammars
+some+host
+not host1
+host1 or not host2
+host1 and (not host2)
+Z:category
+Z:category = value

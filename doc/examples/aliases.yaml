@@ -1,0 +1,3 @@
+alias_direct: D{host1 or host2}
+alias_puppetdb: P{R:Class = My::Class}
+alias_all: A:alias_direct and (A:alias_puppetdb and not D{host3})

@@ -5,7 +5,7 @@ set -e
 function setup() {
     ssh-keygen -t ed25519 -N "" -f "${CUMIN_TMPDIR}/id_rsa" -C "cumin-integration-tests" > /dev/null
     cat <<EOF > "${CUMIN_TMPDIR}/config.yaml"
-backend: direct
+default_backend: direct
 transport: clustershell
 log_file: ${CUMIN_TMPDIR}/cumin.log
 
@@ -46,10 +46,5 @@ EOF
 
 function run_tests() {
     USER=root SUDO_USER=user cumin --force -c "${CUMIN_TMPDIR}/config.yaml" "${CUMIN_IDENTIFIER}-[1-2,5]" "touch /tmp/maybe" > /dev/null 2>&1
-    # Nose multiprocess and coverage don't work together
-    # export NOSE_PROCESS_TIMEOUT=60
-    # export NOSE_PROCESSES=-1
-    export NOSE_IGNORE_CONFIG_FILES=1
-    coverage run --source cumin --omit=cumin/tests/* -m nose cumin/tests/integration/test_cli.py
-    coverage report -m
+    py.test -n auto --strict --cov-report term-missing --cov=cumin cumin/tests/integration
 }

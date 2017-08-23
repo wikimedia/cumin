@@ -1,5 +1,6 @@
 # Invalid grammars
 F:key1 = {(value}
+F:key1 != value
 some+host
 F:a.b_c-$3 >= 3.5-c
 F:a.b_c-3 = a"(complex string 3.5-c with symbols = > and parentheses)"
@@ -11,3 +12,4 @@ not F:key1 < 5 or not and hostname and F:key2 = value
 (F:key1 < 5 and () or hostname)
 (F:key1 < 5 and (hostname not F:key2 = value))
 F:key1 = value or (F:key2 < 5 and (hostname or F:key3 = (value)) and F:key4) = value
+Z:invalid_category

@@ -1,0 +1,6 @@
+group1: D{host10[10-22].example.org}
+group2: D{host20[10-22].example.org}
+group_all_direct: A:group1 OR A:group2
+role1: P{R:Class = Role::Role1}
+dc1: P{*.dc1.example.org}
+group_all_puppetdb: A:role1 AND A:dc1

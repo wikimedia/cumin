@@ -1,0 +1,17 @@
+transport: clustershell
+log_file: logs/cumin.log
+default_backend: puppetdb
+
+environment:
+    ENV_VARIABLE: env_value
+
+puppetdb:
+    host: puppetdb.local
+    port: 443
+    urllib3_disable_warnings:
+        - SubjectAltNameWarning
+
+clustershell:
+    ssh_options:
+        - 'some_option'
+    fanout: 16
