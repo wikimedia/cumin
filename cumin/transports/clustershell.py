@@ -193,7 +193,7 @@ class BaseEventHandler(Event.EventHandler):
                 (node.state.is_pending or node.state.is_scheduled or
                  (node.state.is_success and node.running_command_index < (len(node.commands) - 1))
                  ) for node in self.nodes.itervalues())
-            if self.pbar_ko is not None:
+            if self.pbar_ko is not None and pending_or_scheduled > 0:
                 self.pbar_ko.update(num_timeout + pending_or_scheduled)
         finally:
             self.lock.release()

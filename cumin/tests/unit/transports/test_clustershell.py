@@ -235,6 +235,7 @@ class TestConcreteBaseEventHandler(TestBaseEventHandler):
         for node in self.target.hosts:
             self.worker.current_node = node
             self.handler.ev_pickup(self.worker)
+            self.handler.ev_timeout(self.worker)
         self.worker.task.num_timeout.return_value = 1
         self.worker.task.iter_keys_timeout.return_value = [self.target.hosts[0]]
 
