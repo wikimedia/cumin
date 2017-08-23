@@ -4,7 +4,7 @@ from logging import DEBUG, INFO
 import mock
 import pytest
 
-from cumin import cli, CuminError, LOGGING_TRACE_LEVEL_NUMBER
+from cumin import cli, CuminError, LOGGING_TRACE_LEVEL_NUMBER, transports
 
 # Environment variables
 _ENV = {'USER': 'root', 'SUDO_USER': 'user'}
@@ -198,5 +198,7 @@ def test_run(stderr, transport):
     args = cli.parse_args(argv=['--force', 'D{host1}', 'command1'])
     config = {'backend': 'direct', 'transport': 'clustershell'}
     cli.run(args, config)
-    transport.new.assert_called_once_with(config, cli.logger)
+    assert transport.new.call_args[0][0] is config
+    assert isinstance(transport.new.call_args[0][1], transports.Target)
+    assert transport.new.call_args[1]['logger'] is cli.logger
     assert stderr.called

@@ -238,7 +238,7 @@ def get_hosts(args, config):
     args   -- ArgumentParser instance with parsed command line arguments
     config -- a dictionary with the parsed configuration file
     """
-    hosts = query.Query(config, logger).execute(args.hosts)
+    hosts = query.Query(config, logger=logger).execute(args.hosts)
 
     if not hosts:
         stderr('No hosts found that matches the query')
@@ -313,8 +313,8 @@ def run(args, config):
     if not hosts:
         return 0
 
-    worker = transport.Transport.new(config, logger)
-    worker.target = transports.Target(hosts, batch_size=args.batch_size, batch_sleep=args.batch_sleep, logger=logger)
+    target = transports.Target(hosts, batch_size=args.batch_size, batch_sleep=args.batch_sleep, logger=logger)
+    worker = transport.Transport.new(config, target, logger=logger)
 
     ok_codes = None
     if args.ignore_exit_codes:
