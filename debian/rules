@@ -1,6 +1,11 @@
 #!/usr/bin/make -f
-DPKG_EXPORT_BUILDFLAGS = 1
-include /usr/share/dpkg/default.mk
+
+export PYBUILD_NAME = cumin
+export PYBUILD_TEST_PYTEST = 1
 
 %:
-	dh $@ --with python2 --buildsystem=python_distutils
+	dh $@ --with python2 --buildsystem=pybuild
+
+override_dh_auto_test:
+	py.test --strict --cov-report term-missing --cov=cumin cumin/tests/unit
+

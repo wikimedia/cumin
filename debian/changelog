@@ -1,3 +1,15 @@
+cumin (1.0.0-1) jessie-wikimedia; urgency=medium
+
+  * 1.0.0 upstream release.
+  * Add new Build-Depends required by upstream
+  * Bump debhelper to >= 10
+  * Migrate build system to pybuild
+  * Use pytest to run the tests
+  * Override dh_auto_test to only run unit tests, to avoid the additional
+    dependencies for the other static analysis tools.
+
+ -- Riccardo Coccioli <rcoccioli@wikimedia.org>  Wed, 23 Aug 2017 23:02:24 +0200
+
 cumin (0.0.2-1) jessie-wikimedia; urgency=medium
 
   * Upgrade to version 0.0.2.

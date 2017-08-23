@@ -3,8 +3,24 @@ Section: python
 Priority: optional
 Maintainer: Riccardo Coccioli <rcoccioli@wikimedia.org>
 Standards-Version: 3.9.6
-Build-Depends: debhelper (>= 9), dh-python, python-all (>= 2.7),
-  python-setuptools, python-tqdm
+Build-Depends:
+  clustershell,
+  debhelper (>= 10),
+  dh-python (>= 2.20160609~),
+  python-all (>= 2.7),
+  python-colorama,
+  python-flake8,
+  python-mock (>= 2.0.0),
+  python-pyparsing,
+  python-pytest,
+  python-pytest-cov,
+  python-pytest-runner,
+  python-requests,
+  python-requests-mock,
+  python-setuptools,
+  python-setuptools-scm,
+  python-tqdm,
+  python-yaml
 Homepage: https://github.com/wikimedia/cumin
 X-Python-Version: >= 2.7
 
