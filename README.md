@@ -1,5 +1,4 @@
-Cumin - An automation and orchestration framework
-=======================
+# Cumin - An automation and orchestration framework
 
 [![Build Status](https://travis-ci.org/wikimedia/cumin.svg?branch=master)](https://travis-ci.org/wikimedia/cumin)
 [![Coveralls Coverage](https://coveralls.io/repos/github/wikimedia/cumin/badge.svg?branch=master)](https://coveralls.io/github/wikimedia/cumin)
@@ -7,8 +6,7 @@ Cumin - An automation and orchestration framework
 [![Codacy](https://api.codacy.com/project/badge/Grade/73d9a429dc7343eb935471bf05826fc0)](https://www.codacy.com/app/volans-/cumin)
 [![Licence](https://img.shields.io/badge/license-GPLv3%2B-blue.svg)](https://github.com/wikimedia/cumin/blob/master/LICENSE)
 
-Summary
--------
+## Summary
 
 Cumin provides a flexible and scalable automation framework to execute multiple commands on multiple hosts in parallel.
 It allows to easily perform complex selections of hosts through a user-friendly query language which can interface
@@ -20,13 +18,12 @@ More details of `cumin` usage in the Wikimedia Foundation are available on
 [Cumin's Wikitech page]( https://wikitech.wikimedia.org/wiki/Cumin).
 
 
-Main components
----------------
+## Main components
 
 #### Query language
 
-Cumin provides a user-friendly and unified query language to select hosts using different backends with the following
-features:
+Cumin provides a user-friendly generic query language that allows to combine the results of subqueries for multiple
+backends.
 
 - Each query part can be composed with the others using boolean operators (`and`, `or`, `and not`, `xor`).
 - Multiple query parts can be grouped together with parentheses (`(`, `)`).
@@ -37,12 +34,14 @@ features:
   backend and only if the query is not parsable with that backend it will try to execute it with the main grammar.
 - A complex query example: `(D{host1 or host2} and (P{R:Class = Role::MyClass} and not A:group1)) or D{host3}`
 
+```
 Backus-Naur form (BNF) of the grammar:
         <grammar> ::= <item> | <item> <boolean> <grammar>
            <item> ::= <backend_query> | <alias> | "(" <grammar> ")"
   <backend_query> ::= <backend> "{" <query> "}"
           <alias> ::= A:<alias_name>
         <boolean> ::= "and not" | "and" | "xor" | "or"
+```
 
 Given that the `pyparsing` library defines the grammar in a BNF-like style, for the details of the tokens not
 specified above check directly the code in `cumin/grammar.py`.
@@ -108,25 +107,44 @@ Some query examples:
 - A complex selection for facts:
   `host10[10-42].*.domain or (not F:key1 = value1 and host10*) or (F:key2 > value2 and F:key3 ~ '^value[0-9]+')`
 
+```
 Backus-Naur form (BNF) of the grammar:
       <grammar> ::= <item> | <item> <and_or> <grammar>
          <item> ::= [<neg>] <query-token> | [<neg>] "(" <grammar> ")"
   <query-token> ::= <token> | <hosts>
         <token> ::= <category>:<key> [<operator> <value>]
+```
 
-Given that the `pyparsing` library used to defines the grammar uses a BNF-like style, for the details of the tokens not
+Given that the `pyparsing` library used to define the grammar uses a BNF-like style, for the details of the tokens not
 specified above see directly the code in `cumin/backends/puppetdb.py`.
 
 
 ##### Direct
 
-The `directs` backend allow to use Cumin without any external dependency for the hosts selection.
+The `direct` backend allow to use Cumin without any external dependency for the hosts selection.
 It allow to write arbitrarily complex queries with subgroups and boolean operators, but each item must be either the
 hostname itself, or the using host expansion using the powerful ClusterShell NodeSet syntax, see:
     https://clustershell.readthedocs.io/en/latest/api/NodeSet.html
 
 The typical usage for the `direct` backend is as a reliable alternative in cases in which the primary host
 selection mechanism is not working and also for testing the transports without any external backend dependency.
+
+Some query examples:
+
+- Simple selection: `host1.domain`
+- ClusterShell syntax for hosts expansion: `host10[10-42].domain,host2010.other-domain`
+- A complex selection:
+  `host100[1-5].domain or (host10[30-40].domain and (host10[10-42].domain and not host33.domain))`
+
+```
+Backus-Naur form (BNF) of the grammar:
+        <grammar> ::= <item> | <item> <boolean> <grammar>
+           <item> ::= <hosts> | "(" <grammar> ")"
+        <boolean> ::= "and not" | "and" | "xor" | "or"
+```
+
+Given that the `pyparsing` library used to define the grammar usesa BNF-like style, for the details of the tokens not
+specified above check directly the code in `cumin/backends/direct.py`.
 
 
 #### Transports
@@ -153,32 +171,34 @@ selected hosts and execute a list of commands. This transport accept the followi
   class defined in `cumin/transports/clustershell.py`, implementing its abstract methods and setting to this class
   object the handler to the transport.
 
-Installation
-------------
+## Installation
+
+From the source code in the `master` branch:
 
     python setup.py install
 
+Is it also possible to build a Debian package using the `debian` branch, for example with `git-buildpackage`.
 
-CLI
-===
-
-Configuration
--------------
+## Configuration
 
 The default configuration file for `cumin` CLI is expected to be found at `/etc/cumin/config.yaml`; the path can be
 changed via a command-line switch, `--config`. A commented example configuration is available in
-`cumin/config.yaml`.
+`doc/examples//config.yaml`.
 
-Usage
------
+Cumin will also automatically load any aliases defined in a `aliases.yaml` file, if present in the same directory of
+the main configuration file. An aliases example file is available in `doc/examples/aliases.yaml`
+
+## CLI
+
+### Usage
 
     cumin [OPTIONS] HOSTS COMMAND [COMMAND ...]
 
-#### OPTIONS
+### OPTIONS
 
 For the full list of available optional arguments see `cumin --help`.
 
-##### Mode
+#### Mode
 
 The `-m/--mode` argument is required when multiple COMMANDS are specified and defines the mode of execution:
 
@@ -187,22 +207,21 @@ reached.
 * `async`: execute on each host, independently from each other, the list of commands, aborting the execution on any given
 host at the first command that fails.
 
-#### Positional arguments
+### Positional arguments
 
-##### HOSTS
+#### HOSTS
 
 A host selection query according to a custom grammar. The hosts selection query is executed against the configured
 backend to extract the list of hosts to use as target.
 
 
-##### COMMAND
+#### COMMAND
 A command to be executed on all the target hosts in parallel, according to the configuration and options selected.
 
 Multiple commands will be executed sequentially.
 
 
-Running tests
--------------
+## Running tests
 
 The `tox` utility, a wrapper around virtualenv, is used to run the test. To list the available environements:
 

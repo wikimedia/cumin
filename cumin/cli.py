@@ -27,7 +27,7 @@ INTERACTIVE_BANNER = """===== Cumin Interactive REPL =====
 # Press Ctrl+d or type exit() to exit the program.
 
 = Available variables =
-# hosts     -- the list of targeted hosts.
+# hosts     -- the ClusterShell NodeSet of targeted hosts.
 # worker    -- the instance of the Transport worker that was used for the execution.
 # args      -- the parsed command line arguments, an argparse.Namespace instance.
 # config    -- the cofiguration dictionary.

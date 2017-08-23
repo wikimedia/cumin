@@ -37,14 +37,14 @@ REGISTERED_BACKENDS = get_registered_backends()
 def grammar():
     """Define the main multi-query grammar.
 
-    Cumin provides a user-friendly and unified query language to select hosts using different backends with the
-    following features:
+    Cumin provides a user-friendly generic query language that allows to combine the results of subqueries for multiple
+    backends.
 
     - Each query part can be composed with the others using boolean operators (`and`, `or`, `and not`, `xor`).
     - Multiple query parts can be grouped together with parentheses (`(`, `)`).
     - Specific backend query (`I{backend-specific query syntax}`, where `I` is an identifier for the specific backend).
     - Alias replacement, according to aliases defined in the configuration file (`A:group1`).
-    - The identifier `A` is reserved for the aleases replacement and cannot be used to identify a backend.
+    - The identifier `A` is reserved for the aliases replacement and cannot be used to identify a backend.
     - A complex query example: `(D{host1 or host2} and (P{R:Class = Role::MyClass} and not A:group1)) or D{host3}`
 
     Backus-Naur form (BNF) of the grammar:
