@@ -110,7 +110,7 @@ def parse_args(argv=None):
                               '[optional]'))
     parser.add_argument('--dry-run', action='store_true',
                         help='Do not execute any command, just return the list of matching hosts and exit.')
-    parser.add_argument('--version', action='store_true', help='Print current version and exit.')
+    parser.add_argument('--version', action='version', version='%(prog)s {version}'.format(version=cumin.__version__))
     parser.add_argument('-d', '--debug', action='store_true', help='Set log level to DEBUG.')
     parser.add_argument('--trace', action='store_true',
                         help='Set log level to TRACE, a custom logging level intended for development debugging.')
@@ -353,10 +353,6 @@ def main(argv=None):
     # Setup
     try:
         args = parse_args(argv)
-        if args.version:
-            tqdm.write('cumin {version}'.format(version=cumin.__version__))
-            return 0
-
         user = get_running_user()
         config = cumin.Config(args.config)
         setup_logging(config['log_file'], debug=args.debug, trace=args.trace)
