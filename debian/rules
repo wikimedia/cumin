@@ -9,3 +9,7 @@ export PYBUILD_TEST_PYTEST = 1
 override_dh_auto_test:
 	py.test --strict --cov-report term-missing --cov=cumin cumin/tests/unit
 
+# Hotfix for https://phabricator.wikimedia.org/T174008
+override_dh_installexamples:
+	dh_installexamples
+	rm -rvf $(CURDIR)/debian/cumin/usr/doc
