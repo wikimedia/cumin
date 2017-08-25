@@ -52,7 +52,7 @@ setup(
         'Topic :: System :: Distributed Computing',
         'Topic :: System :: Systems Administration',
     ],
-    data_files=[('doc/cumin/examples/', ['doc/examples/config.yaml', 'doc/examples/aliases.yaml'])],
+    data_files=[('share/doc/cumin/examples/', ['doc/examples/config.yaml', 'doc/examples/aliases.yaml'])],
     description='Automation and orchestration framework written in Python',
     entry_points={
         'console_scripts': [
