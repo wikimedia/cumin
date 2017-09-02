@@ -1,6 +1,7 @@
 """Transport tests."""
 # pylint: disable=protected-access,no-self-use
-import mock
+from unittest import mock
+
 import pytest
 
 from ClusterShell.NodeSet import NodeSet
@@ -168,7 +169,7 @@ class TestCommand(object):
         """Should set the ok_codes to its value, unset it if None is passed."""
         command = transports.Command('command1')
         assert command._ok_codes is None
-        for i in xrange(256):
+        for i in range(256):
             codes = [i]
             command.ok_codes = codes
             assert command._ok_codes == codes
@@ -313,12 +314,12 @@ class TestTarget(object):
     def setup_method(self, _):
         """Initialize default properties and instances."""
         # pylint: disable=attribute-defined-outside-init
-        self.hosts_list = ['host' + str(i) for i in xrange(10)]
-        self.hosts = NodeSet.fromlist(self.hosts_list)
+        self.hosts_list = ['host' + str(i) for i in range(10)]
+        self.hosts = cumin.nodeset_fromlist(self.hosts_list)
 
     def test_instantiation_no_hosts(self):
         """Creating a Target instance with empty hosts should raise WorkerError."""
-        with pytest.raises(transports.WorkerError, match="must be a non-empty ClusterShell's NodeSet or list"):
+        with pytest.raises(transports.WorkerError, match="must be a non-empty ClusterShell NodeSet or list"):
             transports.Target([])
 
     def test_instantiation_nodeset(self):
@@ -337,7 +338,7 @@ class TestTarget(object):
 
     def test_instantiation_invalid(self):
         """Creating a Target instance with invalid hosts should raise WorkerError."""
-        with pytest.raises(transports.WorkerError, match="must be a non-empty ClusterShell's NodeSet or list"):
+        with pytest.raises(transports.WorkerError, match="must be a non-empty ClusterShell NodeSet or list"):
             transports.Target(set(self.hosts_list))
 
     @mock.patch('cumin.transports.logging.Logger.debug')
@@ -375,7 +376,7 @@ class TestTarget(object):
         size = 5
         target = transports.Target(self.hosts, batch_size=size)
         assert len(target.first_batch) == size
-        assert target.first_batch == NodeSet.fromlist(self.hosts[:size])
+        assert target.first_batch == cumin.nodeset_fromlist(self.hosts[:size])
         assert isinstance(target.first_batch, NodeSet)
 
 
@@ -384,11 +385,11 @@ class TestBaseWorker(object):
 
     def test_instantiation(self):
         """Raise if instantiated directly, should return an instance of BaseWorker if inherited."""
-        target = transports.Target(NodeSet('node1'))
+        target = transports.Target(cumin.nodeset('node1'))
         with pytest.raises(TypeError):
             transports.BaseWorker({}, target)  # pylint: disable=abstract-class-instantiated
 
-        assert isinstance(ConcreteBaseWorker({}, transports.Target(NodeSet('node[1-2]'))), transports.BaseWorker)
+        assert isinstance(ConcreteBaseWorker({}, transports.Target(cumin.nodeset('node[1-2]'))), transports.BaseWorker)
 
     @mock.patch.dict(transports.os.environ, {}, clear=True)
     def test_init(self):
@@ -398,7 +399,7 @@ class TestBaseWorker(object):
                   'environment': env_dict}
 
         assert transports.os.environ == {}
-        worker = ConcreteBaseWorker(config, transports.Target(NodeSet('node[1-2]')))
+        worker = ConcreteBaseWorker(config, transports.Target(cumin.nodeset('node[1-2]')))
         assert transports.os.environ == env_dict
         assert worker.config == config
 
@@ -409,7 +410,7 @@ class TestConcreteBaseWorker(object):
     def setup_method(self, _):
         """Initialize default properties and instances."""
         # pylint: disable=attribute-defined-outside-init
-        self.worker = ConcreteBaseWorker({}, transports.Target(NodeSet('node[1-2]')))
+        self.worker = ConcreteBaseWorker({}, transports.Target(cumin.nodeset('node[1-2]')))
         self.commands = [transports.Command('command1'), transports.Command('command2')]
 
     def test_commands_getter(self):

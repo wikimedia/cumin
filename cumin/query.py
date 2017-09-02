@@ -30,7 +30,7 @@ class Query(BaseQueryAggregator):
         :Parameters:
             according to parent :py:meth:`cumin.backends.BaseQueryAggregator.__init__`.
         """
-        super(Query, self).__init__(config)
+        super().__init__(config)
         external = self.config.get('plugins', {}).get('backends', [])
         self.registered_backends = grammar.get_registered_backends(external=external)
         self.grammar = grammar.grammar(self.registered_backends.keys())
@@ -50,7 +50,7 @@ class Query(BaseQueryAggregator):
         """
         if 'default_backend' not in self.config:
             try:  # No default backend set, using directly the global grammar
-                return super(Query, self).execute(query_string)
+                return super().execute(query_string)
             except ParseException as e:
                 raise InvalidQueryError(("Unable to parse the query '{query}' with the global grammar and no "
                                          "default backend is set:\n{error}").format(query=query_string, error=e))
@@ -59,7 +59,7 @@ class Query(BaseQueryAggregator):
             hosts = self._query_default_backend(query_string)
         except ParseException as e_default:
             try:  # Trying global grammar as a fallback
-                hosts = super(Query, self).execute(query_string)
+                hosts = super().execute(query_string)
             except ParseException as e_global:
                 raise InvalidQueryError(
                     ("Unable to parse the query '{query}' neither with the default backend '{name}' nor with the "

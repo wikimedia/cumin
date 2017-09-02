@@ -3,7 +3,7 @@
 import logging
 import os
 
-logging.basicConfig(level=logging.DEBUG, name=__name__)
+logging.basicConfig(level=logging.DEBUG)
 _TESTS_BASE_PATH = os.path.realpath(os.path.dirname(__file__))
 
 

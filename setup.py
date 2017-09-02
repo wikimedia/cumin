@@ -10,11 +10,11 @@ with open('README.rst', 'r') as readme:
 
 # Required dependencies
 install_requires = [
-    'clustershell==1.7.3',
+    'clustershell==1.8',
     'colorama>=0.3.2',
     'pyparsing==2.1.10',
     'pyyaml>=3.11',
-    'requests>=2.12.0',
+    'requests>=2.11.0',
     'tqdm>=4.11.2',
 ]
 
@@ -31,7 +31,6 @@ extras_require = {
     'tests': [
         'bandit>=1.1.0',
         'flake8>=3.2.1',
-        'mock>=2.0.0',
         'prospector[with_everything]>=0.12.4',
         'pytest-cov>=1.8.0',
         'pytest-xdist>=1.15.0',
@@ -70,8 +69,7 @@ setup(
         'Operating System :: MacOS :: MacOS X',
         'Operating System :: POSIX :: BSD',
         'Operating System :: POSIX :: Linux',
-        'Programming Language :: Python :: 2 :: Only',
-        'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3 :: Only',
         'Topic :: Software Development :: Libraries :: Python Modules',
         'Topic :: System :: Clustering',
         'Topic :: System :: Distributed Computing',

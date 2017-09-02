@@ -2,8 +2,9 @@
 
 import pkgutil
 
+from unittest import mock
+
 import pytest
-import mock
 
 from cumin import CuminError, transports
 from cumin.transport import Transport
@@ -17,7 +18,7 @@ def test_missing_transport():
 
 def test_invalid_transport():
     """Passing an invalid transport should raise CuminError."""
-    with pytest.raises(ImportError, match=r'No module named non_existent_transport'):
+    with pytest.raises(CuminError, match=r"No module named 'cumin\.transports\.non_existent_transport'"):
         Transport.new({'transport': 'non_existent_transport'}, transports.Target(['host1']))
 
 
@@ -26,7 +27,7 @@ def test_missing_worker_class():
     module = mock.MagicMock()
     del module.worker_class
     with mock.patch('importlib.import_module', lambda _: module):
-        with pytest.raises(AttributeError, match=r'worker_class'):
+        with pytest.raises(CuminError, match=r'worker_class'):
             Transport.new({'transport': 'invalid_transport'}, transports.Target(['host1']))
 
 

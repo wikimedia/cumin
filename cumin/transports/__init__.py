@@ -7,7 +7,7 @@ from abc import ABCMeta, abstractmethod, abstractproperty
 
 from ClusterShell.NodeSet import NodeSet
 
-from cumin import CuminError
+from cumin import CuminError, nodeset_fromlist
 
 
 class WorkerError(CuminError):
@@ -276,29 +276,85 @@ class State(object):
         """
         return self.states_representation[self._state]
 
-    def __cmp__(self, other):
-        """Comparison operator.
-
-        Allow to directly compare a :py:class:`State` object to another or to an :py:class:`int`.
+    def __eq__(self, other):
+        """Equality operator for rich comparison.
 
         :Parameters:
-            according to Python's Data model :py:meth:`object.__cmp__`.
+            according to Python's Data model :py:meth:`object.__eq__`.
 
         Returns:
-            int: a negative integer if `self` is lesser than `other`, zero if `self` is equal to `other`, a positive
-            integer if `self` is greater than `other`.
+            bool: :py:data:`True` if `self` is equal to `other`, :py:data:`False` otherwise.
 
         Raises:
             exceptions.ValueError: if the comparing object is not an instance of :py:class:`State` or a
                 :py:class:`int`.
 
         """
-        if isinstance(other, int):
-            return self._state - other
-        elif isinstance(other, State):
-            return self._state - other._state  # pylint: disable=protected-access
-        else:
-            raise ValueError("Unable to compare instance of '{other}' with State instance".format(other=type(other)))
+        return self._cmp(other) == 0
+
+    def __lt__(self, other):
+        """Less than operator for rich comparison.
+
+        :Parameters:
+            according to Python's Data model :py:meth:`object.__lt__`.
+
+        Returns:
+            bool: :py:data:`True` if `self` is lower than `other`, :py:data:`False` otherwise.
+
+        Raises:
+            exceptions.ValueError: if the comparing object is not an instance of :py:class:`State` or a
+                :py:class:`int`.
+
+        """
+        return self._cmp(other) < 0
+
+    def __le__(self, other):
+        """Less than or equal operator for rich comparison.
+
+        :Parameters:
+            according to Python's Data model :py:meth:`object.__le__`.
+
+        Returns:
+            bool: :py:data:`True` if `self` is lower or equal than `other`, :py:data:`False` otherwise.
+
+        Raises:
+            exceptions.ValueError: if the comparing object is not an instance of :py:class:`State` or a
+                :py:class:`int`.
+
+        """
+        return self._cmp(other) <= 0
+
+    def __gt__(self, other):
+        """Greater than operator for rich comparison.
+
+        :Parameters:
+            according to Python's Data model :py:meth:`object.__gt__`.
+
+        Returns:
+            bool: :py:data:`True` if `self` is greater than `other`, :py:data:`False` otherwise.
+
+        Raises:
+            exceptions.ValueError: if the comparing object is not an instance of :py:class:`State` or a
+                :py:class:`int`.
+
+        """
+        return self._cmp(other) > 0
+
+    def __ge__(self, other):
+        """Greater than or equal operator for rich comparison.
+
+        :Parameters:
+            according to Python's Data model :py:meth:`object.__ge__`.
+
+        Returns:
+            bool: :py:data:`True` if `self` is greater or equal than `other`, :py:data:`False` otherwise.
+
+        Raises:
+            exceptions.ValueError: if the comparing object is not an instance of :py:class:`State` or a
+                :py:class:`int`.
+
+        """
+        return self._cmp(other) >= 0
 
     def update(self, new):
         """Transition the state from the current state to the new one, if the transition is allowed.
@@ -320,6 +376,21 @@ class State(object):
                     current=self._state, allowed=self.allowed_state_transitions[self._state], new=new))
 
         self._state = new
+
+    def _cmp(self, other):
+        """Comparison operation. Allow to directly compare a state object to another or to an integer.
+
+        Raises ValueError if the comparing object is not an instance of State or an integer.
+
+        Arguments:
+        other -- the object to compare the current instance to
+        """
+        if isinstance(other, int):
+            return self._state - other
+        elif isinstance(other, State):
+            return self._state - other._state  # pylint: disable=protected-access
+        else:
+            raise ValueError("Unable to compare instance of '{other}' with State instance".format(other=type(other)))
 
 
 class Target(object):
@@ -344,13 +415,13 @@ class Target(object):
         """
         self.logger = logging.getLogger('.'.join((self.__module__, self.__class__.__name__)))
 
-        message = "must be a non-empty ClusterShell's NodeSet or list"
+        message = "must be a non-empty ClusterShell NodeSet or list"
         if not hosts:
             raise_error('hosts', message, hosts)
         elif isinstance(hosts, NodeSet):
             self.hosts = hosts
         elif isinstance(hosts, list):
-            self.hosts = NodeSet.fromlist(hosts)
+            self.hosts = nodeset_fromlist(hosts)
         else:
             raise_error('hosts', message, hosts)
 
@@ -408,10 +479,8 @@ class Target(object):
         return batch_sleep or 0.0
 
 
-class BaseWorker(object):
+class BaseWorker(object, metaclass=ABCMeta):
     """Worker interface to be extended by concrete workers."""
-
-    __metaclass__ = ABCMeta
 
     def __init__(self, config, target):
         """Worker constructor. Setup environment variables and initialize properties.
@@ -431,7 +500,7 @@ class BaseWorker(object):
         self._timeout = None
         self._success_threshold = None
 
-        for key, value in config.get('environment', {}).iteritems():
+        for key, value in config.get('environment', {}).items():
             os.environ[key] = value
 
     @abstractmethod

@@ -30,9 +30,7 @@ source "${ENV_FILE}"
 DOCKER_INSTANCES=""
 function exit_trap() {
     _log "Removing docker instances"
-    for DOCKER_INSTANCE in ${DOCKER_INSTANCES}; do
-        docker rm -f "${DOCKER_INSTANCE}" > /dev/null
-    done
+    docker rm -f ${DOCKER_INSTANCES} > /dev/null
 
     if [[ -n "${CUMIN_TMPDIR}" ]]; then
         _log "Cleaning TMPDIR: ${CUMIN_TMPDIR}"

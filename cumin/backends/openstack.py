@@ -1,12 +1,12 @@
 """OpenStack backend."""
 import pyparsing as pp
 
-from ClusterShell.NodeSet import NodeSet
 from keystoneauth1 import session as keystone_session
 from keystoneauth1.identity import v3 as keystone_identity
 from keystoneclient.v3 import client as keystone_client
 from novaclient import client as nova_client
 
+from cumin import nodeset, nodeset_fromlist
 from cumin.backends import BaseQuery, InvalidQueryError
 
 
@@ -124,7 +124,7 @@ class OpenStackQuery(BaseQuery):
             according to parent :py:meth:`cumin.backends.BaseQuery.__init__`.
 
         """
-        super(OpenStackQuery, self).__init__(config)
+        super().__init__(config)
         self.openstack_config = self.config.get('openstack', {})
         self.search_project = None
         self.search_params = self._get_default_search_params()
@@ -153,7 +153,7 @@ class OpenStackQuery(BaseQuery):
 
         """
         self.search_params = self._get_default_search_params()
-        super(OpenStackQuery, self)._build(query_string)
+        super()._build(query_string)
 
     def _execute(self):
         """Concrete implementation of parent abstract method.
@@ -166,7 +166,7 @@ class OpenStackQuery(BaseQuery):
 
         """
         if self.search_project is None:
-            hosts = NodeSet()
+            hosts = nodeset()
             for project in self._get_projects():
                 hosts |= self._get_project_hosts(project)
         else:
@@ -232,7 +232,7 @@ class OpenStackQuery(BaseQuery):
             else:
                 domain = domain_suffix
 
-        return NodeSet.fromlist('{host}.{project}{domain}'.format(host=server.name, project=project, domain=domain)
+        return nodeset_fromlist('{host}.{project}{domain}'.format(host=server.name, project=project, domain=domain)
                                 for server in client.servers.list(search_opts=self.search_params))
 
 

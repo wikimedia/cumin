@@ -130,9 +130,9 @@ man_pages = [
 # -- Options for intersphinx ---------------------------------------
 
 intersphinx_mapping = {
-    'python': ('https://docs.python.org/2.7/', None),
+    'python': ('https://docs.python.org/3/', None),
     'requests': ('http://docs.python-requests.org/en/master/', None),
-    'ClusterShell': ('https://clustershell.readthedocs.io/en/v1.7.3/', None),
+    'ClusterShell': ('http://clustershell.readthedocs.io/en/v1.8/', None),
     'keystoneauth1': ('https://docs.openstack.org/keystoneauth/latest', None),
     'novaclient': ('https://docs.openstack.org/python-novaclient/latest/', None),
     'pyparsing': ('https://pythonhosted.org/pyparsing/', 'pyparsing.inv'),

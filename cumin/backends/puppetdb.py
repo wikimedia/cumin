@@ -6,9 +6,9 @@ from string import capwords
 import pyparsing as pp
 import requests
 
-from ClusterShell.NodeSet import NodeSet
 from requests.packages import urllib3
 
+from cumin import nodeset, nodeset_fromlist
 from cumin.backends import BaseQuery, InvalidQueryError
 
 
@@ -158,7 +158,7 @@ class PuppetDBQuery(BaseQuery):
             according to parent :py:meth:`cumin.backends.BaseQuery.__init__`.
 
         """
-        super(PuppetDBQuery, self).__init__(config)
+        super().__init__(config)
         self.grouped_tokens = None
         self.current_group = self.grouped_tokens
         self._endpoint = None
@@ -237,7 +237,7 @@ class PuppetDBQuery(BaseQuery):
         """
         self.grouped_tokens = PuppetDBQuery._get_grouped_tokens()
         self.current_group = self.grouped_tokens
-        super(PuppetDBQuery, self)._build(query_string)
+        super()._build(query_string)
         self.logger.trace('Query tokens: %s', self.grouped_tokens)
 
     def _execute(self):
@@ -252,7 +252,7 @@ class PuppetDBQuery(BaseQuery):
         """
         query = self._get_query_string(group=self.grouped_tokens).format(host_key=self.hosts_keys[self.endpoint])
         hosts = self._api_call(query)
-        unique_hosts = NodeSet.fromlist([host[self.hosts_keys[self.endpoint]] for host in hosts])
+        unique_hosts = nodeset_fromlist([host[self.hosts_keys[self.endpoint]] for host in hosts])
         self.logger.debug("Queried puppetdb for '%s', got '%d' results.", query, len(unique_hosts))
 
         return unique_hosts
@@ -342,7 +342,7 @@ class PuppetDBQuery(BaseQuery):
             self._add_bool(token_dict['bool'])
 
         elif 'hosts' in token_dict:
-            token_dict['hosts'] = NodeSet(token_dict['hosts'])
+            token_dict['hosts'] = nodeset(token_dict['hosts'])
             self._add_hosts(**token_dict)
 
         elif 'category' in token_dict:

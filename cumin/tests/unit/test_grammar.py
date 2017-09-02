@@ -3,7 +3,8 @@
 import os
 import sys
 
-import mock
+from unittest import mock
+
 import pytest
 
 from cumin import CuminError, grammar

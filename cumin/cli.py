@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/python3
 """Cumin CLI entry point."""
 import argparse
 import code
@@ -13,7 +13,6 @@ from logging.handlers import RotatingFileHandler  # pylint: disable=ungrouped-im
 
 import colorama
 
-from ClusterShell.NodeSet import NodeSet
 from tqdm import tqdm
 
 import cumin
@@ -45,7 +44,7 @@ INTERACTIVE_BANNER = """===== Cumin Interactive REPL =====
 = Example usage:
 for nodes, output in worker.get_results():
     print(nodes)
-    print(output)
+    print(output.message().decode('utf-8'))
     print('-----')
 """
 """str: The message to print when entering the intractive REPL mode."""
@@ -86,7 +85,7 @@ def get_parser():
                               '-p/--success-percentage is reached. In async mode, execute on each host independently '
                               'from each other, the list of commands, aborting the execution on any given host at the '
                               'first command that fails.'))
-    parser.add_argument('-p', '--success-percentage', type=int, choices=xrange(101), metavar='PCT', default=100,
+    parser.add_argument('-p', '--success-percentage', type=int, choices=range(101), metavar='PCT', default=100,
                         help=(('Percentage threshold to consider an execution unit successful. Required in sync mode, '
                                'optional in async mode when -b/--batch-size is used. Accepted values are integers '
                                'in the range 0-100. [default: 100]')))
@@ -186,7 +185,7 @@ def setup_logging(filename, debug=False, trace=False):
     """
     file_path = os.path.dirname(filename)
     if not os.path.exists(file_path):
-        os.makedirs(file_path, 0770)
+        os.makedirs(file_path, 0o770)
 
     log_formatter = logging.Formatter(fmt='%(asctime)s [%(levelname)s %(process)s %(name)s.%(funcName)s] %(message)s')
     log_handler = RotatingFileHandler(filename, maxBytes=(5 * (1024**2)), backupCount=30)
@@ -207,7 +206,7 @@ def setup_logging(filename, debug=False, trace=False):
 def sigint_handler(*args):  # pylint: disable=unused-argument
     """Signal handler for Ctrl+c / SIGINT, raises KeyboardInterruptError.
 
-    Arguments (as defined in https://docs.python.org/2/library/signal.html):
+    Arguments (as defined in https://docs.python.org/3/library/signal.html):
         signum: the signal number
         frame: the current stack frame
     """
@@ -223,7 +222,7 @@ def sigint_handler(*args):  # pylint: disable=unused-argument
     # for i in xrange(10):
     #     stderr('Ctrl+c pressed, sure to quit [y/n]?\n')
     #     try:
-    #         answer = raw_input('\n')
+    #         answer = input('\n')  # nosec
     #     except RuntimeError:
     #         # Can't re-enter readline when already waiting for input in get_hosts(). Assuming 'y' as answer
     #         stderr('Ctrl+c pressed while waiting for answer. Aborting')
@@ -270,7 +269,7 @@ def get_hosts(args, config):
         return hosts
 
     stderr('{num} hosts will be targeted:'.format(num=len(hosts)))
-    stderr('{color}{hosts}'.format(color=colorama.Fore.CYAN, hosts=NodeSet.fromlist(hosts)))
+    stderr('{color}{hosts}'.format(color=colorama.Fore.CYAN, hosts=cumin.nodeset_fromlist(hosts)))
 
     if args.dry_run:
         stderr('DRY-RUN mode enabled, aborting')
@@ -283,9 +282,9 @@ def get_hosts(args, config):
         stderr(message)
         raise cumin.CuminError(message)
 
-    for i in xrange(10):
+    for i in range(10):
         stderr('Confirm to continue [y/n]?', end=' ')
-        answer = raw_input()
+        answer = input()  # nosec
         if not answer:
             continue
 
@@ -349,7 +348,7 @@ def run(args, config):
                        for command in args.commands]
     worker.timeout = args.global_timeout
     worker.handler = args.mode
-    worker.success_threshold = args.success_percentage / float(100)
+    worker.success_threshold = args.success_percentage / 100
     exit_code = worker.execute()
 
     if args.interactive:

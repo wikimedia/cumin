@@ -1,7 +1,6 @@
 """Direct backend tests."""
 
-from ClusterShell.NodeSet import NodeSet
-
+from cumin import nodeset
 from cumin.backends import BaseQuery, direct
 
 
@@ -25,9 +24,9 @@ class TestDirectQuery(object):
 
     def test_execute(self):
         """Calling execute() should return the list of hosts."""
-        assert self.query.execute('host1 or host2') == NodeSet('host[1-2]')
-        assert self.query.execute('host1 and host2') == NodeSet()
-        assert self.query.execute('host1 and not host2') == NodeSet('host1')
-        assert self.query.execute('host[1-5] xor host[3-7]') == NodeSet('host[1-2,6-7]')
-        assert self.query.execute('host1 or (host[10-20] and not host15)') == NodeSet('host[1,10-14,16-20]')
-        assert self.query.execute('(host1 or host[2-3]) and not (host[3-9] or host2)') == NodeSet('host1')
+        assert self.query.execute('host1 or host2') == nodeset('host[1-2]')
+        assert self.query.execute('host1 and host2') == nodeset()
+        assert self.query.execute('host1 and not host2') == nodeset('host1')
+        assert self.query.execute('host[1-5] xor host[3-7]') == nodeset('host[1-2,6-7]')
+        assert self.query.execute('host1 or (host[10-20] and not host15)') == nodeset('host[1,10-14,16-20]')
+        assert self.query.execute('(host1 or host[2-3]) and not (host[3-9] or host2)') == nodeset('host1')

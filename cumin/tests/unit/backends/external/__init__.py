@@ -1,8 +1,7 @@
 """External backends package for testing."""
 import pyparsing as pp
 
-from ClusterShell.NodeSet import NodeSet
-
+from cumin import nodeset
 from cumin.backends import BaseQuery
 
 
@@ -32,8 +31,8 @@ class ExternalBackendQuery(BaseQuery):
             according to parent :py:meth:`cumin.backends.BaseQuery.__init__`.
 
         """
-        super(ExternalBackendQuery, self).__init__(config)
-        self.hosts = NodeSet()
+        super().__init__(config)
+        self.hosts = nodeset()
 
     def _execute(self):
         """Concrete implementation of parent abstract method.
@@ -57,4 +56,4 @@ class ExternalBackendQuery(BaseQuery):
             return
 
         token_dict = token.asDict()
-        self.hosts |= NodeSet(token_dict['hosts'])
+        self.hosts |= nodeset(token_dict['hosts'])
