@@ -95,9 +95,10 @@ class TestClusterShellWorker(object):
         assert kwargs['handler'] == self.worker._handler_instance
 
     def test_execute_no_commands(self):
-        """Calling execute() without commands should raise WorkerError."""
-        with pytest.raises(WorkerError, match=r'commands must be a non-empty list'):
-            self.worker.commands = []
+        """Calling execute() without commands should return immediately."""
+        self.worker.handler = ConcreteBaseEventHandler
+        self.worker.commands = None
+        assert self.worker.execute() is None
         assert not self.worker.task.shell.called
 
     def test_execute_one_command_no_mode(self):
@@ -105,6 +106,13 @@ class TestClusterShellWorker(object):
         self.worker.commands = [self.commands[0]]
         with pytest.raises(RuntimeError, match=r'An EventHandler is mandatory\.'):
             self.worker.execute()
+
+    def test_execute_no_target_hosts(self):
+        """Calling execute() with a target without hosts should return immediately."""
+        self.target.hosts = []
+        self.worker.handler = ConcreteBaseEventHandler
+        assert self.worker.execute() is None
+        assert not self.worker.task.shell.called
 
     def test_execute_wrong_mode(self):
         """Calling execute() without setting the mode with multiple commands should raise RuntimeError."""

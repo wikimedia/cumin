@@ -38,6 +38,10 @@ class ClusterShellWorker(BaseWorker):
             self.logger.warning('No commands provided')
             return
 
+        if not self.target.hosts:
+            self.logger.warning('No target hosts provided')
+            return
+
         if self.handler is None:
             raise RuntimeError('An EventHandler is mandatory.')
 
