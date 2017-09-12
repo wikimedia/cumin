@@ -242,7 +242,7 @@ class BaseEventHandler(Event.EventHandler):
         if self.deduplicate_output:
             return
 
-        tqdm.write(worker.current_msg)
+        tqdm.write(worker.current_msg, file=sys.stdout)
 
     def ev_timeout(self, worker):
         """Worker has timed out.

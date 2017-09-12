@@ -281,7 +281,7 @@ class TestConcreteBaseEventHandler(TestBaseEventHandler):
         self.worker.current_node = self.target.hosts[0]
         self.worker.current_msg = output
         self.handler.ev_read(self.worker)
-        tqdm.write.assert_has_calls([mock.call(output)])
+        assert tqdm.write.call_args[0][0] == output
 
     def test_ev_timeout(self):
         """Calling ev_timeout() should increase the counters for the timed out hosts."""
