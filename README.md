@@ -119,6 +119,35 @@ Given that the `pyparsing` library used to define the grammar uses a BNF-like st
 specified above see directly the code in `cumin/backends/puppetdb.py`.
 
 
+##### OpenStack
+
+This backend uses the OpenStack APIs to perform the query. The specific query language has this features:
+
+- Each query can specify multiple parameters to filter the hosts selection in the form `key:value`.
+- The special `project` key allow to filter by the OpenStack project name: `project:project_name`. If not specified
+  all the visible and enabled projects will be queried.
+- Any other `key:value` pair will be passed as is to the
+  [OpenStack list-servers API](https://developer.openstack.org/api-ref/compute/#list-servers).
+  Multiple filters can be added separated by space. The value can be enclosed in single or double quotes:
+  `name:"host1.*\.domain" image:UUID`
+- By default the filters `status:ACTIVE` and `vm_state:ACTIVE` are also added, but will be overridden if specified in
+  the query.
+- To mix multiple selections the general grammar must be used with multiple subqueries:
+  `O{project:project1} or O{project:project2}`
+- The special query `*` is a shortcut to select all hosts in all OpenStack projects.
+- See the example configuration in `doc/examples/config.yaml` for all the OpenStack-related parameters that can be set.
+
+```
+Backus-Naur form (BNF) of the grammar:
+        <grammar> ::= "*" | <items>
+          <items> ::= <item> | <item> <whitespace> <items>
+           <item> ::= <key>:<value>
+```
+
+Given that the `pyparsing` library used to define the grammar uses a BNF-like style, for the details of the tokens not
+specified above see directly the code in `cumin/backends/openstack.py`.
+
+
 ##### Direct
 
 The `direct` backend allow to use Cumin without any external dependency for the hosts selection.
@@ -183,7 +212,7 @@ Is it also possible to build a Debian package using the `debian` branch, for exa
 
 The default configuration file for `cumin` CLI is expected to be found at `/etc/cumin/config.yaml`; the path can be
 changed via a command-line switch, `--config`. A commented example configuration is available in
-`doc/examples//config.yaml`.
+`doc/examples/config.yaml`.
 
 Cumin will also automatically load any aliases defined in a `aliases.yaml` file, if present in the same directory of
 the main configuration file. An aliases example file is available in `doc/examples/aliases.yaml`
@@ -191,9 +220,9 @@ the main configuration file. An aliases example file is available in `doc/exampl
 ## CLI
 
 ### Usage
-
-    cumin [OPTIONS] HOSTS COMMAND [COMMAND ...]
-
+```
+cumin [OPTIONS] HOSTS COMMAND [COMMAND ...]
+```
 ### OPTIONS
 
 For the full list of available optional arguments see `cumin --help`.
@@ -224,18 +253,23 @@ Multiple commands will be executed sequentially.
 ## Running tests
 
 The `tox` utility, a wrapper around virtualenv, is used to run the test. To list the available environements:
-
-    tox -l
-
+```
+tox -l
+```
 To run one:
+```
+tox -e flake8
+```
+You can pass extra arguments to the underlying command:
+```
+# Run only tests in a specific file:
+tox -e unit -- -k test_puppetdb.py
 
-    tox -e flake8
-
-You can pass extra arguments to the underlying command, for example to only run the tests in a specific file:
-
-    tox -e unit -- -k test_puppetdb.py
-
+# Run only one specific test:
+tox -e unit -- -k test_invalid_grammars
+```
 Also integration tests are available, but not run by default by tox. They depends on a running Docker instance.
 To run them:
-
-    tox -e integration
+```
+tox -e integration
+```

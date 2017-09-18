@@ -1,0 +1,6 @@
+# Invalid grammars
+* key:value
+key:value key
+key:value :value
+"key":value
+key%:value

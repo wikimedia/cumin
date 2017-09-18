@@ -16,7 +16,10 @@ It can be used both via its command line interface (CLI) and as a Python library
 install_requires = [
     'clustershell==1.7.3',
     'colorama>=0.3.2',
+    'keystoneauth1>=2.4.1',
     'pyparsing==2.1.10',
+    'python-keystoneclient>=2.3.1',
+    'python-novaclient>=3.3.1',
     'pyyaml>=3.11',
     'requests>=2.12.0',
     'tqdm>=4.11.2',

@@ -59,22 +59,6 @@ class BaseQuery(object):
         token -- a single token returned by the grammar parsing
         """
 
-    @abstractmethod
-    def _open_subgroup(self):
-        """Is called when a subgroup is opened in the parsing of the query.
-
-        Given that each backend has it's own grammar and parsing logic, keeping this in the abstract class to force
-        each backend to support subgrouping in the grammar for usability and coherence between backends.
-        """
-
-    @abstractmethod
-    def _close_subgroup(self):
-        """Is called when a subgroup is closed in the parsing of the query.
-
-        Given that each backend has it's own grammar and parsing logic, keeping this in the abstract class to force
-        each backend to support subgrouping in the grammar for usability and coherence between backends.
-        """
-
     def _build(self, query_string):
         """Parse the query string according to the grammar and build the query for later execution.
 
@@ -121,14 +105,14 @@ class BaseQueryAggregator(BaseQuery):
         return hosts
 
     def _open_subgroup(self):
-        """Required by BaseQuery."""
+        """Handle subgroup opening."""
         element = self._get_stack_element()
         element['parent'] = self.stack_pointer
         self.stack_pointer['children'].append(element)
         self.stack_pointer = element
 
     def _close_subgroup(self):
-        """Required by BaseQuery."""
+        """Handle subgroup closing."""
         self.stack_pointer = self.stack_pointer['parent']
 
     @abstractmethod
