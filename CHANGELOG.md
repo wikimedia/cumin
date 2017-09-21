@@ -1,5 +1,20 @@
 # CUMIN CHANGELOG
 
+## v1.1.0 (2017-09-21)
+
+### New features:
+* Backends: add OpenStack backend ([T175711](https://phabricator.wikimedia.org/T175711))
+
+### Bug Fixes:
+* CLI: fix --version option
+* Installation: fix data_files installation directory ([T174008](https://phabricator.wikimedia.org/T174008))
+* Transports: better handling of empty list ([T174911](https://phabricator.wikimedia.org/T174911)):
+  * BaseWorker: accept an empty list in the command setter. It's its default value, there is no point in forbidding a
+    client to set it to the same value.
+  * ClusterShellWorker: return immediately if there are no target hosts.
+* Clustershell: make call to tqdm.write() explicit where to send the output, not relying on its default.
+
+
 ## v1.0.0 (2017-08-23)
 
 ### CLI breaking changes:
