@@ -8,12 +8,21 @@ default_backend: direct
 environment:
     ENV_VARIABLE: env_value
 
-# Backend-specific configuration
+# Backend-specific configurations [optional]
 puppetdb:
     host: puppetdb.local
     port: 443
     urllib3_disable_warnings:  # List of Python urllib3 exceptions to ignore
         - SubjectAltNameWarning
+
+openstack:
+    auth_url: http://keystone.local:5000
+    username: observer  # Keystone API user's username
+    password: observer_password  # Keystone API user's password
+    domain_suffix: openstack.local  # OpenStack managed domain, to be added to all hostnames
+    nova_api_version: 2.12
+    timeout: 2  # Used for both Keystone and Nova API calls
+
 
 # Transport-specific configuration
 clustershell:

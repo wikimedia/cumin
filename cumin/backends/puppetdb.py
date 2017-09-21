@@ -59,7 +59,7 @@ def grammar():
     neg = pp.CaselessKeyword('not')('neg')
 
     operator = pp.oneOf(OPERATORS, caseless=True)('operator')  # Comparison operators
-    quoted_string = pp.quotedString.addParseAction(pp.removeQuotes)  # Both single and double quotes are allowed
+    quoted_string = pp.quotedString.copy().addParseAction(pp.removeQuotes)  # Both single and double quotes are allowed
 
     # Parentheses
     lpar = pp.Literal('(')('open_subgroup')
@@ -138,14 +138,14 @@ class PuppetDBQuery(BaseQuery):
         self._category = value
 
     def _open_subgroup(self):
-        """Required by BaseQuery."""
+        """Handle subgroup opening."""
         token = PuppetDBQuery._get_grouped_tokens()
         token['parent'] = self.current_group
         self.current_group['tokens'].append(token)
         self.current_group = token
 
     def _close_subgroup(self):
-        """Required by BaseQuery."""
+        """Handle subgroup closing."""
         self.current_group = self.current_group['parent']
 
     @staticmethod

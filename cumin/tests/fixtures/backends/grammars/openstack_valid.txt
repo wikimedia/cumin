@@ -1,0 +1,10 @@
+# Valid grammars
+*
+name:host1
+name:host10.*
+name:"^host10[1-9]\.domain$"
+name:'^host10[1-9]\.domain$'
+project:project_name
+project:"Project Name"
+project:project_name name:host1
+project:"Project Name" name:host1

@@ -9,7 +9,7 @@ import sys
 
 import pytest
 
-from cumin import cli
+from cumin import __version__, cli
 
 # Set environment variables
 _ENV = {'USER': 'root', 'SUDO_USER': 'user'}
@@ -376,3 +376,17 @@ class TestCLI(object):
         assert _EXPECTED_LINES['all_failure'] in err, _EXPECTED_LINES['all_failure']
         assert _EXPECTED_LINES['failed'] not in err, _EXPECTED_LINES['failed']
         assert rc == 2
+
+    def test_version(self, capsys):  # pylint: disable=no-self-use
+        """Calling --version should return the version and exit."""
+        with pytest.raises(SystemExit) as e:
+            cli.main(argv=['--version'])
+
+        out, err = capsys.readouterr()
+        sys.stdout.write(out)
+        sys.stderr.write(err)
+        assert e.type == SystemExit
+        assert e.value.code == 0
+        assert out == ''
+        assert len(err.splitlines()) == 1
+        assert __version__ in err

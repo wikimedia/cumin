@@ -347,7 +347,7 @@ class BaseWorker(object):
             self._commands = value
             return
 
-        validate_list('commands', value)
+        validate_list('commands', value, allow_empty=True)
         commands = []
         for command in value:
             if isinstance(command, Command):

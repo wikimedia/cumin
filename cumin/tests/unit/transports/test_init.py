@@ -427,6 +427,8 @@ class TestConcreteBaseWorker(object):
         assert self.worker._commands == self.commands
         self.worker.commands = None
         assert self.worker._commands is None
+        self.worker.commands = []
+        assert self.worker._commands == []
         self.worker.commands = ['command1', 'command2']
         assert self.worker._commands == self.commands
 
