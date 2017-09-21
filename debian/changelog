@@ -1,3 +1,12 @@
+cumin (1.1.0-1) jessie-wikimedia; urgency=medium
+
+  * 1.1.0 upstream release.
+  * Update Build-Depends.
+  * Revert example files hotfix for https://phabricator.wikimedia.org/T174008.
+  * Fix tests run with setuptools-scm
+
+ -- Riccardo Coccioli <rcoccioli@wikimedia.org>  Thu, 21 Sep 2017 23:02:24 +0200
+
 cumin (1.0.0-1) jessie-wikimedia; urgency=medium
 
   * 1.0.0 upstream release.

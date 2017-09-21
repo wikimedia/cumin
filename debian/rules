@@ -7,9 +7,5 @@ export PYBUILD_TEST_PYTEST = 1
 	dh $@ --with python2 --buildsystem=pybuild
 
 override_dh_auto_test:
+	SETUPTOOLS_SCM_PRETEND_VERSION="$(shell dpkg-parsechangelog -S version)" python setup.py develop --user
 	py.test --strict --cov-report term-missing --cov=cumin cumin/tests/unit
-
-# Hotfix for https://phabricator.wikimedia.org/T174008
-override_dh_installexamples:
-	dh_installexamples
-	rm -rvf $(CURDIR)/debian/cumin/usr/doc
