@@ -40,7 +40,7 @@ def test_parse_args_no_commands():
 
 
 def test_parse_args_no_mode():
-    """If mode is not speficied with multiple commands, parsing the args should raise a parser error."""
+    """If mode is not specified with multiple commands, parsing the args should raise a parser error."""
     index = _ARGV.index('-m')
     with pytest.raises(SystemExit):
         cli.parse_args(argv=_ARGV[:index] + _ARGV[index + 1:])

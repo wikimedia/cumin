@@ -44,7 +44,7 @@ Backus-Naur form (BNF) of the grammar:
 ```
 
 Given that the `pyparsing` library defines the grammar in a BNF-like style, for the details of the tokens not
-specified above check directly the code in `cumin/grammar.py`.
+specified above check directly the source code in `cumin/grammar.py`.
 
 The `Query` class defined in `cumin/query.py` is the one taking care of replacing the aliases, building and executing
 the query parts with their respective backends and aggregating the results. Once a query is executed, it returns a
@@ -173,7 +173,7 @@ Backus-Naur form (BNF) of the grammar:
 ```
 
 Given that the `pyparsing` library used to define the grammar usesa BNF-like style, for the details of the tokens not
-specified above check directly the code in `cumin/backends/direct.py`.
+specified above check directly the source code in `cumin/backends/direct.py`.
 
 
 #### Transports

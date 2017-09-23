@@ -9,20 +9,37 @@ class Query(BaseQueryAggregator):
     """Cumin main query class.
 
     It has multi-query capability and allow to use a default backend, if set, without additional syntax.
-    If a default_backend is set in the configuration, it will try to execute the query string first with the default
-    backend and only if the query is not parsable with that backend will try to execute it with the multi-query grammar.
+    If a ``default_backend`` is set in the configuration, it will try to execute the query string first with the
+    default backend and only if the query is not parsable with that backend it will try to execute it with the
+    multi-query grammar.
 
-    When a query is executed, a ClusterShell's NodeSet with the FQDN of the matched hosts is returned.
+    When a query is executed, a :py:class:`ClusterShell.NodeSet.NodeSet` with the FQDN of the matched hosts is
+    returned.
 
-    Typical usage:
-    >>> config = cumin.Config(args.config)
-    >>> hosts = query.Query(config, logger=logger).execute(query_string)
+    Examples:
+        >>> import cumin
+        >>> from cumin.query import Query
+        >>> config = cumin.Config()
+        >>> hosts = Query(config, logger=logger).execute(query_string)
+
     """
 
     grammar = grammar()
+    """:py:class:`pyparsing.ParserElement`: Load the grammar parser only once in a singleton-like way."""
 
     def execute(self, query_string):
-        """Override parent class execute method to implement the multi-query capability."""
+        """Override parent class execute method to implement the multi-query capability.
+
+        :Parameters:
+            according to parent :py:meth:`cumin.backends.BaseQueryAggregator.execute`.
+
+        Returns:
+            ClusterShell.NodeSet.NodeSet: with the FQDNs of the matching hosts.
+
+        Raises:
+            cumin.backends.InvalidQueryError: if unable to parse the query.
+
+        """
         if 'default_backend' not in self.config:
             try:  # No default backend set, using directly the global grammar
                 return super(Query, self).execute(query_string)
@@ -47,7 +64,14 @@ class Query(BaseQueryAggregator):
         """Execute the query with the default backend, according to the configuration.
 
         Arguments:
-        query_string -- the query string to be parsed and executed with the default backend
+            query_string (str): the query string to be parsed and executed with the default backend.
+
+        Returns:
+            ClusterShell.NodeSet.NodeSet: with the FQDNs of the matching hosts.
+
+        Raises:
+            cumin.backends.InvalidQueryError: if unable to get the default backend from the registered backends.
+
         """
         for registered_backend in REGISTERED_BACKENDS.values():
             if registered_backend.name == self.config['default_backend']:
@@ -62,7 +86,15 @@ class Query(BaseQueryAggregator):
         return query.execute(query_string)
 
     def _parse_token(self, token):
-        """Required by BaseQuery."""
+        """Concrete implementation of parent abstract method.
+
+        :Parameters:
+            according to parent :py:meth:`cumin.backends.BaseQueryAggregator._parse_token`.
+
+        Raises:
+            cumin.backends.InvalidQueryError: on internal parsing error.
+
+        """
         if not isinstance(token, ParseResults):  # pragma: no cover - this should never happen
             raise InvalidQueryError('Expecting ParseResults object, got {type}: {token}'.format(
                 type=type(token), token=token))
@@ -95,10 +127,15 @@ class Query(BaseQueryAggregator):
     def _replace_alias(self, token_dict):
         """Replace any alias in the query in a recursive way, alias can reference other aliases.
 
-        Return True if a replacement was made, False otherwise. Raise InvalidQueryError on failure.
-
         Arguments:
-        token_dict -- the dictionary of the parsed token returned by the grammar parsing
+            token_dict (dict): the dictionary of the parsed token returned by the grammar parsing.
+
+        Returns:
+            bool: :py:data:`True` if a replacement was made, :py:data`False` otherwise.
+
+        Raises:
+            cumin.backends.InvalidQueryError: if unable to replace an alias.
+
         """
         if 'alias' not in token_dict:
             return False

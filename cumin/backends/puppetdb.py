@@ -12,46 +12,54 @@ from requests.packages import urllib3
 from cumin.backends import BaseQuery, InvalidQueryError
 
 
-# Available categories
 CATEGORIES = (
     'F',  # Fact
     'R',  # Resource
 )
+""":py:func:`tuple`: available categories in the grammar."""
 
-# Available operators
 OPERATORS = ('=', '>=', '<=', '<', '>', '~')
+""":py:func:`tuple`: available operators in the grammar, the same available in PuppetDB API."""
 
 
 def grammar():
     """Define the query grammar.
 
     Some query examples:
-    - All hosts: `*`
-    - Hosts globbing: `host10*`
-    - ClusterShell's NodeSet syntax (see https://clustershell.readthedocs.io/en/latest/api/NodeSet.html) for hosts
-      expansion: `host10[10-42].domain`
-    - Category based key-value selection:
-      - `R:Resource::Name`: query all the hosts that have a resource of type `Resource::Name`.
-      - `R:Resource::Name = 'resource-title'`: query all the hosts that have a resource of type `Resource::Name` whose
-        title is `resource-title`. For example `R:Class = MyModule::MyClass`.
-      - `R:Resource::Name@field = 'some-value'`: query all the hosts that have a resource of type `Resource::Name`
-        whose field `field` has the value `some-value`. The valid fields are: `tag`, `certname`, `type`, `title`,
-        `exported`, `file`, `line`. The previous syntax is a shortcut for this one with the field `title`.
-      - `R:Resource::Name%param = 'some-value'`: query all the hosts that have a resource of type `Resource::Name`
-        whose parameter `param` has the value `some-value`.
-      - Mixed facts/resources queries are not supported, but the same result can be achieved by the main grammar using
-        multiple subqueries.
-    - A complex selection for facts:
-      `host10[10-42].*.domain or (not F:key1 = value1 and host10*) or (F:key2 > value2 and F:key3 ~ '^value[0-9]+')`
 
-    Backus-Naur form (BNF) of the grammar:
+    * All hosts: ``*``
+    * Hosts globbing: ``host10*``
+    * :py:class:`ClusterShell.NodeSet.NodeSet` syntax for hosts expansion: ``host10[10-42].domain``
+    * Category based key-value selection:
+
+      * ``R:Resource::Name``: query all the hosts that have a resource of type `Resource::Name`.
+      * ``R:Resource::Name = 'resource-title'``: query all the hosts that have a resource of type `Resource::Name`
+        whose title is ``resource-title``. For example ``R:Class = MyModule::MyClass``.
+      * ``R:Resource::Name@field = 'some-value'``: query all the hosts that have a resource of type ``Resource::Name``
+        whose field ``field`` has the value ``some-value``. The valid fields are: ``tag``, ``certname``, ``type``,
+        ``title``, ``exported``, ``file``, ``line``. The previous syntax is a shortcut for this one with the field
+        ``title``.
+      * ``R:Resource::Name%param = 'some-value'``: query all the hosts that have a resource of type ``Resource::Name``
+        whose parameter ``param`` has the value ``some-value``.
+      * Mixed facts/resources queries are not supported, but the same result can be achieved by the main grammar using
+        multiple subqueries.
+
+    * A complex selection for facts:
+      ``host10[10-42].*.domain or (not F:key1 = value1 and host10*) or (F:key2 > value2 and F:key3 ~ '^value[0-9]+')``
+
+    Backus-Naur form (BNF) of the grammar::
+
             <grammar> ::= <item> | <item> <and_or> <grammar>
                <item> ::= [<neg>] <query-token> | [<neg>] "(" <grammar> ")"
         <query-token> ::= <token> | <hosts>
               <token> ::= <category>:<key> [<operator> <value>]
 
     Given that the pyparsing library defines the grammar in a BNF-like style, for the details of the tokens not
-    specified above check directly the code.
+    specified above check directly the source code.
+
+    Returns:
+        pyparsing.ParserElement: the grammar parser.
+
     """
     # Boolean operators
     and_or = (pp.CaselessKeyword('and') | pp.CaselessKeyword('or'))('bool')
@@ -92,19 +100,31 @@ def grammar():
 class PuppetDBQuery(BaseQuery):
     """PuppetDB query builder.
 
-    The 'puppetdb' backend allow to use an existing PuppetDB instance for the hosts selection.
+    The `puppetdb` backend allow to use an existing PuppetDB instance for the hosts selection.
     At the moment only PuppetDB v3 API are implemented.
     """
 
     base_url_template = 'https://{host}:{port}/v3/'
+    """:py:class:`str`: string template in the :py:meth:`str.format` style used to generate the base URL of the
+    PuppetDB server."""
+
     endpoints = {'R': 'resources', 'F': 'nodes'}
+    """:py:class:`dict`: dictionary with the mapping of the available categories in the grammar to the PuppetDB API
+    endpoints."""
+
     hosts_keys = {'R': 'certname', 'F': 'name'}
+    """:py:class:`dict`: dictionary with the mapping of the available categories in the grammar to the PuppetDB API
+    field to query to get the hostname."""
+
     grammar = grammar()
+    """:py:class:`pyparsing.ParserElement`: load the grammar parser only once in a singleton-like way."""
 
     def __init__(self, config, logger=None):
         """Query constructor for the PuppetDB backend.
 
-        Arguments: according to BaseQuery interface
+        :Parameters:
+            according to parent :py:meth:`cumin.backends.BaseQuery.__init__`.
+
         """
         super(PuppetDBQuery, self).__init__(config, logger=logger)
         self.grouped_tokens = None
@@ -120,16 +140,24 @@ class PuppetDBQuery(BaseQuery):
 
     @property
     def category(self):
-        """Getter for the property category with a default value."""
+        """Category for the current query.
+
+        :Getter:
+            Returns the current `category` or a default value if not set.
+
+        :Setter:
+            :py:class:`str`: the value to set the `category` to.
+
+        Raises:
+            cumin.backends.InvalidQueryError: if trying to set it to an invalid `category` or mixing categories in a
+                single query.
+
+        """
         return self._category or 'F'
 
     @category.setter
     def category(self, value):
-        """Setter for the property category with validation.
-
-        Arguments:
-        value -- the value to set the category to
-        """
+        """Setter for the `category` property. The relative documentation is in the getter."""
         if value not in self.endpoints:
             raise InvalidQueryError("Invalid value '{category}' for category property".format(category=value))
         if self._category is not None and value != self._category:
@@ -150,18 +178,36 @@ class PuppetDBQuery(BaseQuery):
 
     @staticmethod
     def _get_grouped_tokens():
-        """Return an empty grouped tokens structure."""
+        """Return an empty grouped tokens structure.
+
+        Returns:
+            dict: the dictionary with the empty grouped tokens structure.
+
+        """
         return {'parent': None, 'bool': None, 'tokens': []}
 
     def _build(self, query_string):
-        """Override parent class _build method to reset tokens and add logging."""
+        """Override parent class _build method to reset tokens and add logging.
+
+        :Parameters:
+            according to parent :py:meth:`cumin.backends.BaseQuery._build`.
+
+        """
         self.grouped_tokens = PuppetDBQuery._get_grouped_tokens()
         self.current_group = self.grouped_tokens
         super(PuppetDBQuery, self)._build(query_string)
         self.logger.trace('Query tokens: {tokens}'.format(tokens=self.grouped_tokens))
 
     def _execute(self):
-        """Required by BaseQuery."""
+        """Concrete implementation of parent abstract method.
+
+        :Parameters:
+            according to parent :py:meth:`cumin.backends.BaseQuery._execute`.
+
+        Returns:
+            ClusterShell.NodeSet.NodeSet: with the FQDNs of the matching hosts.
+
+        """
         query = self._get_query_string(group=self.grouped_tokens).format(host_key=self.hosts_keys[self.category])
         hosts = self._api_call(query, self.endpoints[self.category])
         unique_hosts = NodeSet.fromlist([host[self.hosts_keys[self.category]] for host in hosts])
@@ -174,11 +220,15 @@ class PuppetDBQuery(BaseQuery):
         """Add a category token to the query 'F:key = value'.
 
         Arguments:
-        category -- the category of the token, one of CATEGORIES excluding the alias one.
-        key      -- the key for this category
-        value    -- the value to match, if not specified the key itself will be matched [optional, default: None]
-        operator -- the comparison operator to use, one of cumin.grammar.OPERATORS [optional: default: =]
-        neg      -- whether the token must be negated [optional, default: False]
+            category (str): the category of the token, one of :py:const:`CATEGORIES`.
+            key (str): the key for this category.
+            value (str, optional): the value to match, if not specified the key itself will be matched.
+            operator (str, optional): the comparison operator to use, one of :py:const:`OPERATORS`.
+            neg (bool, optional): whether the token must be negated.
+
+        Raises:
+            cumin.backends.InvalidQueryError: on internal parsing error.
+
         """
         self.category = category
         if operator == '~':
@@ -201,8 +251,8 @@ class PuppetDBQuery(BaseQuery):
         """Add a list of hosts to the query.
 
         Arguments:
-        hosts -- a list of hosts to match
-        neg   -- whether the token must be negated [optional, default: False]
+            hosts (ClusterShell.NodeSet.NodeSet): with the list of hosts to search.
+            neg (bool, optional): whether the token must be negated.
         """
         if not hosts:
             return
@@ -224,7 +274,15 @@ class PuppetDBQuery(BaseQuery):
         self.current_group['tokens'].append(query)
 
     def _parse_token(self, token):
-        """Required by BaseQuery."""
+        """Concrete implementation of parent abstract method.
+
+        :Parameters:
+            according to parent :py:meth:`cumin.backends.BaseQuery._parse_token`.
+
+        Raises:
+            cumin.backends.InvalidQueryError: on internal parsing error.
+
+        """
         if isinstance(token, str):
             return
 
@@ -252,12 +310,19 @@ class PuppetDBQuery(BaseQuery):
                 "No valid key found in token, one of bool|hosts|category expected: {token}".format(token=token_dict))
 
     def _get_resource_query(self, key, value=None, operator='='):  # pylint: disable=no-self-use
-        """Build a resource query based on the parameters, resolving the special cases for %params and @field.
+        """Build a resource query based on the parameters, resolving the special cases for ``%params`` and ``@field``.
 
         Arguments:
-        key      -- the key of the resource
-        value    -- the value to match, if not specified the key itself will be matched [optional, default: None]
-        operator -- the comparison operator to use, one of cumin.grammar.OPERATORS [optional: default: =]
+            key (str): the key of the resource.
+            value (str, optional): the value to match, if not specified the key itself will be matched.
+            operator (str, optional): the comparison operator to use, one of :py:const:`OPERATORS`.
+
+        Returns:
+            str: the resource query.
+
+        Raises:
+            cumin.backends.InvalidQueryError: on invalid combinations of parameters.
+
         """
         if all(char in key for char in ('%', '@')):
             raise InvalidQueryError(("Resource key cannot contain both '%' (query a resource's parameter) and '@' "
@@ -293,7 +358,11 @@ class PuppetDBQuery(BaseQuery):
         """Recursively build and return the PuppetDB query string.
 
         Arguments:
-        group -- a dictionary with the grouped tokens
+            group (dict): a dictionary with the grouped tokens.
+
+        Returns:
+            str: the query string for the PuppetDB API.
+
         """
         if group['bool']:
             query = '["{bool}", '.format(bool=group['bool'])
@@ -319,7 +388,11 @@ class PuppetDBQuery(BaseQuery):
         """Add a boolean AND or OR query block to the query and validate logic.
 
         Arguments:
-        bool_op -- the boolean operator (and|or) to add to the query
+            bool_op (str): the boolean operator to add to the query: ``and``, ``or``.
+
+        Raises:
+            cumin.backends.InvalidQueryError: if an invalid boolean operator was found.
+
         """
         if self.current_group['bool'] is None:
             self.current_group['bool'] = bool_op
@@ -333,14 +406,21 @@ class PuppetDBQuery(BaseQuery):
         """Execute a query to PuppetDB API and return the parsed JSON.
 
         Arguments:
-        query    -- the query parameter to send to the PuppetDB API
-        endpoint -- the endpoint of the PuppetDB API to call
+            query (str): the query parameter to send to the PuppetDB API.
+            endpoint (str): the endpoint of the PuppetDB API to call.
+
+        Raises:
+            requests.HTTPError: if the PuppetDB API call fails.
+
         """
         resources = requests.get(self.url + endpoint, params={'query': query}, verify=True)
         resources.raise_for_status()
         return resources.json()
 
 
-# Required by the backend auto-loader in cumin.grammar.get_registered_backends()
 GRAMMAR_PREFIX = 'P'
+""":py:class:`str`: the prefix associate to this grammar, to register this backend into the general grammar.
+Required by the backend auto-loader in :py:meth:`cumin.grammar.get_registered_backends`."""
+
 query_class = PuppetDBQuery  # pylint: disable=invalid-name
+"""Required by the backend auto-loader in :py:meth:`cumin.grammar.get_registered_backends`."""

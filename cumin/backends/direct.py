@@ -10,18 +10,24 @@ def grammar():
     """Define the query grammar.
 
     Some query examples:
-    - Simple selection: host1.domain
-    - ClusterShell syntax for hosts expansion: host10[10-42].domain,host2010.other-domain
-    - A complex selection:
-      host100[1-5].domain or (host10[30-40].domain and (host10[10-42].domain and not host33.domain))
 
-    Backus-Naur form (BNF) of the grammar:
-            <grammar> ::= <item> | <item> <boolean> <grammar>
-               <item> ::= <hosts> | "(" <grammar> ")"
-            <boolean> ::= "and not" | "and" | "xor" | "or"
+    * Simple selection: ``host1.domain``
+    * ClusterShell syntax for hosts expansion: ``host10[10-42].domain,host2010.other-domain``
+    * A complex selection:
+      ``host100[1-5].domain or (host10[30-40].domain and (host10[10-42].domain and not host33.domain))``
+
+    Backus-Naur form (BNF) of the grammar::
+
+        <grammar> ::= <item> | <item> <boolean> <grammar>
+           <item> ::= <hosts> | "(" <grammar> ")"
+        <boolean> ::= "and not" | "and" | "xor" | "or"
 
     Given that the pyparsing library defines the grammar in a BNF-like style, for the details of the tokens not
-    specified above check directly the code.
+    specified above check directly the source code.
+
+    Returns:
+        pyparsing.ParserElement: the grammar parser.
+
     """
     # Boolean operators
     boolean = (pp.CaselessKeyword('and not').leaveWhitespace() | pp.CaselessKeyword('and') |
@@ -46,19 +52,23 @@ def grammar():
 class DirectQuery(BaseQueryAggregator):
     """DirectQuery query builder.
 
-    The 'direct' backend allow to use Cumin without any external dependency for the hosts selection.
+    The `direct` backend allow to use Cumin without any external dependency for the hosts selection.
     It allow to write arbitrarily complex queries with subgroups and boolean operators, but each item must be either the
-    hostname itself, or the using host expansion using the powerful ClusterShell NodeSet syntax, see:
-        https://clustershell.readthedocs.io/en/latest/api/NodeSet.html
+    hostname itself, or the using host expansion using the powerful :py:class:`ClusterShell.NodeSet.NodeSet` syntax.
 
-    The typical usage for the 'direct' backend is as a reliable alternative in cases in which the primary host
+    The typical usage for the `direct` backend is as a reliable alternative in cases in which the primary host
     selection mechanism is not working and also for testing the transports without any external backend dependency.
     """
 
     grammar = grammar()
+    """:py:class:`pyparsing.ParserElement`: load the grammar parser only once in a singleton-like way."""
 
     def _parse_token(self, token):
-        """Required by BaseQuery."""
+        """Concrete implementation of parent abstract method.
+
+        :Parameters:
+            according to parent :py:meth:`cumin.backends.BaseQueryAggregator._parse_token`.
+        """
         if not isinstance(token, pp.ParseResults):  # pragma: no cover - this should never happen
             raise InvalidQueryError('Expecting ParseResults object, got {type}: {token}'.format(
                 type=type(token), token=token))
@@ -85,6 +95,9 @@ class DirectQuery(BaseQueryAggregator):
             raise InvalidQueryError('Got unexpected token: {token}'.format(token=token))
 
 
-# Required by the backend auto-loader in cumin.grammar.get_registered_backends()
 GRAMMAR_PREFIX = 'D'
+""":py:class:`str`: the prefix associate to this grammar, to register this backend into the general grammar.
+Required by the backend auto-loader in :py:meth:`cumin.grammar.get_registered_backends`."""
+
 query_class = DirectQuery  # pylint: disable=invalid-name
+"""Required by the backend auto-loader in :py:meth:`cumin.grammar.get_registered_backends`."""

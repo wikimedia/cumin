@@ -22,23 +22,25 @@ from cumin import backends, query, transport, transports
 
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+"""logging.Logger: The logging instance."""
 OUTPUT_FORMATS = ('txt', 'json')
+"""tuple: A tuple with the possible output formats."""
 INTERACTIVE_BANNER = """===== Cumin Interactive REPL =====
 # Press Ctrl+d or type exit() to exit the program.
 
 = Available variables =
-# hosts     -- the ClusterShell NodeSet of targeted hosts.
-# worker    -- the instance of the Transport worker that was used for the execution.
-# args      -- the parsed command line arguments, an argparse.Namespace instance.
-# config    -- the cofiguration dictionary.
-# exit_code -- the return code of the execution, that will be used as exit code.
+#     hosts: the ClusterShell NodeSet of targeted hosts.
+#     worker: the instance of the Transport worker that was used for the execution.
+#     args: the parsed command line arguments, an argparse.Namespace instance.
+#     config: the cofiguration dictionary.
+#     exit_code: the return code of the execution, that will be used as exit code.
 
 = Useful functions =
-# worker.get_results() -- generator that yields the tuple (nodes, output) for each grouped result, where:
-#                         - nodes  -- is a ClusterShell.NodeSet.NodeSet instance
-#                         - output -- is a ClusterShell.MsgTree.MsgTreeElem instance
-# h()                  -- print this help message.
-# help(object)         -- Python default interactive help and documentation of the given object.
+#     worker.get_results(): generator that yields the tuple (nodes, output) for each grouped result, where:
+#                         -     nodes: is a ClusterShell.NodeSet.NodeSet instance
+#                         -     output: is a ClusterShell.MsgTree.MsgTreeElem instance
+#     h(): print this help message.
+#     help(object): Python default interactive help and documentation of the given object.
 
 = Example usage:
 for nodes, output in worker.get_results():
@@ -46,6 +48,7 @@ for nodes, output in worker.get_results():
     print(output)
     print('-----')
 """
+"""str: The message to print when entering the intractive REPL mode."""
 
 
 class KeyboardInterruptError(cumin.CuminError):
@@ -56,7 +59,7 @@ def parse_args(argv=None):
     """Parse command line arguments and return them.
 
     Arguments:
-    argv -- the list of arguments to use. If None, the command line ones are used [optional, default: None]
+        argv: the list of arguments to use. If None, the command line ones are used [optional, default: None]
     """
     sync_mode = 'sync'
     async_mode = 'async'
@@ -116,7 +119,7 @@ def parse_args(argv=None):
                         help='Set log level to TRACE, a custom logging level intended for development debugging.')
     parser.add_argument('hosts', metavar='HOSTS_QUERY', help='Hosts selection query')
     parser.add_argument('commands', metavar='COMMAND', nargs='*',
-                        help='Command to be executed. If no commands are speficied, --dry-run is set.')
+                        help='Command to be executed. If no commands are specified, --dry-run is set.')
 
     if argv is None:
         parsed_args = parser.parse_args()
@@ -157,8 +160,8 @@ def setup_logging(filename, debug=False, trace=False):
     """Setup the logger instance.
 
     Arguments:
-    filename -- the filename of the log file
-    debug    -- whether to set logging level to DEBUG [optional, default: False]
+        filename: the filename of the log file
+        debug: whether to set logging level to DEBUG [optional, default: False]
     """
     file_path = os.path.dirname(filename)
     if not os.path.exists(file_path):
@@ -183,8 +186,8 @@ def sigint_handler(*args):  # pylint: disable=unused-argument
     """Signal handler for Ctrl+c / SIGINT, raises KeyboardInterruptError.
 
     Arguments (as defined in https://docs.python.org/2/library/signal.html):
-    signum -- the signal number
-    frame  -- the current stack frame
+        signum: the signal number
+        frame: the current stack frame
     """
     if not sys.stdout.isatty():  # pylint: disable=no-member
         logger.warning('Execution interrupted by Ctrl+c/SIGINT')
@@ -224,8 +227,8 @@ def stderr(message, end='\n'):
     r"""Print a message to stderr and flush.
 
     Arguments:
-    message -- the message to print to sys.stderr
-    end     -- the character to use at the end of the message. [optional, default: \n]
+        message: the message to print to sys.stderr
+        end: the character to use at the end of the message. [optional, default: \n]
     """
     tqdm.write('{color}{message}{reset}'.format(
         color=colorama.Fore.YELLOW, message=message, reset=colorama.Style.RESET_ALL), file=sys.stderr, end=end)
@@ -235,8 +238,8 @@ def get_hosts(args, config):
     """Resolve the hosts selection into a list of hosts and return it. Raises KeyboardInterruptError.
 
     Arguments:
-    args   -- ArgumentParser instance with parsed command line arguments
-    config -- a dictionary with the parsed configuration file
+        args: ArgumentParser instance with parsed command line arguments
+        config: a dictionary with the parsed configuration file
     """
     hosts = query.Query(config, logger=logger).execute(args.hosts)
 
@@ -280,8 +283,8 @@ def print_output(output_format, worker):
     """Print the execution results in a specific format.
 
     Arguments:
-    output_format -- the output format to use, one of: 'txt', 'json'.
-    worker        -- the Transport worker instance to retrieve the results from.
+        output_format: the output format to use, one of: 'txt', 'json'.
+        worker: the Transport worker instance to retrieve the results from.
     """
     if output_format not in OUTPUT_FORMATS:
         raise cumin.CuminError("Got invalid output format '{fmt}', expected one of {allowed}".format(
@@ -306,8 +309,8 @@ def run(args, config):
     """Execute the commands on the selected hosts and print the results.
 
     Arguments:
-    args   -- ArgumentParser instance with parsed command line arguments
-    config -- a dictionary with the parsed configuration file
+        args: ArgumentParser instance with parsed command line arguments
+        config: a dictionary with the parsed configuration file
     """
     hosts = get_hosts(args, config)
     if not hosts:
@@ -345,7 +348,7 @@ def main(argv=None):
     """CLI entry point. Execute commands on hosts according to arguments.
 
     Arguments:
-    argv -- the list of arguments to use. If None, the command line ones are used [optional, default: None]
+        argv: the list of arguments to use. If None, the command line ones are used [optional, default: None]
     """
     signal.signal(signal.SIGINT, sigint_handler)
     colorama.init()
