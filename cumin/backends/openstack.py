@@ -34,8 +34,8 @@ def grammar():
     quoted_string = pp.quotedString.copy().addParseAction(pp.removeQuotes)  # Both single and double quotes are allowed
 
     # Key-value tokens: key:value
-    # All printables characters except the parentheses that are part of this or the global grammar
-    key = pp.Word(pp.alphanums + '-_.')('key')
+    # Lowercase key, all printable characters except the parentheses that are part of the global grammar for the value
+    key = pp.Word(pp.srange('[a-z0-9-_.]"'), min=2)('key')
     all_but_par = ''.join([c for c in pp.printables if c not in ('(', ')', '{', '}')])
     value = (quoted_string | pp.Word(all_but_par))('value')
     item = pp.Combine(key + ':' + value)
