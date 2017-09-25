@@ -1,4 +1,11 @@
-alias_direct: D{host1 or host2}
-alias_puppetdb: P{R:Class = My::Class}
-alias_openstack: O{project:project_name}
-alias_complex: A:alias_direct and (A:alias_puppetdb and not D{host3})
+# Cumin aliases configuration
+#
+# Cumin looks for an aliases.yaml file in the same directory of the loaded main configuration file.
+# Aliases are resolved recursively at runtime, hence they can be nested.
+# Aliases are defined in the form:
+#     alias_name: query_ tring using the global grammar
+#
+alias_direct: D{host1 or host2}  # Use the direct backend
+alias_puppetdb: P{R:Class = My::Class}  # Use the PuppetDB backend
+alias_openstack: O{project:project_name}  # Use the OpenStack backend
+alias_complex: A:alias_direct and (A:alias_puppetdb and not D{host3})  # Mix aliases and backend grammars

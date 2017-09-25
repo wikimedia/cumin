@@ -27,6 +27,9 @@ tests_require = [
     'pytest-cov>=1.8.0',
     'pytest-xdist>=1.15.0',
     'requests-mock>=0.7.0',
+    'Sphinx>=1.4.9',
+    'sphinx-argparse>=0.1.15',
+    'sphinx_rtd_theme>=0.1.6',
     'tox>=2.5.0',
     'vulture>=0.6,<0.25',  # Required for https://github.com/landscapeio/prospector/issues/230
 ]
