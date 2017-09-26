@@ -63,7 +63,7 @@ class Config(dict):
         if config not in cls._instances:
             cls._instances[config] = parse_config(config)
             alias_file = os.path.join(os.path.dirname(config), 'aliases.yaml')
-            if os.path.isfile(alias_file):  # Do not fail if the alias file doesn't exists
+            if os.path.isfile(alias_file):  # Load the aliases only if present
                 cls._instances[config]['aliases'] = parse_config(alias_file)
 
         return cls._instances[config]
@@ -85,6 +85,6 @@ def parse_config(config_file):
             config=config_file, message=e))
 
     if config is None:
-        raise CuminError("Empty configuration found in '{config}'".format(config=config_file))
+        config = {}
 
     return config

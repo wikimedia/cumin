@@ -2,6 +2,8 @@
 
 import importlib
 
+from cumin import CuminError
+
 
 class Transport(object):
     """Transport factory class."""
@@ -15,6 +17,9 @@ class Transport(object):
         target -- a Target instance
         logger -- an optional logging instance [optional, default: None]
         """
+        if 'transport' not in config:
+            raise CuminError("Missing required parameter 'transport' in the configuration dictionary")
+
         try:
             module = importlib.import_module('cumin.transports.{transport}'.format(transport=config['transport']))
             return module.worker_class(config, target, logger=logger)

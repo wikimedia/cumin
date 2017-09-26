@@ -355,6 +355,11 @@ def main(argv=None):
         args = parse_args(argv)
         user = get_running_user()
         config = cumin.Config(args.config)
+
+        if 'log_file' not in config:
+            raise cumin.CuminError(("Missing required parameter 'log_file' in the configuration file "
+                                    "'{config}'").format(config=args.config))
+
         setup_logging(config['log_file'], debug=args.debug, trace=args.trace)
     except cumin.CuminError as e:
         stderr(e)
