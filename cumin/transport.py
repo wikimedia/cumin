@@ -24,5 +24,6 @@ class Transport(object):
             module = importlib.import_module('cumin.transports.{transport}'.format(transport=config['transport']))
             return module.worker_class(config, target, logger=logger)
         except (AttributeError, ImportError) as e:
-            raise RuntimeError("Unable to load worker class for transport '{transport}': {msg}".format(
-                transport=config['transport'], msg=repr(e)))
+            e.message = "Unable to load worker class for transport '{transport}': {msg}".format(
+                transport=config['transport'], msg=repr(e))
+            raise

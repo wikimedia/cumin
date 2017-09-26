@@ -10,7 +10,7 @@ import colorama
 from ClusterShell import Event, NodeSet, Task
 from tqdm import tqdm
 
-from cumin.transports import BaseWorker, raise_error, State
+from cumin.transports import BaseWorker, raise_error, State, WorkerError
 
 
 class ClusterShellWorker(BaseWorker):
@@ -43,7 +43,7 @@ class ClusterShellWorker(BaseWorker):
             return
 
         if self.handler is None:
-            raise RuntimeError('An EventHandler is mandatory.')
+            raise WorkerError('An EventHandler is mandatory.')
 
         # Instantiate handler
         # Schedule only the first command for the first batch, the following ones must be handled by the EventHandler
@@ -222,7 +222,7 @@ class BaseEventHandler(Event.EventHandler):
             command = node.commands[node.running_command_index + 1].command
             # Security check, it should never be triggered
             if command != worker.command:
-                raise RuntimeError("ev_pickup: got unexpected command '{command}', expected '{expected}'".format(
+                raise WorkerError("ev_pickup: got unexpected command '{command}', expected '{expected}'".format(
                     command=command, expected=worker.command))
             node.running_command_index += 1  # Move the pointer of the current command
         finally:
