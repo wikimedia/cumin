@@ -1,5 +1,12 @@
 # CUMIN CHANGELOG
 
+
+## v1.1.1 (2017-09-26)
+
+### Bug Fixes:
+* OpenStack: limit grammar to not overlap with the global one
+
+
 ## v1.1.0 (2017-09-21)
 
 ### New features:
