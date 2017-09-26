@@ -127,3 +127,16 @@ class TestOpenStackQuery(object):
         assert keystone_identity.call_count == 1
         assert keystone_session.call_count == 1
         keystone_client.assert_not_called()
+
+    def test_execute_query_params(self, keystone_identity, keystone_session, keystone_client, nova_client):
+        """When the query_params are set, they must be loaded automatically."""
+        nova_client.return_value.servers.list.return_value = [Server('host1'), Server('host2')]
+        self.config['openstack']['query_params'] = {'project': 'project1'}
+        query = openstack.OpenStackQuery(self.config)
+
+        hosts = query.execute('*')
+        assert hosts == NodeSet('host[1-2].project1')
+
+        assert keystone_identity.call_count == 1
+        assert keystone_session.call_count == 1
+        keystone_client.assert_not_called()

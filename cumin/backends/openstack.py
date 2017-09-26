@@ -92,16 +92,22 @@ class OpenStackQuery(BaseQuery):
         super(OpenStackQuery, self).__init__(config, logger=logger)
         self.openstack_config = self.config.get('openstack', {})
         self.search_project = None
-        self.search_params = OpenStackQuery._get_default_search_params()
+        self.search_params = self._get_default_search_params()
 
-    @staticmethod
-    def _get_default_search_params():
-        """Return the default search parameters dictionary."""
-        return {'status': 'ACTIVE', 'vm_state': 'ACTIVE'}
+    def _get_default_search_params(self):
+        """Return the default search parameters dictionary and set the project, if configured."""
+        params = {'status': 'ACTIVE', 'vm_state': 'ACTIVE'}
+        config_params = self.openstack_config.get('query_params', {})
+
+        if 'project' in config_params:
+            self.search_project = config_params.pop('project')
+
+        params.update(config_params)
+        return params
 
     def _build(self, query_string):
         """Override parent class _build method to reset search parameters."""
-        self.search_params = OpenStackQuery._get_default_search_params()
+        self.search_params = self._get_default_search_params()
         super(OpenStackQuery, self)._build(query_string)
 
     def _execute(self):
