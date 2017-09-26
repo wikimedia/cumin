@@ -4,3 +4,8 @@ key:value key
 key:value :value
 "key":value
 key%:value
+A:value
+a:value
+KEY:value
+Key:value
+kEy:value
