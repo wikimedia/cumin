@@ -1,6 +1,22 @@
 # CUMIN CHANGELOG
 
 
+## v1.2.1 (2017-09-27)
+
+### New features:
+* OpenStack backend: allow to set default query params in the configuration
+  ([T176314](https://phabricator.wikimedia.org/T176314)):
+
+  Allow to set arbitrary default query params in the configuration for the OpenStack backend. This is useful for
+  example if Cumin is installed inside an OpenStack project to automatically search only within the instances of the
+  current project. See the example in the provided `doc/examples/config.yaml` file.
+
+### Bug Fixes:
+* Configuration: do not raise on empty configuration or aliases. Moved the check of required parameters where needed,
+  in order to raise explicit exceptions with a more meaningful message for the user.
+* Exceptions: convert remaining spurious exceptions to CuminError or improve their error message.
+
+
 ## v1.1.1 (2017-09-26)
 
 ### Bug Fixes:
