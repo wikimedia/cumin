@@ -47,7 +47,7 @@ def test_parse_args_no_mode():
 
 
 def test_get_running_user():
-    """Unsufficient permissions or unknown user should raise RuntimeError and a proper user should be detected."""
+    """Unsufficient permissions or unknown user should raise CuminError and a proper user should be detected."""
     env = {'USER': None, 'SUDO_USER': None}
     with mock.patch('os.getenv', env.get):
         with pytest.raises(CuminError, match='Insufficient privileges, run with sudo'):
@@ -158,7 +158,7 @@ def test_get_hosts_ok(isatty, mocked_raw_input, stderr):
 @mock.patch('cumin.cli.stderr')
 @mock.patch('cumin.cli.sys.stdout.isatty')
 def test_get_hosts_no_tty_ko(isatty, stderr):
-    """Calling get_hosts() without a TTY should raise RuntimeError if --dry-run or --force are not specified."""
+    """Calling get_hosts() without a TTY should raise CuminError if --dry-run or --force are not specified."""
     args = cli.parse_args(argv=['D{host1}', 'command1'])
     config = {'backend': 'direct'}
     isatty.return_value = False

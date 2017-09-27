@@ -6,6 +6,7 @@ import pytest
 
 from ClusterShell.NodeSet import NodeSet
 
+from cumin import CuminError
 from cumin.transports import BaseWorker, Command, clustershell, State, Target, WorkerError
 
 
@@ -102,9 +103,9 @@ class TestClusterShellWorker(object):
         assert not self.worker.task.shell.called
 
     def test_execute_one_command_no_mode(self):
-        """Calling execute() with only one command without mode should raise exception."""
+        """Calling execute() with only one command without mode should raise CuminError."""
         self.worker.commands = [self.commands[0]]
-        with pytest.raises(RuntimeError, match=r'An EventHandler is mandatory\.'):
+        with pytest.raises(CuminError, match=r'An EventHandler is mandatory\.'):
             self.worker.execute()
 
     def test_execute_no_target_hosts(self):
@@ -115,8 +116,8 @@ class TestClusterShellWorker(object):
         assert not self.worker.task.shell.called
 
     def test_execute_wrong_mode(self):
-        """Calling execute() without setting the mode with multiple commands should raise RuntimeError."""
-        with pytest.raises(RuntimeError, match=r'An EventHandler is mandatory\.'):
+        """Calling execute() without setting the mode with multiple commands should raise CuminError."""
+        with pytest.raises(CuminError, match=r'An EventHandler is mandatory\.'):
             self.worker.execute()
 
     def test_execute_batch_size(self):

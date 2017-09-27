@@ -284,7 +284,7 @@ def print_output(output_format, worker):
     worker        -- the Transport worker instance to retrieve the results from.
     """
     if output_format not in OUTPUT_FORMATS:
-        raise RuntimeError("Got invalid output format '{fmt}', expected one of {allowed}".format(
+        raise cumin.CuminError("Got invalid output format '{fmt}', expected one of {allowed}".format(
             fmt=output_format, allowed=OUTPUT_FORMATS))
 
     out = {}
@@ -355,6 +355,11 @@ def main(argv=None):
         args = parse_args(argv)
         user = get_running_user()
         config = cumin.Config(args.config)
+
+        if 'log_file' not in config:
+            raise cumin.CuminError(("Missing required parameter 'log_file' in the configuration file "
+                                    "'{config}'").format(config=args.config))
+
         setup_logging(config['log_file'], debug=args.debug, trace=args.trace)
     except cumin.CuminError as e:
         stderr(e)

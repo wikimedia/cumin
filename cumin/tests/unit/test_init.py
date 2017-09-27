@@ -20,9 +20,9 @@ def test_config_class_valid():
 
 
 def test_config_class_empty():
-    """A CuminError is raised if the configuration is empty."""
-    with pytest.raises(cumin.CuminError, match='Empty configuration found in'):
-        cumin.Config(config=get_fixture_path(os.path.join('config', 'empty', 'config.yaml')))
+    """An empty dictionary is returned if the configuration is empty."""
+    config = cumin.Config(config=get_fixture_path(os.path.join('config', 'empty', 'config.yaml')))
+    assert config == {}
 
 
 def test_config_class_invalid():
@@ -43,9 +43,11 @@ def test_config_class_valid_with_aliases():
 
 
 def test_config_class_empty_aliases():
-    """A CuminError is raised if one of the backend aliases is empty."""
-    with pytest.raises(cumin.CuminError, match='Empty configuration found in'):
-        cumin.Config(config=get_fixture_path(os.path.join('config', 'valid_with_empty_aliases', 'config.yaml')))
+    """The configuration is loaded also if the aliases file is empty."""
+    config = cumin.Config(config=get_fixture_path(os.path.join('config', 'valid_with_empty_aliases', 'config.yaml')))
+    assert 'log_file' in config
+    assert 'aliases' in config
+    assert config['aliases'] == {}
 
 
 def test_config_class_invalid_aliases():
@@ -73,9 +75,9 @@ def test_parse_config_invalid():
 
 
 def test_parse_config_empty():
-    """A CuminError is raised if the configuration is empty."""
-    with pytest.raises(cumin.CuminError, match='Empty configuration found in'):
-        cumin.parse_config(get_fixture_path(os.path.join('config', 'empty', 'config.yaml')))
+    """An empty dictionary is returned if the configuration is empty."""
+    config = cumin.parse_config(get_fixture_path(os.path.join('config', 'empty', 'config.yaml')))
+    assert config == {}
 
 
 def test_trace_logging_level_conflict():
