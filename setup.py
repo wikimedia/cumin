@@ -4,14 +4,8 @@
 from setuptools import find_packages, setup
 
 
-long_description = """
-Cumin provides a flexible and scalable automation framework to execute multiple commands on
-multiple targets in parallel.
-It allows to easily perform complex selections of hosts through a user-friendly query language which can interface
-with different backend modules.
-The transport layer can also be selected, providing multiple execution strategies.
-It can be used both via its command line interface (CLI) and as a Python library.
-"""
+with open('README.rst', 'r') as readme:
+    long_description = readme.read()
 
 install_requires = [
     'clustershell==1.7.3',
@@ -56,7 +50,7 @@ setup(
         'Topic :: System :: Systems Administration',
     ],
     data_files=[('share/doc/cumin/examples/', ['doc/examples/config.yaml', 'doc/examples/aliases.yaml'])],
-    description='Automation and orchestration framework written in Python',
+    description='Automation and orchestration framework and CLI written in Python',
     entry_points={
         'console_scripts': [
             'cumin = cumin.cli:main',
@@ -64,7 +58,7 @@ setup(
     },
     extras_require={'tests': tests_require + ['prospector[with_everything]>=0.12.4']},
     install_requires=install_requires,
-    keywords=['cumin', 'automation framework', 'orchestration framework'],
+    keywords=['cumin', 'automation', 'orchestration'],
     license='GPLv3+',
     long_description=long_description,
     name='cumin',
