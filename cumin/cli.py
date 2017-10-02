@@ -55,11 +55,12 @@ class KeyboardInterruptError(cumin.CuminError):
     """Custom KeyboardInterrupt exception class for the SIGINT signal handler."""
 
 
-def parse_args(argv=None):
-    """Parse command line arguments and return them.
+def get_parser():
+    """Create and return the command line arguments parser.
 
-    Arguments:
-        argv: the list of arguments to use. If None, the command line ones are used [optional, default: None]
+    Returns:
+        argparse.ArgumentParser: the parser object.
+
     """
     sync_mode = 'sync'
     async_mode = 'async'
@@ -69,13 +70,14 @@ def parse_args(argv=None):
     transports_names = [name for _, name, ispkg in pkgutil.iter_modules(transports.__path__) if not ispkg]
 
     parser = argparse.ArgumentParser(
+        prog='cumin',
         description='Cumin CLI - Automation and orchestration framework written in Python',
         epilog='More details at https://wikitech.wikimedia.org/wiki/Cumin')
     parser.add_argument('-c', '--config', default='/etc/cumin/config.yaml',
                         help='configuration file. [default: /etc/cumin/config.yaml]')
-    parser.add_argument('--global-timeout', type=int, default=None,
+    parser.add_argument('--global-timeout', type=int,
                         help='Global timeout in seconds (int) for the whole execution. [default: None (unlimited)]')
-    parser.add_argument('-t', '--timeout', type=int, default=None,
+    parser.add_argument('-t', '--timeout', type=int,
                         help=('Timeout in seconds (int) for the the execution of every command in each host. '
                               '[default: None (unlimited)]'))
     parser.add_argument('-m', '--mode', choices=(sync_mode, async_mode),
@@ -84,47 +86,65 @@ def parse_args(argv=None):
                               '-p/--success-percentage is reached. In async mode, execute on each host independently '
                               'from each other, the list of commands, aborting the execution on any given host at the '
                               'first command that fails.'))
-    parser.add_argument('-p', '--success-percentage', type=int, choices=xrange(101), metavar='0-100', default=100,
+    parser.add_argument('-p', '--success-percentage', type=int, choices=xrange(101), metavar='PCT', default=100,
                         help=(('Percentage threshold to consider an execution unit successful. Required in sync mode, '
-                               'optional in async mode when -b/--batch-size is used. [default: 100]')))
+                               'optional in async mode when -b/--batch-size is used. Accepted values are integers '
+                               'in the range 0-100. [default: 100]')))
     parser.add_argument('-b', '--batch-size', type=int,
                         help=('The commands will be executed with a sliding batch of this size. The batch mode depends '
                               'on the -m/--mode option when multiple commands are specified. In sync mode the first '
                               'command is executed in batch to all hosts before proceeding with the next one. In async '
                               'mode all commands are executed on the first batch of hosts, proceeding with the next '
                               'hosts as soon as one host completes all the commands. The -p/--success-percentage is '
-                              'checked before starting the execution in each hosts.'))
-    parser.add_argument('-s', '--batch-sleep', type=float, default=None,
+                              'checked before starting the execution in each host. [default: None (# of hosts)]'))
+    parser.add_argument('-s', '--batch-sleep', type=float,
                         help=('Sleep in seconds (float) to wait before starting the execution on the next host when '
                               '-b/--batch-size is used. [default: None]'))
     parser.add_argument('-x', '--ignore-exit-codes', action='store_true',
-                        help='USE WITH CAUTION! Treat any executed command as successful, ignoring the exit codes.')
-    parser.add_argument('-o', '--output', choices=OUTPUT_FORMATS, help='Specify a different output format.')
-    parser.add_argument('-i', '--interactive', action='store_true', help='Drop into a Python shell with the results.')
+                        help=('USE WITH CAUTION! Treat any executed command as successful, ignoring the exit codes. '
+                              '[default: False]'))
+    parser.add_argument('-o', '--output', choices=OUTPUT_FORMATS,
+                        help='Specify a different output format. [default: None]')
+    parser.add_argument('-i', '--interactive', action='store_true',
+                        help='Drop into a Python shell with the results. [default: False]')
     parser.add_argument('--force', action='store_true',
-                        help='USE WITH CAUTION! Force the execution without confirmation of the affected hosts. ')
+                        help=('USE WITH CAUTION! Force the execution without confirmation of the affected hosts. '
+                              '[default: False]'))
     parser.add_argument('--backend', choices=backends_names,
                         help=('Override the default backend selected in the configuration file for this execution. The '
                               'backend-specific configuration must be already present in the configuration file. '
-                              '[optional]'))
+                              '[default: None]'))
     parser.add_argument('--transport', choices=transports_names,
                         help=('Override the default transport selected in the configuration file for this execution. '
                               'The transport-specific configuration must already be present in the configuration file. '
-                              '[optional]'))
+                              '[default: None]'))
     parser.add_argument('--dry-run', action='store_true',
-                        help='Do not execute any command, just return the list of matching hosts and exit.')
+                        help=('Do not execute any command, just return the list of matching hosts and exit. '
+                              '[default: False]'))
     parser.add_argument('--version', action='version', version='%(prog)s {version}'.format(version=cumin.__version__))
-    parser.add_argument('-d', '--debug', action='store_true', help='Set log level to DEBUG.')
+    parser.add_argument('-d', '--debug', action='store_true', help='Set log level to DEBUG. [default: False]')
     parser.add_argument('--trace', action='store_true',
-                        help='Set log level to TRACE, a custom logging level intended for development debugging.')
+                        help=('Set log level to TRACE, a custom logging level intended for development debugging. '
+                              '[default: False]'))
     parser.add_argument('hosts', metavar='HOSTS_QUERY', help='Hosts selection query')
     parser.add_argument('commands', metavar='COMMAND', nargs='*',
                         help='Command to be executed. If no commands are specified, --dry-run is set.')
 
-    if argv is None:
-        parsed_args = parser.parse_args()
-    else:
-        parsed_args = parser.parse_args(argv)
+    return parser
+
+
+def parse_args(argv):
+    """Parse command line arguments, validate and return them.
+
+    Arguments:
+        argv: the list of command line arguments to use.
+
+    Returns:
+        argparse.Namespace: the parsed arguments.
+
+    """
+    parser = get_parser()
+    parsed_args = parser.parse_args(argv)
 
     # Validation and default values
     num_commands = len(parsed_args.commands)
@@ -334,7 +354,7 @@ def run(args, config):
         # Define a help function h() that will be available in the interactive shell to print the help message.
         # The name is to not shadow the Python built-in help() that might be usefult too to inspect objects.
         def h():  # pylint: disable=unused-variable,invalid-name
-            """Helper function for the interactive shell."""
+            """Print the help message in interactive shell."""
             tqdm.write(INTERACTIVE_BANNER)
         code.interact(banner=INTERACTIVE_BANNER, local=locals())
     elif args.output is not None:
@@ -344,12 +364,31 @@ def run(args, config):
     return exit_code
 
 
+def validate_config(config):
+    """Perform validation of mandatory keys in the configuration.
+
+    Arguments:
+        config (dict): the loaded configuration to validate.
+
+    Raises:
+        cumin.CuminError: if a mandatory configuration key is missing.
+
+    """
+    if 'log_file' not in config:
+        raise cumin.CuminError("Missing required parameter 'log_file' in the configuration file '{config}'".format(
+            config=config))
+
+
 def main(argv=None):
     """CLI entry point. Execute commands on hosts according to arguments.
 
     Arguments:
-        argv: the list of arguments to use. If None, the command line ones are used [optional, default: None]
+        argv: the list of command line arguments to use. If not specified it will be automatically taken from sys.argv
+            [optional, default: None]
     """
+    if argv is None:
+        argv = sys.argv[1:]
+
     signal.signal(signal.SIGINT, sigint_handler)
     colorama.init()
 
@@ -358,11 +397,7 @@ def main(argv=None):
         args = parse_args(argv)
         user = get_running_user()
         config = cumin.Config(args.config)
-
-        if 'log_file' not in config:
-            raise cumin.CuminError(("Missing required parameter 'log_file' in the configuration file "
-                                    "'{config}'").format(config=args.config))
-
+        validate_config(args.config)
         setup_logging(config['log_file'], debug=args.debug, trace=args.trace)
     except cumin.CuminError as e:
         stderr(e)
