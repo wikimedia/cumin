@@ -2,6 +2,26 @@
 CUMIN CHANGELOG
 ###############
 
+`v1.2.2`_ (2017-10-11)
+======================
+
+Minor improvements
+------------------
+* Dependencies: split the OpenStack dependencies into a separate ``extras_require`` in ``setup.py``. This allows to
+  install Cumin without all the dependencies needed for the OpenStack backend, if that is not needed.
+* Docstrings: use Google Style Python Docstrings to allow to automatically generate documentation with Sphinx.
+* Documentation: converted ``README``, ``CHANGELOG`` and ``TODO`` from Markdown to reStructuredText. PyPI renders only
+  reStructuredText while GitHub renders both. Moving to reStructuredText to be PyPI friendly and allow to write more
+  powerful documentation.
+* CLI: extract the ``ArgumentParser`` definition from ``parse_args()`` into a ``get_parser()`` function for easier
+  testability and documentation generation. Uniform help messages in ``ArgumentParser`` options.
+* setup.py: prepare for PyPi submission. Include the full ``README.rst`` as long description.
+* Documentation: setup Sphinx to generate the documentation and to auto-document the API and CLI.
+* Testing: refactored ``tox.ini`` to reduce the number of virtualenv while expanding the available environments for
+  static analysis and tests performed, including running unit tests with the minimum supported versions of all the
+  dependencies.
+
+
 `v1.2.1`_ (2017-09-27)
 ======================
 
@@ -158,8 +178,8 @@ New features
   output and the usage of batches when running troubleshooting commands for which the return code might be ignored
   (i.e. grep).
 
-Minor improvements:
--------------------
+Minor improvements
+------------------
 
 * CLI: improve configuration error handling (`T158747`_).
 * Fix Pylint and other validation tools reported errors (`T154588`_).
@@ -256,8 +276,8 @@ New features
 
 * PuppetDB backend: automatically upper case the first character in resource names (`T159970`_).
 
-Minor improvements:
--------------------
+Minor improvements
+------------------
 
 * Moved ``config.yaml`` to a ``doc/examples/`` directory. It simplify the ship of the example file when packaging.
 * Allow to ignore selected ``urllib3`` warnings (`T158758`_).
@@ -313,3 +333,4 @@ Bug Fixes
 .. _`v1.1.0`: https://github.com/wikimedia/cumin/releases/tag/v1.1.0
 .. _`v1.1.1`: https://github.com/wikimedia/cumin/releases/tag/v1.1.1
 .. _`v1.2.1`: https://github.com/wikimedia/cumin/releases/tag/v1.2.1
+.. _`v1.2.2`: https://github.com/wikimedia/cumin/releases/tag/v1.2.2
