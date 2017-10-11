@@ -1,3 +1,19 @@
+cumin (1.2.2-1) jessie-wikimedia; urgency=medium
+
+  * v1.2.2 upstream release.
+  * Bump Standards-Version to 3.9.8
+  * Change Section to utils
+  * Add Sphinx-related Build-Depends in order to build documentation and manpage
+  * Override dh_installman to generate the manpage that will be installed
+  * Add cumin.manpages to let dh install the manpage
+  * Add OpenStack backend dependencies as Suggests, given that they are now
+    optional in setup.py
+  * Add upstream signing GPG key
+  * Add watch file to track GitHub releases
+
+ -- Riccardo Coccioli <rcoccioli@wikimedia.org>  Wed, 11 Oct 2017 22:43:05 +0200
+
+
 cumin (1.2.1-1) jessie-wikimedia; urgency=medium
 
   * 1.2.1 upstream release.

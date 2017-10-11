@@ -1,8 +1,8 @@
 Source: cumin
-Section: python
+Section: utils
 Priority: optional
 Maintainer: Riccardo Coccioli <rcoccioli@wikimedia.org>
-Standards-Version: 3.9.6
+Standards-Version: 3.9.8
 Build-Depends:
   clustershell,
   debhelper (>= 10),
@@ -22,6 +22,9 @@ Build-Depends:
   python-requests-mock,
   python-setuptools,
   python-setuptools-scm,
+  python-sphinx,
+  python-sphinx-argparse,
+  python-sphinx-rtd-theme,
   python-tqdm,
   python-yaml
 Homepage: https://github.com/wikimedia/cumin
@@ -30,6 +33,10 @@ X-Python-Version: >= 2.7
 Package: cumin
 Architecture: any
 Depends: ${python:Depends}, ${misc:Depends}
+Suggests:
+  python-keystoneauth1,
+  python-keystoneclient,
+  python-novaclient
 Description: Automation and orchestration framework written in Python
  Cumin provides a flexible and scalable automation framework to
  execute multiple commands on multiple targets in parallel.

@@ -1,0 +1,5 @@
+version=4
+
+opts=filenamemangle=s/.+\/v?(\d\S+)\.tar\.gz/cumin-$1\.tar\.gz/,\
+pgpsigurlmangle=s/archive\/(\d\S+)\.tar\.gz/releases\/download\/$1\/cumin-$1\.tar\.gz\.asc/ \
+https://github.com/wikimedia/cumin/releases .*/v?(\d\S+)\.tar\.gz

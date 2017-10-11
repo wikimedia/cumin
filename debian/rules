@@ -9,3 +9,11 @@ export PYBUILD_TEST_PYTEST = 1
 override_dh_auto_test:
 	SETUPTOOLS_SCM_PRETEND_VERSION="$(shell dpkg-parsechangelog -S version | cut -d '+' -f 1)" python setup.py develop --user
 	py.test --strict --cov-report term-missing --cov=cumin cumin/tests/unit
+
+override_dh_auto_clean:
+	# Skip the default dh_auto_clean
+
+override_dh_installman:
+	SETUPTOOLS_SCM_PRETEND_VERSION="$(shell dpkg-parsechangelog -S version | cut -d '+' -f 1)" python setup.py build_sphinx -b man
+	sed -i='' -e 's/^\.B/.B /' doc/build/man/cumin.1
+	dh_installman
