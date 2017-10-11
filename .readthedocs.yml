@@ -1,0 +1,10 @@
+# Don't build any extra formats
+formats:
+  - none
+
+python:
+  version: 2.7
+  pip_install: true
+  extra_requirements:
+    - tests
+
