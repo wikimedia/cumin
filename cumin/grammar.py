@@ -33,7 +33,11 @@ def get_registered_backends():
     backend_names = [name for _, name, ispkg in pkgutil.iter_modules(backends.__path__) if not ispkg]
 
     for name in backend_names:
-        backend = importlib.import_module('cumin.backends.{backend}'.format(backend=name))
+        try:
+            backend = importlib.import_module('cumin.backends.{backend}'.format(backend=name))
+        except ImportError:
+            continue  # Backend not available, are all dependencies installed?
+
         keyword = backend.GRAMMAR_PREFIX
         if keyword in available_backends:
             raise CuminError("Unable to register backend {name}, keyword '{key}' already registered: {backends}".format(

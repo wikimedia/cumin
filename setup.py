@@ -44,6 +44,8 @@ extras_require = {
     ],
 }
 
+# Copy tests requirements to test only base dependencies
+extras_require['tests-base'] = extras_require['tests'][:]
 # Add optional dependencies to the tests ones
 extras_require['tests'].extend(extras_require['with-openstack'])
 
