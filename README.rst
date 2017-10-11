@@ -2,11 +2,7 @@
 Cumin - An automation and orchestration framework
 #################################################
 
-| |Build Status|
-| |Coveralls Coverage|
-| |Codcov Coverage|
-| |Codacy|
-| |Licence|
+| |Build Status| |Coveralls Coverage| |Codcov Coverage| |Codacy| |Licence|
 
 Summary
 =======
