@@ -397,7 +397,7 @@ def main(argv=None):
         args = parse_args(argv)
         user = get_running_user()
         config = cumin.Config(args.config)
-        validate_config(args.config)
+        validate_config(config)
         setup_logging(config['log_file'], debug=args.debug, trace=args.trace)
     except cumin.CuminError as e:
         stderr(e)
