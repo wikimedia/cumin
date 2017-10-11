@@ -2,7 +2,7 @@
 Cumin - An automation and orchestration framework
 #################################################
 
-| |Build Status| |Coveralls Coverage| |Codcov Coverage| |Codacy| |Licence|
+| |GitHub Release| |PyPI Release| |Build Status| |Coveralls Coverage| |Codcov Coverage| |Codacy| |Licence|
 
 Summary
 =======
@@ -61,7 +61,9 @@ All the backends share a minimal common interface that is defined in the ``BaseQ
 building and executing the query. Each backend module need to define a ``query_class`` module variable that is a
 pointer to the backend class for dynamic instantiation and a ``GRAMMAR_PREFIX`` constant string that is the
 identifier to be used in the main query syntax to identify the backend. The ``GRAMMAR_PREFIX`` ``A`` is reserved by
-the main grammar for aliases.
+the main grammar for aliases. Some backends are optional, in the sense that their dependencies are not installed
+automatically, they are available as an ``extras_require`` when installing from ``pip`` or as ``Recommended`` in the
+debian package.
 
 PuppetDB
 ^^^^^^^^
@@ -127,7 +129,7 @@ not specified above see directly the code in ``cumin/backends/puppetdb.py``.
 OpenStack
 ^^^^^^^^^
 
-This backend uses the OpenStack APIs to perform the query. The specific query language has this features:
+This `optional` backend uses the OpenStack APIs to perform the query. The specific query language has this features:
 
 - Each query can specify multiple parameters to filter the hosts selection in the form ``key:value``.
 - The special ``project`` key allow to filter by the OpenStack project name: ``project:project_name``. If not
@@ -209,9 +211,15 @@ selected hosts and execute a list of commands. This transport accept the followi
 Installation
 ============
 
-From the source code in the ``master`` branch:
+From the Python Package Index (PyPI)::
 
-::
+    pip install cumin
+
+Optional backends are available as ``extras_require`` and can be installed with::
+
+    pip install cumin[with-openstack]
+
+From the source code in the ``master`` branch::
 
     python setup.py install
 
@@ -220,12 +228,12 @@ Is it also possible to build a Debian package using the ``debian`` branch, for e
 Configuration
 =============
 
-The default configuration file for ``cumin`` CLI is expected to be found at ``/etc/cumin/config.yaml``; the path can
-be changed via a command-line switch, ``--config``. A commented example configuration is available in
+The default configuration file for ``cumin`` is expected to be found at ``/etc/cumin/config.yaml``. The path can
+be changed in the CLI via a command-line switch, ``--config``. A commented example configuration is available in
 ``doc/examples/config.yaml``.
 
 Cumin will also automatically load any aliases defined in a ``aliases.yaml`` file, if present in the same directory
-of the main configuration file. An aliases example file is available in ``doc/examples/aliases.yaml``
+of the main configuration file. An aliases example file is available in ``doc/examples/aliases.yaml``.
 
 CLI
 ===
@@ -271,21 +279,19 @@ Running tests
 =============
 
 The ``tox`` utility, a wrapper around virtualenv, is used to run the
-test. To list the available environements:
+test. To list the default environements run by tox::
 
-::
+    tox -lv
 
-    tox -l
+To list all the available environments::
 
-To run one:
+    tox -av
 
-::
+To run one specific environment only::
 
     tox -e flake8
 
-You can pass extra arguments to the underlying command:
-
-::
+You can pass extra arguments to the underlying command::
 
     # Run only tests in a specific file:
     tox -e unit -- -k test_puppetdb.py
@@ -294,13 +300,15 @@ You can pass extra arguments to the underlying command:
     tox -e unit -- -k test_invalid_grammars
 
 Also integration tests are available, but not run by default by tox. They depends on a running Docker instance. To run
-them:
-
-::
+them::
 
     tox -e integration
 
 
+.. |GitHub Release| image:: https://img.shields.io/github/release/wikimedia/cumin.svg
+   :target: https://github.com/wikimedia/cumin/releases
+.. |PyPI Release| image:: https://img.shields.io/pypi/v/cumin.svg
+   :target: https://pypi.python.org/pypi/cumin
 .. |Build Status| image:: https://travis-ci.org/wikimedia/cumin.svg?branch=master
    :target: https://travis-ci.org/wikimedia/cumin
 .. |Coveralls Coverage| image:: https://coveralls.io/repos/github/wikimedia/cumin/badge.svg?branch=master
