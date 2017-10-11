@@ -10,12 +10,21 @@ class Transport(object):
 
     @staticmethod
     def new(config, target, logger=None):
-        """Return an instance of the worker class for the configured transport.
+        """Create a transport worker class based on the configuration (`factory`).
 
         Arguments:
-        config -- the configuration dictionary
-        target -- a Target instance
-        logger -- an optional logging instance [optional, default: None]
+            config (dict): the configuration dictionary.
+            target (cumin.transports.Target): a Target instance.
+            logger (logging.Logger, optional): an optional logger instance.
+
+        Returns:
+            BaseWorker: the created worker instance for the configured transport.
+
+        Raises:
+            cumin.CuminError: if the configuration is missing the required ``transport`` key.
+            exceptions.ImportError: if unable to import the transport module.
+            exceptions.AttributeError: if the transport module is missing the required ``worker_class`` attribute.
+
         """
         if 'transport' not in config:
             raise CuminError("Missing required parameter 'transport' in the configuration dictionary")

@@ -9,6 +9,7 @@ import yaml
 
 try:
     __version__ = get_distribution(__name__).version
+    """:py:class:`str`: the version of the current Cumin module."""
 except DistributionNotFound:  # pragma: no cover - this should never happen during tests
     pass  # package is not installed
 
@@ -34,7 +35,12 @@ if (LOGGING_TRACE_LEVEL_NUMBER in logging._levelNames and  # pylint: disable=pro
 
 
 def trace(self, msg, *args, **kwargs):
-    """Additional logging level for development debugging."""
+    """Additional logging level for development debugging.
+
+    :Parameters:
+        according to :py:class:`logging.Logger` interface for log levels.
+
+    """
     if self.isEnabledFor(LOGGING_TRACE_LEVEL_NUMBER):
         self._log(LOGGING_TRACE_LEVEL_NUMBER, msg, args, **kwargs)  # pragma: no cover, pylint: disable=protected-access
 
@@ -58,7 +64,15 @@ class Config(dict):
         Called by Python's data model for each new instantiation of the class.
 
         Arguments:
-        config -- path to the configuration file to load. [optional, default: /etc/cumin/config.yaml]
+            config (str, optional): path to the configuration file to load.
+
+        Returns:
+            dict: the configuration dictionary.
+
+        Examples:
+            >>> import cumin
+            >>> config = cumin.Config()
+
         """
         if config not in cls._instances:
             cls._instances[config] = parse_config(config)
@@ -73,7 +87,14 @@ def parse_config(config_file):
     """Parse the YAML configuration file.
 
     Arguments:
-    config_file -- the path of the configuration file to load
+        config_file (str): the path of the configuration file to load.
+
+    Returns:
+        dict: the configuration dictionary.
+
+    Raises:
+        CuminError: if unable to read or parse the configuration.
+
     """
     try:
         with open(config_file, 'r') as f:

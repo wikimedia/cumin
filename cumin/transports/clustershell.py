@@ -19,7 +19,8 @@ class ClusterShellWorker(BaseWorker):
     def __init__(self, config, target, logger=None):
         """Worker ClusterShell constructor.
 
-        Arguments: according to BaseWorker
+        :Parameters:
+            according to parent :py:meth:`cumin.transports.BaseWorker.__init__`.
         """
         super(ClusterShellWorker, self).__init__(config, target, logger)
         self.task = Task.task_self()  # Initialize a ClusterShell task
@@ -33,7 +34,13 @@ class ClusterShellWorker(BaseWorker):
                 self.task.set_info(key, value)
 
     def execute(self):
-        """Required by BaseWorker."""
+        """Execute the commands on all the targets using the handler.
+
+        Concrete implementation of parent abstract method.
+
+        :Parameters:
+            according to parent :py:meth:`cumin.transports.BaseWorker.execute`.
+        """
         if not self.commands:
             self.logger.warning('No commands provided')
             return
@@ -72,21 +79,34 @@ class ClusterShellWorker(BaseWorker):
         return return_value
 
     def get_results(self):
-        """Required by BaseWorker."""
+        """Get the results of the last task execution.
+
+        Concrete implementation of parent abstract method.
+
+        :Parameters:
+            according to parent :py:meth:`cumin.transports.BaseWorker.get_results`.
+        """
         for output, nodelist in self.task.iter_buffers():
             yield NodeSet.NodeSet.fromlist(nodelist), output
 
     @property
     def handler(self):
-        """Getter for the handler property."""
+        """Concrete implementation of parent abstract getter and setter.
+
+        Accepted values for the setter:
+        * an instance of a custom handler class derived from :py:class:`BaseEventHandler`.
+        * a :py:class:`str` with one of the available default handler listed in :py:data:`DEFAULT_HANDLERS`.
+
+        The event handler is mandatory for this transport.
+
+        :Parameters:
+            according to parent :py:attr:`cumin.transports.BaseWorker.handler`.
+        """
         return self._handler
 
     @handler.setter
     def handler(self, value):
-        """Required by BaseTask.
-
-        The available default handlers are defined in DEFAULT_HANDLERS.
-        """
+        """Setter for the `handler` property. The relative documentation is in the getter."""
         if isinstance(value, type) and issubclass(value, BaseEventHandler):
             self._handler = value
         elif value in DEFAULT_HANDLERS:
@@ -106,8 +126,8 @@ class Node(object):
         """Node class constructor with default values.
 
         Arguments:
-        name     -- the hostname of the node.
-        commands -- a list of Command objects to be executed on the node.
+            name (str): the hostname of the node.
+            commands (list): a list of :py:class:`cumin.transports.Command` objects to be executed on the node.
         """
         self.name = name
         self.commands = commands
@@ -116,27 +136,27 @@ class Node(object):
 
 
 class BaseEventHandler(Event.EventHandler):
-    """ClusterShell event handler extension base class.
+    """ClusterShell event handler base class.
 
-    Inherit from ClusterShell's EventHandler class and define a base EventHandler class to be used in Cumin.
-    It can be subclassed to generate custom EventHandler classes while taking advantage of some common
+    Inherit from :py:class:`ClusterShell.Event.EventHandler` class and define a base `EventHandler` class to be used
+    in Cumin. It can be subclassed to generate custom `EventHandler` classes while taking advantage of some common
     functionalities.
     """
 
-    short_command_length = 35  # For logging and printing the commands are shortened to reach at most this length
+    short_command_length = 35
+    """:py:class:`int`: the length to which a command should be shortened in various outputs."""
 
     def __init__(self, target, commands, success_threshold=1.0, logger=None, **kwargs):
         """Event handler ClusterShell extension constructor.
 
-        If subclasses defines a self.pbar_ko tqdm progress bar, it will be updated on timeout.
+        If subclasses defines a ``self.pbar_ko`` `tqdm` progress bar, it will be updated on timeout.
 
         Arguments:
-        target            -- a Target instance.
-        commands          -- the list of Command objects that has to be executed on the nodes.
-        success_threshold -- the success threshold, a float between 0 and 1, to consider the execution successful.
-                             [optional, default: 1.0]
-        **kwargs          -- additional keyword arguments that might be used by classes that extend this base class.
-                             [optional]
+            target (cumin.transports.Target): a Target instance.
+            commands (list): the list of Command objects that has to be executed on the nodes.
+            success_threshold (float, optional): the success threshold, a :py:class:`float` between ``0`` and ``1``,
+                to consider the execution successful.
+            **kwargs (optional): additional keyword arguments that might be used by derived classes.
         """
         super(BaseEventHandler, self).__init__()
         self.success_threshold = success_threshold
@@ -171,17 +191,18 @@ class BaseEventHandler(Event.EventHandler):
         """Additional method called at the end of the whole execution, useful for reporting and final actions.
 
         Arguments:
-        task -- a ClusterShell Task instance
+            task (ClusterShell.Task.Task): a ClusterShell Task instance.
         """
         raise NotImplementedError
 
     def on_timeout(self, task):
-        """Callback called by the ClusterShellWorker when a Task.TimeoutError is raised.
+        """Update the state of the nodes and the timeout counter.
 
-        The whole execution timed out, update the state of the nodes and the timeout counter accordingly.
+        Callback called by the :py:class:`ClusterShellWorker` when a :py:exc:`ClusterShell.Task.TimeoutError` is
+        raised. It means that the whole execution timed out.
 
         Arguments:
-        task -- a ClusterShell Task instance
+            task (ClusterShell.Task.Task): a ClusterShell Task instance.
         """
         num_timeout = task.num_timeout()
         self.logger.error('global timeout was triggered while {num} nodes were executing a command'.format(
@@ -207,9 +228,10 @@ class BaseEventHandler(Event.EventHandler):
     def ev_pickup(self, worker):
         """Command execution started on a node, remove the command from the node's queue.
 
-        This callback is triggered by ClusterShell for each node when it starts executing a command.
+        This callback is triggered by the `ClusterShell` library for each node when it starts executing a command.
 
-        Arguments: according to EventHandler interface
+        :Parameters:
+            according to parent :py:meth:`ClusterShell.Event.EventHandler.ev_pickup`.
         """
         self.logger.debug("node={node}, command='{command}'".format(
             node=worker.current_node, command=worker.command))
@@ -237,7 +259,8 @@ class BaseEventHandler(Event.EventHandler):
 
         This callback is triggered by ClusterShell for each node when output is available.
 
-        Arguments: according to EventHandler interface
+        :Parameters:
+            according to parent :py:meth:`ClusterShell.Event.EventHandler.ev_read`.
         """
         if self.deduplicate_output:
             return
@@ -249,7 +272,8 @@ class BaseEventHandler(Event.EventHandler):
 
         This callback is triggered by ClusterShell when the execution has timed out.
 
-        Arguments: according to EventHandler interface
+        :Parameters:
+            according to parent :py:meth:`ClusterShell.Event.EventHandler.ev_timeout`.
         """
         delta_timeout = worker.task.num_timeout() - self.counters['timeout']
         self.logger.debug("command='{command}', delta_timeout={num}".format(
@@ -269,14 +293,16 @@ class BaseEventHandler(Event.EventHandler):
         worker.task.timer(self.target.batch_sleep, worker.eh)
 
     def _get_log_message(self, num, message, nodes=None):
-        """Helper to get a pre-formatted message suitable for logging or printing.
-
-        Returns a tuple of two strings: a logging message, the affected nodes in NodeSet format
+        """Get a pre-formatted message suitable for logging or printing.
 
         Arguments:
-        num     - the number of affecte nodes
-        message - the message to print
-        nodes   - the list of nodes affected [optional, default: None]
+            num (int): the number of affecte nodes.
+            message (str): the message to print.
+            nodes (list, optional): the list of nodes affected.
+
+        Returns:
+            tuple: a tuple of ``(logging message, NodeSet of the affected nodes)``.
+
         """
         if nodes is None:
             nodes_string = ''
@@ -292,32 +318,37 @@ class BaseEventHandler(Event.EventHandler):
         return (log_message, str(nodes_string))
 
     def _print_report_line(self, message, color=colorama.Fore.RED, nodes_string=''):  # pylint: disable=no-self-use
-        """Helper to print a tqdm-friendly colored status line with success/failure ratio and optional list of nodes.
+        """Print a tqdm-friendly colored status line with success/failure ratio and optional list of nodes.
 
         Arguments:
-        message      -- the message to print
-        color        -- the message color [optional, default: colorama.Fore.RED]
-        nodes_string -- the string representation of the affected nodes [optional, default: '']
+            message (str): the message to print.
+            color (str, optional): the message color.
+            nodes_string (str, optional): the string representation of the affected nodes.
         """
         tqdm.write('{color}{message}{nodes_color}{nodes_string}{reset}'.format(
             color=color, message=message, nodes_color=colorama.Fore.CYAN,
             nodes_string=nodes_string, reset=colorama.Style.RESET_ALL), file=sys.stderr)
 
     def _get_short_command(self, command):
-        """Return a shortened representation of a command omitting the central part.
+        """Return a shortened representation of a command omitting the central part, if it's too long.
 
         Arguments:
-        command - the command to be shortened
+            command (str): the command to be shortened.
+
+        Returns:
+            str: the short command.
+
         """
         sublen = (self.short_command_length - 3) // 2  # The -3 is for the ellipsis
         return (command[:sublen] + '...' + command[-sublen:]) if len(command) > self.short_command_length else command
 
     def _commands_output_report(self, buffer_iterator, command=None):
-        """Helper to print the commands output in a colored and tqdm-friendly way.
+        """Print the commands output in a colored and tqdm-friendly way.
 
         Arguments:
-        buffer_iterator - any ClusterShell object that implements iter_buffers() like Task and Worker objects.
-        command         - command the output is referring to [optional, default: None]
+            buffer_iterator (mixed): any `ClusterShell` object that implements ``iter_buffers()`` like
+                :py:class:`ClusterShell.Task.Task` and all the `Worker` objects.
+            command (str, optional): the command the output is referring to.
         """
         if not self.deduplicate_output:
             tqdm.write(colorama.Fore.BLUE + '================' + colorama.Style.RESET_ALL, file=sys.stdout)
@@ -345,7 +376,7 @@ class BaseEventHandler(Event.EventHandler):
         tqdm.write(colorama.Fore.BLUE + message + colorama.Style.RESET_ALL, file=sys.stdout)
 
     def _global_timeout_nodes_report(self):
-        """Helper to print the nodes that were caught by the global timeout in a colored and tqdm-friendly way."""
+        """Print the nodes that were caught by the global timeout in a colored and tqdm-friendly way."""
         if not self.global_timedout:
             return
 
@@ -362,10 +393,11 @@ class BaseEventHandler(Event.EventHandler):
         self._print_report_line(not_run_message, nodes_string=not_run_nodes)
 
     def _failed_commands_report(self, filter_command_index=-1):
-        """Helper to print the nodes that failed to execute commands in a colored and tqdm-friendly way.
+        """Print the nodes that failed to execute commands in a colored and tqdm-friendly way.
 
         Arguments:
-        filter_command - print only the nodes that failed to execute this specific command [optional, default: None]
+            filter_command_index (int, optional): print only the nodes that failed to execute the command specified by
+                this command index.
         """
         for state in (State.failed, State.timeout):
             failed_commands = defaultdict(list)
@@ -385,7 +417,11 @@ class BaseEventHandler(Event.EventHandler):
                 self._print_report_line(log_message, nodes_string=nodes_string)
 
     def _success_nodes_report(self, command=None):
-        """Helper to print how many nodes succesfully executed all commands in a colored and tqdm-friendly way."""
+        """Print how many nodes succesfully executed all commands in a colored and tqdm-friendly way.
+
+        Arguments:
+            command (str, optional): the command the report is referring to.
+        """
         if self.global_timedout and command is None:
             num = sum(1 for node in self.nodes.itervalues() if node.state.is_success and
                       node.running_command_index == (len(self.commands) - 1))
@@ -432,21 +468,23 @@ class SyncEventHandler(BaseEventHandler):
     """Custom ClusterShell event handler class that execute commands synchronously.
 
     The implemented logic is:
-    - execute command #N on all nodes where command #N-1 was successful according to batch_size
-    - the success ratio is checked at each command completion on every node, and will abort if not met, however
-      nodes already scheduled for execution with ClusterShell will execute the command anyway. The use of the
-      batch_size allow to control this aspect.
-    - if the execution of command #N is completed and the success ratio is greater than the success threshold,
-      re-start from the top with N=N+1
+
+    * execute command `#N` on all nodes where command #`N-1` was successful according to `batch_size`.
+    * the success ratio is checked at each command completion on every node, and will abort if not met, however
+      nodes already scheduled for execution with `ClusterShell` will execute the command anyway. The use of the
+      `batch_size` allow to control this aspect.
+    * if the execution of command `#N` is completed and the success ratio is greater than the success threshold,
+      re-start from the top with `N=N+1`.
 
     The typical use case is to orchestrate some operation across a fleet, ensuring that each command is completed by
     enough nodes before proceeding with the next one.
     """
 
     def __init__(self, target, commands, success_threshold=1.0, logger=None, **kwargs):
-        """Custom ClusterShell synchronous event handler constructor.
+        """Define a custom ClusterShell event handler to execute commands synchronously.
 
-        Arguments: according to BaseEventHandler interface
+        :Parameters:
+            according to parent :py:meth:`BaseEventHandler.__init__`.
         """
         super(SyncEventHandler, self).__init__(
             target, commands, success_threshold=success_threshold, logger=logger, **kwargs)
@@ -460,8 +498,7 @@ class SyncEventHandler(BaseEventHandler):
         Executed at the start of each command.
 
         Arguments:
-        schedule -- boolean to decide if the next command should be sent to ClusterShell for execution or not.
-                    [optional, default: False]
+            schedule (bool, optional): whether the next command should be sent to ClusterShell for execution or not.
         """
         self.counters['success'] = 0
 
@@ -497,6 +534,10 @@ class SyncEventHandler(BaseEventHandler):
         """Command terminated, print the result and schedule the next command if criteria are met.
 
         Executed at the end of each command inside a lock.
+
+        Returns:
+            bool: :py:data:`True` if the next command should be scheduled, :py:data:`False` otherwise.
+
         """
         self._commands_output_report(Task.task_self(), command=self.commands[self.current_command_index].command)
 
@@ -526,22 +567,23 @@ class SyncEventHandler(BaseEventHandler):
         return True
 
     def on_timeout(self, task):
-        """Callback called by the ClusterShellWorker when a Task.TimeoutError is raised.
+        """Override parent class `on_timeout` method to run `end_command`.
 
-        Arguments: according to BaseEventHandler interface
+        :Parameters:
+            according to parent :py:meth:`BaseEventHandler.on_timeout`.
         """
         super(SyncEventHandler, self).on_timeout(task)
         self.end_command()
 
     def ev_hup(self, worker):
-        """Command execution completed.
+        """Command execution completed on a node.
 
         This callback is triggered by ClusterShell for each node when it completes the execution of a command.
-
         Update the progress bars and keep track of nodes based on the success/failure of the command's execution.
         Schedule a timer for further decisions.
 
-        Arguments: according to EventHandler interface
+        :Parameters:
+            according to parent :py:meth:`ClusterShell.Event.EventHandler.ev_hup`.
         """
         self.logger.debug("node={node}, rc={rc}, command='{command}'".format(
             node=worker.current_node, rc=worker.current_rc, command=worker.command))
@@ -570,9 +612,10 @@ class SyncEventHandler(BaseEventHandler):
     def ev_timer(self, timer):
         """Schedule the current command on the next node or the next command on the first batch of nodes.
 
-        This callback is triggered by ClusterShell when a scheduled Task.timer() goes off.
+        This callback is triggered by `ClusterShell` when a scheduled `Task.timer()` goes off.
 
-        Arguments: according to EventHandler interface
+        :Parameters:
+            according to parent :py:meth:`ClusterShell.Event.EventHandler.ev_timer`.
         """
         success_ratio = 1 - (float(self.counters['failed'] + self.counters['timeout']) / self.counters['total'])
 
@@ -639,9 +682,10 @@ class SyncEventHandler(BaseEventHandler):
             self.start_command(schedule=True)
 
     def close(self, task):
-        """Print a final summary report line.
+        """Concrete implementation of parent abstract method to print the success nodes report.
 
-        Arguments: according to BaseEventHandler interface
+        :Parameters:
+            according to parent :py:meth:`cumin.transports.BaseEventHandler.close`.
         """
         self._success_nodes_report()
 
@@ -650,21 +694,23 @@ class AsyncEventHandler(BaseEventHandler):
     """Custom ClusterShell event handler class that execute commands asynchronously.
 
     The implemented logic is:
-    - execute on all nodes independently every command in a sequence, aborting the execution on that node if any
+
+    * execute on all nodes independently every command in a sequence, aborting the execution on that node if any
       command fails.
-    - The success ratio is checked at each node completion (either because it completed all commands or aborted
+    * The success ratio is checked at each node completion (either because it completed all commands or aborted
       earlier), however nodes already scheduled for execution with ClusterShell will execute the commands anyway. The
       use of the batch_size allows to control this aspect.
-    - if the success ratio is met, schedule the execution of all commands to the next node.
+    * if the success ratio is met, schedule the execution of all commands to the next node.
 
     The typical use case is to execute read-only commands to gather the status of a fleet without any special need of
     orchestration between the nodes.
     """
 
     def __init__(self, target, commands, success_threshold=1.0, logger=None, **kwargs):
-        """Custom ClusterShell asynchronous event handler constructor.
+        """Define a custom ClusterShell event handler to execute commands asynchronously between nodes.
 
-        Arguments: according to BaseEventHandler interface
+        :Parameters:
+            according to parent :py:meth:`BaseEventHandler.__init__`.
         """
         super(AsyncEventHandler, self).__init__(
             target, commands, success_threshold=success_threshold, logger=logger, **kwargs)
@@ -680,11 +726,11 @@ class AsyncEventHandler(BaseEventHandler):
         """Command execution completed on a node.
 
         This callback is triggered by ClusterShell for each node when it completes the execution of a command.
+        Enqueue the next command if the success criteria are met, track the failure otherwise. Update the progress
+        bars accordingly.
 
-        Enqueue the next command if the success criteria are met, track the failure otherwise
-        Update the progress bars accordingly
-
-        Arguments: according to EventHandler interface
+        :Parameters:
+            according to parent :py:meth:`ClusterShell.Event.EventHandler.ev_hup`.
         """
         self.logger.debug("node={node}, rc={rc}, command='{command}'".format(
             node=worker.current_node, rc=worker.current_rc, command=worker.command))
@@ -724,9 +770,10 @@ class AsyncEventHandler(BaseEventHandler):
     def ev_timer(self, timer):
         """Schedule the current command on the next node or the next command on the first batch of nodes.
 
-        This callback is triggered by ClusterShell when a scheduled Task.timer() goes off.
+        This callback is triggered by `ClusterShell` when a scheduled `Task.timer()` goes off.
 
-        Arguments: according to EventHandler interface
+        :Parameters:
+            according to parent :py:meth:`ClusterShell.Event.EventHandler.ev_timer`.
         """
         success_ratio = 1 - (float(self.counters['failed'] + self.counters['timeout']) / self.counters['total'])
 
@@ -755,9 +802,10 @@ class AsyncEventHandler(BaseEventHandler):
             self.logger.debug('No more nodes left')
 
     def close(self, task):
-        """Properly close all progress bars and print results.
+        """Concrete implementation of parent abstract method to print the nodes reports and close progress bars.
 
-        Arguments: according to BaseEventHandler interface
+        :Parameters:
+            according to parent :py:meth:`cumin.transports.BaseEventHandler.close`.
         """
         self._commands_output_report(task)
 
@@ -779,6 +827,8 @@ class AsyncEventHandler(BaseEventHandler):
             self.return_value = 1
 
 
-# Required by the auto-loader in the cumin.transport.Transport factory
 worker_class = ClusterShellWorker  # pylint: disable=invalid-name
-DEFAULT_HANDLERS = {'sync': SyncEventHandler, 'async': AsyncEventHandler}  # Available default EventHandler classes
+"""Required by the transport auto-loader in :py:meth:`cumin.transport.Transport.new`."""
+
+DEFAULT_HANDLERS = {'sync': SyncEventHandler, 'async': AsyncEventHandler}
+"""dict: mapping of available default event handlers for :py:class:`ClusterShellWorker`."""

@@ -14,22 +14,28 @@ def grammar():
     """Define the query grammar.
 
     Some query examples:
-    - All hosts in all OpenStack projects: `*`
-    - All hosts in a specific OpenStack project: `project:project_name`
-    - Filter hosts using any parameter allowed by the OpenStack list-servers API: `name:host1 image:UUID`
-      See https://developer.openstack.org/api-ref/compute/#list-servers for more details.
-      Multiple filters can be added separated by space. The value can be enclosed in single or double quotes.
-      If the `project` key is not specified the hosts will be selected from all projects.
-    - To mix multiple selections the general grammar must be used with multiple subqueries:
-      `O{project:project1} or O{project:project2}`
 
-    Backus-Naur form (BNF) of the grammar:
-            <grammar> ::= "*" | <items>
-              <items> ::= <item> | <item> <whitespace> <items>
-               <item> ::= <key>:<value>
+    * All hosts in all OpenStack projects: ``*``
+    * All hosts in a specific OpenStack project: ``project:project_name``
+    * Filter hosts using any parameter allowed by the OpenStack list-servers API: ``name:host1 image:UUID``
+      See `OpenStack Compute API list-servers <https://developer.openstack.org/api-ref/compute/#list-servers>`_ for
+      more details. Multiple filters can be added separated by space. The value can be enclosed in single or double
+      quotes. If the ``project`` key is not specified the hosts will be selected from all projects.
+    * To mix multiple selections the general grammar must be used with multiple subqueries:
+      ``O{project:project1} or O{project:project2}``
+
+    Backus-Naur form (BNF) of the grammar::
+
+        <grammar> ::= "*" | <items>
+          <items> ::= <item> | <item> <whitespace> <items>
+           <item> ::= <key>:<value>
 
     Given that the pyparsing library defines the grammar in a BNF-like style, for the details of the tokens not
-    specified above check directly the code.
+    specified above check directly the source code.
+
+    Returns:
+        pyparsing.ParserElement: the grammar parser.
+
     """
     quoted_string = pp.quotedString.copy().addParseAction(pp.removeQuotes)  # Both single and double quotes are allowed
 
@@ -49,8 +55,12 @@ def _get_keystone_session(config, project=None):
     """Return a new keystone session based on configuration.
 
     Arguments:
-    config  -- a dictionary with the session configuration: auth_url, username, password
-    project -- a project to scope the session to. [optional, default: None]
+        config (dict): a dictionary with the session configuration keys: ``auth_url``, ``username``, ``password``.
+        project (str, optional): a project to scope the session to.
+
+    Returns:
+        keystoneauth1.session.Session: the Keystone session scoped for the project if specified.
+
     """
     auth = keystone_identity.Password(
         auth_url='{auth_url}/v3'.format(auth_url=config.get('auth_url', 'http://localhost:5000')),
@@ -66,8 +76,13 @@ def _get_nova_client(config, project):
     """Return a new nova client tailored to the given project.
 
     Arguments:
-    config  -- a dictionary with the session configuration: auth_url, username, password, nova_api_version, timeout
-    project -- a project to scope the session to. [optional, default: None]
+        config (dict): a dictionary with the session configuration keys: ``auth_url``, ``username``, ``password``,
+            ``nova_api_version``, ``timeout``.
+        project (str): the project to scope the `novaclient` session to.
+
+    Returns:
+        novaclient.client.Client: the novaclient Client instance, already authenticated.
+
     """
     return nova_client.Client(
         config.get('nova_api_version', '2'),
@@ -83,11 +98,14 @@ class OpenStackQuery(BaseQuery):
     """
 
     grammar = grammar()
+    """:py:class:`pyparsing.ParserElement`: load the grammar parser only once in a singleton-like way."""
 
     def __init__(self, config, logger=None):
-        """Query constructor for the OpenStack backend.
+        """Override parent class constructor for specific setup.
 
-        Arguments: according to BaseQuery interface
+        :Parameters:
+            according to parent :py:meth:`cumin.backends.BaseQuery.__init__`.
+
         """
         super(OpenStackQuery, self).__init__(config, logger=logger)
         self.openstack_config = self.config.get('openstack', {})
@@ -95,7 +113,12 @@ class OpenStackQuery(BaseQuery):
         self.search_params = self._get_default_search_params()
 
     def _get_default_search_params(self):
-        """Return the default search parameters dictionary and set the project, if configured."""
+        """Return the default search parameters dictionary and set the project, if configured.
+
+        Returns:
+            dict: the dictionary with the default search parameters.
+
+        """
         params = {'status': 'ACTIVE', 'vm_state': 'ACTIVE'}
         config_params = self.openstack_config.get('query_params', {})
 
@@ -106,12 +129,25 @@ class OpenStackQuery(BaseQuery):
         return params
 
     def _build(self, query_string):
-        """Override parent class _build method to reset search parameters."""
+        """Override parent class _build method to reset the search parameters.
+
+        :Parameters:
+            according to parent :py:meth:`cumin.backends.BaseQuery._build`.
+
+        """
         self.search_params = self._get_default_search_params()
         super(OpenStackQuery, self)._build(query_string)
 
     def _execute(self):
-        """Required by BaseQuery."""
+        """Concrete implementation of parent abstract method.
+
+        :Parameters:
+            according to parent :py:meth:`cumin.backends.BaseQuery._execute`.
+
+        Returns:
+            ClusterShell.NodeSet.NodeSet: with the FQDNs of the matching hosts.
+
+        """
         if self.search_project is None:
             hosts = NodeSet()
             for project in self._get_projects():
@@ -122,7 +158,15 @@ class OpenStackQuery(BaseQuery):
         return hosts
 
     def _parse_token(self, token):
-        """Required by BaseQuery."""
+        """Concrete implementation of parent abstract method.
+
+        :Parameters:
+            according to parent :py:meth:`cumin.backends.BaseQuery._parse_token`.
+
+        Raises:
+            cumin.backends.InvalidQueryError: on internal parsing error.
+
+        """
         if not isinstance(token, pp.ParseResults):  # pragma: no cover - this should never happen
             raise InvalidQueryError('Expecting ParseResults object, got {type}: {token}'.format(
                 type=type(token), token=token))
@@ -141,7 +185,12 @@ class OpenStackQuery(BaseQuery):
             raise InvalidQueryError('Got unexpected token: {token}'.format(token=token))
 
     def _get_projects(self):
-        """Yield the project names for all projects (except admin) from keystone API."""
+        """Get all the project names from keystone API, filtering out the special `admin` project. Is a `generator`.
+
+        Yields:
+            str: the project name for all the selected projects.
+
+        """
         client = keystone_client.Client(
             session=_get_keystone_session(self.openstack_config), timeout=self.openstack_config.get('timeout', 10))
         return (project.name for project in client.projects.list(enabled=True) if project.name != 'admin')
@@ -150,7 +199,11 @@ class OpenStackQuery(BaseQuery):
         """Return a NodeSet with the list of matching hosts based for the project based on the search parameters.
 
         Arguments:
-        project -- the project name where to get the list of hosts
+            project (str): the project name where to get the list of hosts.
+
+        Returns:
+            ClusterShell.NodeSet.NodeSet: with the FQDNs of the matching hosts.
+
         """
         client = _get_nova_client(self.openstack_config, project)
 
@@ -166,6 +219,9 @@ class OpenStackQuery(BaseQuery):
                                 for server in client.servers.list(search_opts=self.search_params))
 
 
-# Required by the backend auto-loader in cumin.grammar.get_registered_backends()
 GRAMMAR_PREFIX = 'O'
+""":py:class:`str`: the prefix associate to this grammar, to register this backend into the general grammar.
+Required by the backend auto-loader in :py:meth:`cumin.grammar.get_registered_backends`."""
+
 query_class = OpenStackQuery  # pylint: disable=invalid-name
+"""Required by the backend auto-loader in :py:meth:`cumin.grammar.get_registered_backends`."""

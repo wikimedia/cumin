@@ -1,4 +1,5 @@
 /build/
+/doc/build/
 /.cache/
 /.coverage
 /.coverage-integration-clustershell

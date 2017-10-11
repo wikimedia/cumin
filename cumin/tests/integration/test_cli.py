@@ -185,7 +185,7 @@ def get_rc(params):
     """Return the expected return code based on the parameters.
 
     Arguments:
-    params -- a dictionary with all the parameters passed to the variant_function
+        params: a dictionary with all the parameters passed to the variant_function
     """
     return_value = 2
     if '-p' in params['params'] and '--global-timeout' not in params['params']:
@@ -198,7 +198,7 @@ def get_global_timeout_expected_lines(params):  # pylint: disable=invalid-name
     """Return a list of expected lines labels for global timeout-based tests.
 
     Arguments:
-    params -- a dictionary with all the parameters passed to the variant_function
+        params: a dictionary with all the parameters passed to the variant_function
     """
     expected = []
     if '--global-timeout' not in params['params']:
@@ -216,7 +216,7 @@ def get_timeout_expected_lines(params):
     """Return a list of expected lines labels for timeout-based tests.
 
     Arguments:
-    params -- a dictionary with all the parameters passed to the variant_function
+        params: a dictionary with all the parameters passed to the variant_function
     """
     expected = []
     if '-t' not in params['params']:
@@ -242,7 +242,7 @@ def get_date_expected_lines(params):
     """Return a list of expected lines labels for the date command based on parameters.
 
     Arguments:
-    params -- a dictionary with all the parameters passed to the variant_function
+        params: a dictionary with all the parameters passed to the variant_function
     """
     expected = []
     if 'ls -la /tmp/non_existing' in params['commands']:
@@ -263,7 +263,7 @@ def get_ls_expected_lines(params):
     """Return a list of expected lines labels for the ls command based on the parameters.
 
     Arguments:
-    params -- a dictionary with all the parameters passed to the variant_function
+        params: a dictionary with all the parameters passed to the variant_function
     """
     expected = []
     if 'ls -la /tmp' in params['commands']:
@@ -311,7 +311,7 @@ class TestCLI(object):
         """Return the query for the nodes selection.
 
         Arguments:
-        nodes - a string with the ClusterShell NodeSet nodes selection
+            nodes: a string with the ClusterShell NodeSet nodes selection
         """
         if nodes is None:
             return self.all_nodes
