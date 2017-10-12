@@ -81,8 +81,11 @@ This backend uses the PuppetDB API to perform the query. The specific query lang
 
 The available categories are:
 
+- ``C``: shortcut for querying resources of type ``Class``
 - ``F``: for querying facts
-- ``R``: for querying resources
+- ``O``: shortcut for querying resources of type ``Class`` that starts with ``Role::``
+- ``P``: shortcut for querying resources of type ``Class`` that starts with ``Profile::``
+- ``R``: for querying generic resources
 
 The available operators are:
 
@@ -110,8 +113,24 @@ Some query examples:
   - ``R:Resource::Name%param = 'some-value'``: query all the hosts that have a resource of type ``Resource::Name``
     whose parameter ``param`` has the value ``some-value``.
 
-- Mixed facts/resources queries are not supported, but the same result can be achieved by the main grammar using
-  multiple subqueries.
+  - ``C:Class::Name``: special shortcut to query all the hosts that have a resource of type ``Class`` whose name
+    is ``Class::Name``. The ``Class::Name`` part is completely arbitrary and depends on the puppet hierarchy
+    chosen. It's equivalent to ``R:Class = Class::Name``, with the addition that the ``param`` and ``field``
+    selectors described above can be used directly without the need to add another condition.
+  - ``O:Module::Name``: special shortcut to query all the hosts that have a resource of type ``Class`` whose name
+    is ``Role::Module::Name``. The ``Module::Name`` part is completely arbitrary and depends on the puppet
+    hierarchy chosen. It's equivalent to ``R:Class = Role::Module::Name``, with the addition that the ``param`` and
+    ``field`` selectors described above can be used directly without the need to add another condition, although
+    usually roles should not have parameters in the role/profile Puppet paradigm.
+  - ``P:Module::Name``: special shortcut to query all the hosts that have a resource of type ``Class`` whose name
+    is ``Profile::Module::Name``. The ``Module::Name`` part is completely arbitrary and depends on the puppet
+    hierarchy chosen. It's equivalent to ``R:Class = Profile::Module::Name``, with the addition that the ``param``
+    and ``field`` selectors described above can be used directly without the need to add another condition.
+  - ``F:FactName = value``: query all the hosts that have a fact ``FactName``, as reported by facter, with the
+    value ``value``.
+  - Mixed facts/resources queries are not supported, but the same result can be achieved using the main grammar
+    with multiple subqueries for the PuppetDB backend.
+
 - A complex selection for facts:
   ``host10[10-42].*.domain or (not F:key1 = value1 and host10*) or (F:key2 > value2 and F:key3 ~ '^value[0-9]+')``
 

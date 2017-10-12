@@ -13,7 +13,10 @@ from cumin.backends import BaseQuery, InvalidQueryError
 
 
 CATEGORIES = (
+    'C',  # Class shortcut (R:Class = class_path)
     'F',  # Fact
+    'O',  # Role class shortcut (R:Class = role::class_path)
+    'P',  # Profile class shortcut (RClass = profile::class_path)
     'R',  # Resource
 )
 """:py:func:`tuple`: available categories in the grammar."""
@@ -41,8 +44,23 @@ def grammar():
         ``title``.
       * ``R:Resource::Name%param = 'some-value'``: query all the hosts that have a resource of type ``Resource::Name``
         whose parameter ``param`` has the value ``some-value``.
-      * Mixed facts/resources queries are not supported, but the same result can be achieved by the main grammar using
-        multiple subqueries.
+      * ``C:Class::Name``: special shortcut to query all the hosts that have a resource of type ``Class`` whose name
+        is ``Class::Name``. The ``Class::Name`` part is completely arbitrary and depends on the puppet hierarchy
+        chosen. It's equivalent to ``R:Class = Class::Name``, with the addition that the ``param`` and ``field``
+        selectors described above can be used directly without the need to add another condition.
+      * ``O:Module::Name``: special shortcut to query all the hosts that have a resource of type ``Class`` whose name
+        is ``Role::Module::Name``. The ``Module::Name`` part is completely arbitrary and depends on the puppet
+        hierarchy chosen. It's equivalent to ``R:Class = Role::Module::Name``, with the addition that the ``param`` and
+        ``field`` selectors described above can be used directly without the need to add another condition, although
+        usually roles should not have parameters in the role/profile Puppet paradigm.
+      * ``P:Module::Name``: special shortcut to query all the hosts that have a resource of type ``Class`` whose name
+        is ``Profile::Module::Name``. The ``Module::Name`` part is completely arbitrary and depends on the puppet
+        hierarchy chosen. It's equivalent to ``R:Class = Profile::Module::Name``, with the addition that the ``param``
+        and ``field`` selectors described above can be used directly without the need to add another condition.
+      * ``F:FactName = value``: query all the hosts that have a fact ``FactName``, as reported by facter, with the
+        value ``value``.
+      * Mixed facts/resources queries are not supported, but the same result can be achieved using the main grammar
+        with multiple subqueries for the PuppetDB backend.
 
     * A complex selection for facts:
       ``host10[10-42].*.domain or (not F:key1 = value1 and host10*) or (F:key2 > value2 and F:key3 ~ '^value[0-9]+')``
@@ -108,13 +126,16 @@ class PuppetDBQuery(BaseQuery):
     """:py:class:`str`: string template in the :py:meth:`str.format` style used to generate the base URL of the
     PuppetDB server."""
 
-    endpoints = {'R': 'resources', 'F': 'nodes'}
+    endpoints = {'C': 'resources', 'F': 'nodes', 'O': 'resources', 'P': 'resources', 'R': 'resources'}
     """:py:class:`dict`: dictionary with the mapping of the available categories in the grammar to the PuppetDB API
     endpoints."""
 
-    hosts_keys = {'R': 'certname', 'F': 'name'}
-    """:py:class:`dict`: dictionary with the mapping of the available categories in the grammar to the PuppetDB API
-    field to query to get the hostname."""
+    hosts_keys = {'nodes': 'name', 'resources': 'certname'}
+    """:py:class:`dict`: dictionary with the mapping of the available endpoints of the PuppetDB API to the field to
+    query to get the hostname."""
+
+    category_prefixes = {'C': '', 'O': 'Role', 'P': 'Profile'}
+    """:py:class:`dict`: dictionary with the mapping of special categories to title prefixes."""
 
     grammar = grammar()
     """:py:class:`pyparsing.ParserElement`: load the grammar parser only once in a singleton-like way."""
@@ -129,7 +150,7 @@ class PuppetDBQuery(BaseQuery):
         super(PuppetDBQuery, self).__init__(config, logger=logger)
         self.grouped_tokens = None
         self.current_group = self.grouped_tokens
-        self._category = None
+        self._endpoint = None
         puppetdb_config = self.config.get('puppetdb', {})
         self.url = self.base_url_template.format(
             host=puppetdb_config.get('host', 'localhost'),
@@ -139,31 +160,31 @@ class PuppetDBQuery(BaseQuery):
             urllib3.disable_warnings(category=getattr(urllib3.exceptions, exception))
 
     @property
-    def category(self):
-        """Category for the current query.
+    def endpoint(self):
+        """Endpoint in the PuppetDB API for the current query.
 
         :Getter:
-            Returns the current `category` or a default value if not set.
+            Returns the current `endpoint` or a default value if not set.
 
         :Setter:
-            :py:class:`str`: the value to set the `category` to.
+            :py:class:`str`: the value to set the `endpoint` to.
 
         Raises:
-            cumin.backends.InvalidQueryError: if trying to set it to an invalid `category` or mixing categories in a
+            cumin.backends.InvalidQueryError: if trying to set it to an invalid `endpoint` or mixing endpoints in a
                 single query.
 
         """
-        return self._category or 'F'
+        return self._endpoint or 'nodes'
 
-    @category.setter
-    def category(self, value):
-        """Setter for the `category` property. The relative documentation is in the getter."""
-        if value not in self.endpoints:
-            raise InvalidQueryError("Invalid value '{category}' for category property".format(category=value))
-        if self._category is not None and value != self._category:
-            raise InvalidQueryError('Mixed F: and R: queries are currently not supported')
+    @endpoint.setter
+    def endpoint(self, value):
+        """Setter for the `endpoint` property. The relative documentation is in the getter."""
+        if value not in self.endpoints.values():
+            raise InvalidQueryError("Invalid value '{endpoint}' for endpoint property".format(endpoint=value))
+        if self._endpoint is not None and value != self._endpoint:
+            raise InvalidQueryError('Mixed endpoints are not supported, use the global grammar to mix them.')
 
-        self._category = value
+        self._endpoint = value
 
     def _open_subgroup(self):
         """Handle subgroup opening."""
@@ -208,9 +229,9 @@ class PuppetDBQuery(BaseQuery):
             ClusterShell.NodeSet.NodeSet: with the FQDNs of the matching hosts.
 
         """
-        query = self._get_query_string(group=self.grouped_tokens).format(host_key=self.hosts_keys[self.category])
-        hosts = self._api_call(query, self.endpoints[self.category])
-        unique_hosts = NodeSet.fromlist([host[self.hosts_keys[self.category]] for host in hosts])
+        query = self._get_query_string(group=self.grouped_tokens).format(host_key=self.hosts_keys[self.endpoint])
+        hosts = self._api_call(query)
+        unique_hosts = NodeSet.fromlist([host[self.hosts_keys[self.endpoint]] for host in hosts])
         self.logger.debug("Queried puppetdb for '{query}', got '{num}' results.".format(
             query=query, num=len(unique_hosts)))
 
@@ -230,17 +251,19 @@ class PuppetDBQuery(BaseQuery):
             cumin.backends.InvalidQueryError: on internal parsing error.
 
         """
-        self.category = category
+        self.endpoint = self.endpoints[category]
         if operator == '~':
             value = value.replace(r'\\', r'\\\\')  # Required by PuppetDB API
 
-        if category == 'R':
+        if category in ('C', 'O', 'P'):
+            query = self._get_special_resource_query(category, key, value, operator)
+        elif category == 'R':
             query = self._get_resource_query(key, value, operator)
         elif category == 'F':
             query = '["{op}", ["fact", "{key}"], "{val}"]'.format(op=operator, key=key, val=value)
         else:  # pragma: no cover - this should never happen
             raise InvalidQueryError(
-                "Got invalid category '{category}', one of F|R expected".format(category=category))
+                "Got invalid category '{category}', one of F|O|P|R expected".format(category=category))
 
         if neg:
             query = '["not", {query}]'.format(query=query)
@@ -354,6 +377,50 @@ class PuppetDBQuery(BaseQuery):
 
         return query
 
+    def _get_special_resource_query(self, category, key, value, operator):
+        """Build a query for Roles and Profiles, resolving the special cases for ``%params`` and ``@field``.
+
+        Arguments:
+            category (str): the category of the token, one of :py:data:`category_prefixes` keys.
+            key (str): the key of the resource to use as a suffix for the Class title matching.
+            value (str, optional): the value to match in case ``%params`` or ``@field`` is specified.
+            operator (str, optional): the comparison operator to use if there is a value, one of :py:const:`OPERATORS`.
+
+        Returns:
+            str: the resource query.
+
+        Raises:
+            cumin.backends.InvalidQueryError: on invalid combinations of parameters.
+
+        """
+        if all(char in key for char in ('%', '@')):
+            raise InvalidQueryError(("Resource key cannot contain both '%' (query a resource's parameter) and '@' "
+                                     "(query a  resource's field)"))
+        elif '%' in key:
+            special = '%'
+            key, param = key.split('%')
+        elif '@' in key:
+            special = '@'
+            key, param = key.split('@')
+        else:
+            special = None
+            if value is not None:
+                raise InvalidQueryError(("Invalid query of the form '{category}:key = value'. The matching of a value "
+                                         "is accepted only when using %param or @field.").format(category=category))
+
+        if self.category_prefixes[category]:
+            title = '{prefix}::{key}'.format(prefix=self.category_prefixes[category], key=key)
+        else:
+            title = key
+
+        query = self._get_resource_query('Class', title, '=')
+
+        if special is not None:
+            param_query = self._get_resource_query(''.join(('Class', special, param)), value, operator)
+            query = '["and", {query}, {param_query}]'.format(query=query, param_query=param_query)
+
+        return query
+
     def _get_query_string(self, group):
         """Recursively build and return the PuppetDB query string.
 
@@ -402,18 +469,17 @@ class PuppetDBQuery(BaseQuery):
             raise InvalidQueryError("Got unexpected '{bool}' boolean operator, current operator was '{current}'".format(
                 bool=bool_op, current=self.current_group['bool']))
 
-    def _api_call(self, query, endpoint):
+    def _api_call(self, query):
         """Execute a query to PuppetDB API and return the parsed JSON.
 
         Arguments:
             query (str): the query parameter to send to the PuppetDB API.
-            endpoint (str): the endpoint of the PuppetDB API to call.
 
         Raises:
             requests.HTTPError: if the PuppetDB API call fails.
 
         """
-        resources = requests.get(self.url + endpoint, params={'query': query}, verify=True)
+        resources = requests.get(self.url + self.endpoint, params={'query': query}, verify=True)
         resources.raise_for_status()
         return resources.json()
 
