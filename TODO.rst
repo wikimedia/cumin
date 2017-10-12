@@ -11,7 +11,6 @@ On the masters
 Internal improvements / bug fixes
 ---------------------------------
 
-* global: add a man page `T159308`_.
 * CLI: fix progress bar interaction with ctrl+c and ``sigint_handler()``.
 * CLI: suppress normal output when ``-o/--output`` is used.
 * clustershell transport: decouple the output handling from the event handlers.

@@ -20,7 +20,7 @@ Minor improvements
 * Testing: refactored ``tox.ini`` to reduce the number of virtualenv while expanding the available environments for
   static analysis and tests performed, including running unit tests with the minimum supported versions of all the
   dependencies.
-
+* CLI: add manpage (`T159308`_)
 
 `v1.2.1`_ (2017-09-27)
 ======================
@@ -304,6 +304,7 @@ Bug Fixes
 .. _`T158748`: https://phabricator.wikimedia.org/T158748
 .. _`T158758`: https://phabricator.wikimedia.org/T158758
 .. _`T158967`: https://phabricator.wikimedia.org/T158967
+.. _`T159308`: https://phabricator.wikimedia.org/T159308
 .. _`T159968`: https://phabricator.wikimedia.org/T159968
 .. _`T159969`: https://phabricator.wikimedia.org/T159969
 .. _`T159970`: https://phabricator.wikimedia.org/T159970
