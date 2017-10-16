@@ -109,12 +109,6 @@ html_use_smartypants = False
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
 
-html_context = {
-    'css_files': [
-        '_static/theme_overrides.css',  # override wide tables in RTD theme
-    ],
-}
-
 # -- Options for HTMLHelp output ------------------------------------------
 
 # Output file base name for HTML help builder.
@@ -221,3 +215,4 @@ def setup(app):
     app.connect('autodoc-process-docstring', add_inherited_annotations)
     app.connect('autodoc-skip-member', skip_exceptions_init)
     app.connect('autodoc-skip-member', skip_external_inherited)
+    app.add_stylesheet('theme_overrides.css')  # override wide tables in RTD theme
