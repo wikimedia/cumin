@@ -383,8 +383,8 @@ class Target(object):
         if batch_size is None:
             batch_size = hosts_size
         elif batch_size > hosts_size:
-            self.logger.debug(("Provided batch_size '{batch_size}' is greater than the number of hosts '{hosts_size}'"
-                               ", using '{hosts_size}' as value").format(batch_size=batch_size, hosts_size=hosts_size))
+            self.logger.debug(("Provided batch_size '%d' is greater than the number of hosts '%d'"
+                               ", using '%d' as value"), batch_size, hosts_size, hosts_size)
             batch_size = hosts_size
 
         return batch_size
@@ -420,8 +420,7 @@ class BaseWorker(object):
         self.config = config
         self.target = target
         self.logger = logging.getLogger('.'.join((self.__module__, self.__class__.__name__)))
-        self.logger.trace('Transport {name} created with config: {config}'.format(
-            name=type(self).__name__, config=config))
+        self.logger.trace('Transport %s created with config: %s', type(self).__name__, config)
 
         # Initialize setters values
         self._commands = None

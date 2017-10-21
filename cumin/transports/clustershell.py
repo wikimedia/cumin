@@ -71,8 +71,8 @@ class ClusterShellWorker(BaseWorker):
         self._handler_instance = self.handler(  # pylint: disable=not-callable
             self.target, self.commands, success_threshold=self.success_threshold)
 
-        self.logger.info("Executing commands {commands} on '{num}' hosts: {hosts}".format(
-            commands=self.commands, num=len(self.target.hosts), hosts=self.target.hosts))
+        self.logger.info(
+            "Executing commands %s on '%d' hosts: %s", self.commands, len(self.target.hosts), self.target.hosts)
         self.task.shell(self.commands[0].command, nodes=self.target.first_batch, handler=self._handler_instance,
                         timeout=self.commands[0].timeout)
 
@@ -219,8 +219,7 @@ class BaseEventHandler(Event.EventHandler):
             task (ClusterShell.Task.Task): a ClusterShell Task instance.
         """
         num_timeout = task.num_timeout()
-        self.logger.error('global timeout was triggered while {num} nodes were executing a command'.format(
-            num=num_timeout))
+        self.logger.error('Global timeout was triggered while %d nodes were executing a command', num_timeout)
 
         self.lock.acquire()  # Avoid modifications of the same data from other callbacks triggered by ClusterShell
         try:
@@ -247,8 +246,7 @@ class BaseEventHandler(Event.EventHandler):
         :Parameters:
             according to parent :py:meth:`ClusterShell.Event.EventHandler.ev_pickup`.
         """
-        self.logger.debug("node={node}, command='{command}'".format(
-            node=worker.current_node, command=worker.command))
+        self.logger.debug("node=%s, command='%s'", worker.current_node, worker.command)
 
         self.lock.acquire()  # Avoid modifications of the same data from other callbacks triggered by ClusterShell
         try:
@@ -290,8 +288,7 @@ class BaseEventHandler(Event.EventHandler):
             according to parent :py:meth:`ClusterShell.Event.EventHandler.ev_timeout`.
         """
         delta_timeout = worker.task.num_timeout() - self.counters['timeout']
-        self.logger.debug("command='{command}', delta_timeout={num}".format(
-            command=worker.command, num=delta_timeout))
+        self.logger.debug("command='%s', delta_timeout=%d", worker.command, delta_timeout)
 
         self.lock.acquire()  # Avoid modifications of the same data from other callbacks triggered by ClusterShell
         try:
@@ -397,13 +394,13 @@ class BaseEventHandler(Event.EventHandler):
         timeout = [node.name for node in self.nodes.itervalues() if node.state.is_timeout]
         timeout_desc = 'of nodes were executing a command when the global timeout occurred'
         timeout_message, timeout_nodes = self._get_log_message(len(timeout), timeout_desc, nodes=timeout)
-        self.logger.error('{message}{nodes}'.format(message=timeout_message, nodes=timeout_nodes))
+        self.logger.error('%s%s', timeout_message, timeout_nodes)
         self._print_report_line(timeout_message, nodes_string=timeout_nodes)
 
         not_run = [node.name for node in self.nodes.itervalues() if node.state.is_pending or node.state.is_scheduled]
         not_run_desc = 'of nodes were pending execution when the global timeout occurred'
         not_run_message, not_run_nodes = self._get_log_message(len(not_run), not_run_desc, nodes=not_run)
-        self.logger.error('{message}{nodes}'.format(message=not_run_message, nodes=not_run_nodes))
+        self.logger.error('%s%s', not_run_message, not_run_nodes)
         self._print_report_line(not_run_message, nodes_string=not_run_nodes)
 
     def _failed_commands_report(self, filter_command_index=-1):
@@ -427,7 +424,7 @@ class BaseEventHandler(Event.EventHandler):
                 message = "of nodes {state} to execute command '{command}'".format(
                     state=State.states_representation[state], command=self._get_short_command(command))
                 log_message, nodes_string = self._get_log_message(len(nodes), message, nodes=nodes)
-                self.logger.error('{message}{nodes}'.format(message=log_message, nodes=nodes_string))
+                self.logger.error('%s%s', log_message, nodes_string)
                 self._print_report_line(log_message, nodes_string=nodes_string)
 
     def _success_nodes_report(self, command=None):
@@ -463,18 +460,18 @@ class BaseEventHandler(Event.EventHandler):
         message = "success ratio ({comp} {perc:.1%} threshold){message_string}{post}".format(
             comp=comp, perc=self.success_threshold, message_string=message_string, post=post)
         log_message, nodes_string = self._get_log_message(num, message, nodes=nodes)
-        final_message = '{message}{nodes}'.format(message=log_message, nodes=nodes_string)
 
         if num == tot:
             color = colorama.Fore.GREEN
-            self.logger.info(final_message)
+            level = logging.INFO
         elif success_ratio >= self.success_threshold:
             color = colorama.Fore.YELLOW
-            self.logger.warning(final_message)
+            level = logging.WARNING
         else:
             color = colorama.Fore.RED
-            self.logger.error(final_message)
+            level = logging.CRITICAL
 
+        self.logger.log(level, '%s%s', log_message, nodes_string)
         self._print_report_line(log_message, color=color, nodes_string=nodes_string)
 
 
@@ -537,8 +534,8 @@ class SyncEventHandler(BaseEventHandler):
                 self.lock.release()
 
             command = self.commands[self.current_command_index]
-            self.logger.debug("command='{command}', timeout={timeout}, first_batch={first_batch}".format(
-                command=command.command, timeout=command.timeout, first_batch=first_batch_set))
+            self.logger.debug(
+                "command='%s', timeout=%d, first_batch=%s", command.command, command.timeout, first_batch_set)
 
             # Schedule the command for execution in ClusterShell
             Task.task_self().flush_buffers()
@@ -599,8 +596,7 @@ class SyncEventHandler(BaseEventHandler):
         :Parameters:
             according to parent :py:meth:`ClusterShell.Event.EventHandler.ev_hup`.
         """
-        self.logger.debug("node={node}, rc={rc}, command='{command}'".format(
-            node=worker.current_node, rc=worker.current_rc, command=worker.command))
+        self.logger.debug("node=%s, rc=%d, command='%s'", worker.current_node, worker.current_rc, worker.command)
 
         self.lock.acquire()  # Avoid modifications of the same data from other callbacks triggered by ClusterShell
         try:
@@ -650,8 +646,7 @@ class SyncEventHandler(BaseEventHandler):
         if node is not None:
             # Schedule the execution with ClusterShell of the current command to the next node found above
             command = self.nodes[node.name].commands[self.nodes[node.name].running_command_index + 1]
-            self.logger.debug("next_node={node}, timeout={timeout}, command='{command}'".format(
-                node=node.name, command=command.command, timeout=command.timeout))
+            self.logger.debug("next_node=%s, timeout=%d, command='%s'", node.name, command.command, command.timeout)
             Task.task_self().shell(
                 command.command, nodes=NodeSet.NodeSet(node.name), handler=timer.eh, timeout=command.timeout)
             return
@@ -672,15 +667,14 @@ class SyncEventHandler(BaseEventHandler):
 
             # Avoid race conditions
             if self.aborted or accounted != self.counters['total'] or command is None or self.global_timedout:
-                self.logger.debug("skipped timer")
+                self.logger.debug("Skipped timer")
                 return
 
             if pending:
                 # This usually happens when executing in batches
-                self.logger.warning("command '{command}' was not executed on: {nodes}".format(
-                    command=command, nodes=NodeSet.NodeSet.fromlist(pending)))
+                self.logger.warning("Command '%s' was not executed on: %s", command, NodeSet.NodeSet.fromlist(pending))
 
-            self.logger.info("completed command '{command}'".format(command=command))
+            self.logger.info("Completed command '%s'", command)
             restart = self.end_command()
             self.current_command_index += 1  # Move the global pointer of the command in execution
 
@@ -746,8 +740,7 @@ class AsyncEventHandler(BaseEventHandler):
         :Parameters:
             according to parent :py:meth:`ClusterShell.Event.EventHandler.ev_hup`.
         """
-        self.logger.debug("node={node}, rc={rc}, command='{command}'".format(
-            node=worker.current_node, rc=worker.current_rc, command=worker.command))
+        self.logger.debug("node=%s, rc=%d, command='%s'", worker.current_node, worker.current_rc, worker.command)
 
         schedule_next = False
         schedule_timer = False
@@ -808,8 +801,7 @@ class AsyncEventHandler(BaseEventHandler):
         if node is not None:
             # Schedule the exeuction of the first command to the next node with ClusterShell
             command = node.commands[0]
-            self.logger.debug("next_node={node}, timeout={timeout}, command='{command}'".format(
-                node=node.name, command=command.command, timeout=command.timeout))
+            self.logger.debug("next_node=%s, timeout=%d, command='%s'", node.name, command.command, command.timeout)
             Task.task_self().shell(
                 command.command, nodes=NodeSet.NodeSet(node.name), handler=timer.eh, timeout=command.timeout)
         else:

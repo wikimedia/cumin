@@ -241,7 +241,7 @@ def sigint_handler(*args):  # pylint: disable=unused-argument
     #         stderr(message)
     #         break
     # else:
-    #     logger.warning('Execution interrupted by Ctrl+c/SIGINT: got invalid answer for {i} times'.format(i=i))
+    #     logger.warning('Execution interrupted by Ctrl+c/SIGINT: got invalid answer for %d times', i)
     #     raise KeyboardInterruptError
 
 
@@ -414,7 +414,7 @@ def main(argv=None):
     if args.transport is not None:
         config['transport'] = args.transport
 
-    logger.info("Cumin called by user '{user}' with args: {args}".format(user=user, args=args))
+    logger.info("Cumin called by user '%s' with args: %s", user, args)
 
     # Execution
     try:

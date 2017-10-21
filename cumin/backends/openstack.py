@@ -189,7 +189,7 @@ class OpenStackQuery(BaseQuery):
                 type=type(token), token=token))
 
         token_dict = token.asDict()
-        self.logger.trace('Token is: {token_dict} | {token}'.format(token_dict=token_dict, token=token))
+        self.logger.trace('Token is: %s | %s', token_dict, token)
 
         if 'key' in token_dict and 'value' in token_dict:
             if token_dict['key'] == 'project':

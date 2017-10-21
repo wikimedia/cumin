@@ -35,8 +35,7 @@ class BaseQuery(object):
         """
         self.config = config
         self.logger = logging.getLogger('.'.join((self.__module__, self.__class__.__name__)))
-        self.logger.trace('Backend {name} created with config: {config}'.format(
-            name=type(self).__name__, config=config))
+        self.logger.trace('Backend %s created with config: %s', type(self).__name__, config)
 
     def execute(self, query_string):
         """Build and execute the query, return the NodeSet of FQDN hostnames that matches.
@@ -74,9 +73,9 @@ class BaseQuery(object):
         Arguments:
             query_string (str): the query string to be parsed.
         """
-        self.logger.trace('Parsing query: {query}'.format(query=query_string))
+        self.logger.trace('Parsing query: %s', query_string)
         parsed = self.grammar.parseString(query_string.strip(), parseAll=True)
-        self.logger.trace('Parsed query: {parsed}'.format(parsed=parsed))
+        self.logger.trace('Parsed query: %s', parsed)
         for token in parsed:
             self._parse_token(token)
 
@@ -111,7 +110,7 @@ class BaseQueryAggregator(BaseQuery):
         self.stack = self._get_stack_element()
         self.stack_pointer = self.stack
         super(BaseQueryAggregator, self)._build(query_string)
-        self.logger.trace('Query stack: {stack}'.format(stack=self.stack))
+        self.logger.trace('Query stack: %s', self.stack)
 
     def _execute(self):
         """Concrete implementation of parent abstract method.
@@ -121,7 +120,7 @@ class BaseQueryAggregator(BaseQuery):
         """
         hosts = NodeSet()
         self._loop_stack(hosts, self.stack)  # The hosts nodeset is updated in place while looping the stack
-        self.logger.debug('Found {num} hosts'.format(num=len(hosts)))
+        self.logger.debug('Found %d hosts', len(hosts))
 
         return hosts
 
@@ -182,8 +181,7 @@ class BaseQueryAggregator(BaseQuery):
             bool_operator (str, None): the boolean operator to apply while aggregating the two NodeSet. It must be
                 :py:data:`None` when adding the first hosts.
         """
-        self.logger.trace("Aggregating: {hosts} | {boolean} | {element_hosts}".format(
-            hosts=hosts, boolean=bool_operator, element_hosts=element_hosts))
+        self.logger.trace("Aggregating: %s | %s | %s", hosts, bool_operator, element_hosts)
 
         # This should never happen
         if (bool_operator is None and hosts) or (bool_operator is not None and not hosts):  # pragma: no cover

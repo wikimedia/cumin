@@ -231,7 +231,7 @@ class PuppetDBQuery(BaseQuery):
         self.grouped_tokens = PuppetDBQuery._get_grouped_tokens()
         self.current_group = self.grouped_tokens
         super(PuppetDBQuery, self)._build(query_string)
-        self.logger.trace('Query tokens: {tokens}'.format(tokens=self.grouped_tokens))
+        self.logger.trace('Query tokens: %s', self.grouped_tokens)
 
     def _execute(self):
         """Concrete implementation of parent abstract method.
@@ -246,8 +246,7 @@ class PuppetDBQuery(BaseQuery):
         query = self._get_query_string(group=self.grouped_tokens).format(host_key=self.hosts_keys[self.endpoint])
         hosts = self._api_call(query)
         unique_hosts = NodeSet.fromlist([host[self.hosts_keys[self.endpoint]] for host in hosts])
-        self.logger.debug("Queried puppetdb for '{query}', got '{num}' results.".format(
-            query=query, num=len(unique_hosts)))
+        self.logger.debug("Queried puppetdb for '%s', got '%d' results.", query, len(unique_hosts))
 
         return unique_hosts
 

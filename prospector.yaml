@@ -24,8 +24,6 @@ pep257:
     - D407  # Missing dashed underline after section, incompatible with Google Style Python Docstrings
 
 pylint:
-  disable:
-    - logging-format-interpolation  # format() is used for coherence across the project
   options:
     ignore: vulture_whitelist.py
     max-line-length: 120

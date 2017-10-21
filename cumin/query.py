@@ -108,7 +108,7 @@ class Query(BaseQueryAggregator):
                 type=type(token), token=token))
 
         token_dict = token.asDict()
-        self.logger.trace('Token is: {token}'.format(token=token_dict))
+        self.logger.trace('Token is: %s', token_dict)
 
         if self._replace_alias(token_dict):
             return  # This token was an alias and got replaced
