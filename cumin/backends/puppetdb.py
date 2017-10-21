@@ -154,14 +154,14 @@ class PuppetDBQuery(BaseQuery):
     grammar = grammar()
     """:py:class:`pyparsing.ParserElement`: load the grammar parser only once in a singleton-like way."""
 
-    def __init__(self, config, logger=None):
+    def __init__(self, config):
         """Query constructor for the PuppetDB backend.
 
         :Parameters:
             according to parent :py:meth:`cumin.backends.BaseQuery.__init__`.
 
         """
-        super(PuppetDBQuery, self).__init__(config, logger=logger)
+        super(PuppetDBQuery, self).__init__(config)
         self.grouped_tokens = None
         self.current_group = self.grouped_tokens
         self._endpoint = None

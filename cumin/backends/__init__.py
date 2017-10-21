@@ -27,15 +27,14 @@ class BaseQuery(object):
     """:py:class:`pyparsing.ParserElement`: derived classes must define their own pyparsing grammar and set this class
     attribute accordingly."""
 
-    def __init__(self, config, logger=None):
+    def __init__(self, config):
         """Query constructor.
 
         Arguments:
             config (dict): a dictionary with the parsed configuration file.
-            logger (logging.Logger, optional): an optional logger instance.
         """
         self.config = config
-        self.logger = logger or logging.getLogger(__name__)
+        self.logger = logging.getLogger('.'.join((self.__module__, self.__class__.__name__)))
         self.logger.trace('Backend {name} created with config: {config}'.format(
             name=type(self).__name__, config=config))
 
@@ -92,13 +91,13 @@ class BaseQueryAggregator(BaseQuery):
     operators.
     """
 
-    def __init__(self, config, logger=None):
+    def __init__(self, config):
         """Query aggregator constructor, initialize the stack.
 
         :Parameters:
             according to parent :py:meth:`cumin.backends.BaseQuery.__init__`.
         """
-        super(BaseQueryAggregator, self).__init__(config, logger=logger)
+        super(BaseQueryAggregator, self).__init__(config)
 
         self.stack = None
         self.stack_pointer = None

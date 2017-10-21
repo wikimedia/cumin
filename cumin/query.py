@@ -20,17 +20,17 @@ class Query(BaseQueryAggregator):
         >>> import cumin
         >>> from cumin.query import Query
         >>> config = cumin.Config()
-        >>> hosts = Query(config, logger=logger).execute(query_string)
+        >>> hosts = Query(config).execute(query_string)
 
     """
 
-    def __init__(self, config, logger=None):
+    def __init__(self, config):
         """Query constructor, initialize the registered backends.
 
         :Parameters:
             according to parent :py:meth:`cumin.backends.BaseQueryAggregator.__init__`.
         """
-        super(Query, self).__init__(config, logger=logger)
+        super(Query, self).__init__(config)
         external = self.config.get('plugins', {}).get('backends', [])
         self.registered_backends = grammar.get_registered_backends(external=external)
         self.grammar = grammar.grammar(self.registered_backends.keys())
@@ -89,7 +89,7 @@ class Query(BaseQueryAggregator):
             raise InvalidQueryError("Default backend '{name}' is not registered: {backends}".format(
                 name=self.config['default_backend'], backends=self.registered_backends))
 
-        query = backend.cls(self.config, logger=self.logger)
+        query = backend.cls(self.config)
 
         return query.execute(query_string)
 
@@ -115,7 +115,7 @@ class Query(BaseQueryAggregator):
 
         if 'backend' in token_dict and 'query' in token_dict:
             element = self._get_stack_element()
-            query = self.registered_backends[token_dict['backend']].cls(self.config, logger=self.logger)
+            query = self.registered_backends[token_dict['backend']].cls(self.config)
             element['hosts'] = query.execute(token_dict['query'])
             if 'bool' in token_dict:
                 element['bool'] = token_dict['bool']

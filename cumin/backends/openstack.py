@@ -117,14 +117,14 @@ class OpenStackQuery(BaseQuery):
     grammar = grammar()
     """:py:class:`pyparsing.ParserElement`: load the grammar parser only once in a singleton-like way."""
 
-    def __init__(self, config, logger=None):
+    def __init__(self, config):
         """Override parent class constructor for specific setup.
 
         :Parameters:
             according to parent :py:meth:`cumin.backends.BaseQuery.__init__`.
 
         """
-        super(OpenStackQuery, self).__init__(config, logger=logger)
+        super(OpenStackQuery, self).__init__(config)
         self.openstack_config = self.config.get('openstack', {})
         self.search_project = None
         self.search_params = self._get_default_search_params()

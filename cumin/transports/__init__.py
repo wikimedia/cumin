@@ -325,7 +325,7 @@ class State(object):
 class Target(object):
     """Targets management class."""
 
-    def __init__(self, hosts, batch_size=None, batch_sleep=None, logger=None):
+    def __init__(self, hosts, batch_size=None, batch_sleep=None):
         """Constructor, inizialize the Target with the list of hosts and additional parameters.
 
         Arguments:
@@ -337,13 +337,12 @@ class Target(object):
                 It must be a positive integer or :py:data:`None` to unset it.
             batch_sleep (int, optional): sleep time in seconds between the end of execution of one host in the
                 batch and the start in the next host. It must be a positive float or None to unset it.
-            logger (logging.Logger, optional): a logger instance.
 
         Raises:
             cumin.transports.WorkerError: if the `hosts` parameter is invalid.
 
         """
-        self.logger = logger or logging.getLogger(__name__)
+        self.logger = logging.getLogger('.'.join((self.__module__, self.__class__.__name__)))
 
         if isinstance(hosts, NodeSet):
             self.hosts = hosts
@@ -411,17 +410,16 @@ class BaseWorker(object):
 
     __metaclass__ = ABCMeta
 
-    def __init__(self, config, target, logger=None):
+    def __init__(self, config, target):
         """Worker constructor. Setup environment variables and initialize properties.
 
         Arguments:
             config (dict): a dictionary with the parsed configuration file.
             target (Target): a Target instance.
-            logger (logging.Logger, optional): an optional logger instance.
         """
         self.config = config
         self.target = target
-        self.logger = logger or logging.getLogger(__name__)
+        self.logger = logging.getLogger('.'.join((self.__module__, self.__class__.__name__)))
         self.logger.trace('Transport {name} created with config: {config}'.format(
             name=type(self).__name__, config=config))
 

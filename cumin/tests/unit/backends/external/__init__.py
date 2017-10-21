@@ -25,14 +25,14 @@ class ExternalBackendQuery(BaseQuery):
     grammar = grammar()
     """:py:class:`pyparsing.ParserElement`: load the grammar parser only once in a singleton-like way."""
 
-    def __init__(self, config, logger=None):
+    def __init__(self, config):
         """Query constructor for the test external backend.
 
         :Parameters:
             according to parent :py:meth:`cumin.backends.BaseQuery.__init__`.
 
         """
-        super(ExternalBackendQuery, self).__init__(config, logger=logger)
+        super(ExternalBackendQuery, self).__init__(config)
         self.hosts = NodeSet()
 
     def _execute(self):

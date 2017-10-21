@@ -70,21 +70,21 @@ def test_get_running_user():
 
 @mock.patch('cumin.cli.os')
 @mock.patch('cumin.cli.RotatingFileHandler')
-@mock.patch('cumin.cli.logger')
-def test_setup_logging(logging, file_handler, mocked_os):
+@mock.patch('cumin.cli.logging.getLogger')
+def test_setup_logging(mocked_get_logger, file_handler, mocked_os):
     """Calling setup_logging() should properly setup the logger."""
     mocked_os.path.exists.return_value = False
     cli.setup_logging('/path/to/filename')
-    logging.setLevel.assert_called_with(INFO)
+    assert mock.call().setLevel(INFO) in mocked_get_logger.mock_calls
     assert file_handler.called
 
     mocked_os.path.exists.return_value = True
     cli.setup_logging('filename', debug=True)
-    logging.setLevel.assert_called_with(DEBUG)
+    assert mock.call().setLevel(DEBUG) in mocked_get_logger.mock_calls
 
     mocked_os.path.exists.return_value = True
     cli.setup_logging('filename', trace=True)
-    logging.setLevel.assert_called_with(LOGGING_TRACE_LEVEL_NUMBER)
+    assert mock.call().setLevel(LOGGING_TRACE_LEVEL_NUMBER) in mocked_get_logger.mock_calls
 
 
 @mock.patch('cumin.cli.stderr')
@@ -206,7 +206,6 @@ def test_run(stderr, transport):
     cli.run(args, config)
     assert transport.new.call_args[0][0] is config
     assert isinstance(transport.new.call_args[0][1], transports.Target)
-    assert transport.new.call_args[1]['logger'] is cli.logger
     assert stderr.called
 
 

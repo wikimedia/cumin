@@ -188,19 +188,20 @@ def setup_logging(filename, debug=False, trace=False):
     if not os.path.exists(file_path):
         os.makedirs(file_path, 0770)
 
-    log_formatter = logging.Formatter(
-        fmt='%(asctime)s [%(process)s] (%(levelname)s %(filename)s:%(lineno)s in %(funcName)s) %(message)s')
+    log_formatter = logging.Formatter(fmt='%(asctime)s [%(levelname)s %(process)s %(name)s.%(funcName)s] %(message)s')
     log_handler = RotatingFileHandler(filename, maxBytes=(5 * (1024**2)), backupCount=30)
     log_handler.setFormatter(log_formatter)
-    logger.addHandler(log_handler)
-    logger.raiseExceptions = False
+
+    root_logger = logging.getLogger()
+    root_logger.addHandler(log_handler)
+    root_logger.raiseExceptions = False
 
     if trace:
-        logger.setLevel(cumin.LOGGING_TRACE_LEVEL_NUMBER)
+        root_logger.setLevel(cumin.LOGGING_TRACE_LEVEL_NUMBER)
     elif debug:
-        logger.setLevel(logging.DEBUG)
+        root_logger.setLevel(logging.DEBUG)
     else:
-        logger.setLevel(logging.INFO)
+        root_logger.setLevel(logging.INFO)
 
 
 def sigint_handler(*args):  # pylint: disable=unused-argument
@@ -262,7 +263,7 @@ def get_hosts(args, config):
         args: ArgumentParser instance with parsed command line arguments
         config: a dictionary with the parsed configuration file
     """
-    hosts = query.Query(config, logger=logger).execute(args.hosts)
+    hosts = query.Query(config).execute(args.hosts)
 
     if not hosts:
         stderr('No hosts found that matches the query')
@@ -337,8 +338,8 @@ def run(args, config):
     if not hosts:
         return 0
 
-    target = transports.Target(hosts, batch_size=args.batch_size, batch_sleep=args.batch_sleep, logger=logger)
-    worker = transport.Transport.new(config, target, logger=logger)
+    target = transports.Target(hosts, batch_size=args.batch_size, batch_sleep=args.batch_sleep)
+    worker = transport.Transport.new(config, target)
 
     ok_codes = None
     if args.ignore_exit_codes:

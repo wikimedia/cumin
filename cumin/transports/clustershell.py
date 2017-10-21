@@ -30,13 +30,13 @@ class ClusterShellWorker(BaseWorker):
       object the handler to the transport.
     """
 
-    def __init__(self, config, target, logger=None):
+    def __init__(self, config, target):
         """Worker ClusterShell constructor.
 
         :Parameters:
             according to parent :py:meth:`cumin.transports.BaseWorker.__init__`.
         """
-        super(ClusterShellWorker, self).__init__(config, target, logger)
+        super(ClusterShellWorker, self).__init__(config, target)
         self.task = Task.task_self()  # Initialize a ClusterShell task
         self._handler_instance = None
 
@@ -69,7 +69,7 @@ class ClusterShellWorker(BaseWorker):
         # Instantiate handler
         # Schedule only the first command for the first batch, the following ones must be handled by the EventHandler
         self._handler_instance = self.handler(  # pylint: disable=not-callable
-            self.target, self.commands, success_threshold=self.success_threshold, logger=self.logger)
+            self.target, self.commands, success_threshold=self.success_threshold)
 
         self.logger.info("Executing commands {commands} on '{num}' hosts: {hosts}".format(
             commands=self.commands, num=len(self.target.hosts), hosts=self.target.hosts))
@@ -160,7 +160,7 @@ class BaseEventHandler(Event.EventHandler):
     short_command_length = 35
     """:py:class:`int`: the length to which a command should be shortened in various outputs."""
 
-    def __init__(self, target, commands, success_threshold=1.0, logger=None, **kwargs):
+    def __init__(self, target, commands, success_threshold=1.0, **kwargs):
         """Event handler ClusterShell extension constructor.
 
         If subclasses defines a ``self.pbar_ko`` `tqdm` progress bar, it will be updated on timeout.
@@ -174,7 +174,7 @@ class BaseEventHandler(Event.EventHandler):
         """
         super(BaseEventHandler, self).__init__()
         self.success_threshold = success_threshold
-        self.logger = logger or logging.getLogger(__name__)
+        self.logger = logging.getLogger('.'.join((self.__module__, self.__class__.__name__)))
         self.target = target
         self.lock = threading.Lock()  # Used to update instance variables coherently from within callbacks
 
@@ -494,14 +494,14 @@ class SyncEventHandler(BaseEventHandler):
     enough nodes before proceeding with the next one.
     """
 
-    def __init__(self, target, commands, success_threshold=1.0, logger=None, **kwargs):
+    def __init__(self, target, commands, success_threshold=1.0, **kwargs):
         """Define a custom ClusterShell event handler to execute commands synchronously.
 
         :Parameters:
             according to parent :py:meth:`BaseEventHandler.__init__`.
         """
         super(SyncEventHandler, self).__init__(
-            target, commands, success_threshold=success_threshold, logger=logger, **kwargs)
+            target, commands, success_threshold=success_threshold, **kwargs)
         self.current_command_index = 0  # Global pointer for the current command in execution across all nodes
         self.start_command()
         self.aborted = False
@@ -720,14 +720,14 @@ class AsyncEventHandler(BaseEventHandler):
     orchestration between the nodes.
     """
 
-    def __init__(self, target, commands, success_threshold=1.0, logger=None, **kwargs):
+    def __init__(self, target, commands, success_threshold=1.0, **kwargs):
         """Define a custom ClusterShell event handler to execute commands asynchronously between nodes.
 
         :Parameters:
             according to parent :py:meth:`BaseEventHandler.__init__`.
         """
         super(AsyncEventHandler, self).__init__(
-            target, commands, success_threshold=success_threshold, logger=logger, **kwargs)
+            target, commands, success_threshold=success_threshold, **kwargs)
 
         self.pbar_ok = tqdm(desc='PASS', total=self.counters['total'], leave=True, unit='hosts', dynamic_ncols=True,
                             bar_format=colorama.Fore.GREEN + self.bar_format, file=sys.stderr)
