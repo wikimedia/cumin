@@ -1,0 +1,14 @@
+# Valid grammars
+hostname
+host-name
+host_name.domain
+hostname and host_name.domain.tld
+host1 or host2
+host1 and host2
+host1 and not host2
+host10[10-20,30-50]
+host10[10-20,30-50]*
+host?0[10-20,30-50]*
+(hostname.domain.tld)
+(host1 or host2) and host1
+((host1[0-9] or host01) and host[01-10])
