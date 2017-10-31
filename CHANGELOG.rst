@@ -1,12 +1,11 @@
-###############
-CUMIN CHANGELOG
-###############
+Cumin Changelog
+---------------
 
 `v1.2.2`_ (2017-10-11)
-======================
+^^^^^^^^^^^^^^^^^^^^^^
 
 Minor improvements
-------------------
+""""""""""""""""""
 * Dependencies: split the OpenStack dependencies into a separate ``extras_require`` in ``setup.py``. This allows to
   install Cumin without all the dependencies needed for the OpenStack backend, if that is not needed.
 * Docstrings: use Google Style Python Docstrings to allow to automatically generate documentation with Sphinx.
@@ -23,10 +22,10 @@ Minor improvements
 * CLI: add manpage (`T159308`_)
 
 `v1.2.1`_ (2017-09-27)
-======================
+^^^^^^^^^^^^^^^^^^^^^^
 
 New features
-------------
+""""""""""""
 
 * OpenStack backend: allow to set default query params in the configuration (`T176314`_):
   Allow to set arbitrary default query params in the configuration for the OpenStack backend. This is useful for
@@ -34,30 +33,30 @@ New features
   current project. See the example in the provided ``doc/examples/config.yaml`` file.
 
 Bug Fixes
----------
+"""""""""
 
 * Configuration: do not raise on empty configuration or aliases. Moved the check of required parameters where needed,
   in order to raise explicit exceptions with a more meaningful message for the user.
 * Exceptions: convert remaining spurious exceptions to CuminError or improve their error message.
 
 `v1.1.1`_ (2017-09-26)
-======================
+^^^^^^^^^^^^^^^^^^^^^^
 
 Bug Fixes
----------
+"""""""""
 
 * OpenStack: limit grammar to not overlap with the global one.
 
 `v1.1.0`_ (2017-09-21)
-======================
+^^^^^^^^^^^^^^^^^^^^^^
 
 New features
-------------
+""""""""""""
 
 * Backends: add OpenStack backend (`T175711`_).
 
 Bug Fixes
----------
+"""""""""
 
 * CLI: fix --version option.
 * Installation: fix ``data_files`` installation directory (`T174008`_)
@@ -70,18 +69,18 @@ Bug Fixes
 * Clustershell: make call to tqdm.write() explicit where to send the output, not relying on its default.
 
 `v1.0.0`_ (2017-08-23)
-======================
+^^^^^^^^^^^^^^^^^^^^^^
 
-CLI breaking changes:
----------------------
+CLI breaking changes
+""""""""""""""""""""
 
 * CLI: migrate to timeout per command (`T164838`_):
 
   * the global timeout command line options changes from ``-t/--timeout`` to ``--global-timeout``.
   * the ``-t/--timeout`` option is now used to set the timeout for each command in each host independently.
 
-Configuration breaking changes:
--------------------------------
+Configuration breaking changes
+""""""""""""""""""""""""""""""
 
 * Query: add multi-query support (`T170394`_):
 
@@ -90,8 +89,8 @@ Configuration breaking changes:
     backend, and if failing the parsing it will be executed with the global multi-query grammar. This allow to keep
     backward compatibility with the query that were executed with previous versions of Cumin.
 
-API breaking changes:
----------------------
+API breaking changes
+""""""""""""""""""""
 
 * PuppetDB backend: consistently use ``InvalidQueryError`` (`T162151`_).
 * Transports: refactor command handling to support new features (`T164838`_), (`T164833`_) and (`T171679`_):
@@ -142,7 +141,7 @@ API breaking changes:
     setters/getters.
 
 New features
-------------
+""""""""""""
 
 * CLI: automatically set dry-run mode when no commands are specified (`T161887`_).
 * ClusterShell transport: output directly when only a single host is targeted. When the commands are executed against
@@ -179,7 +178,7 @@ New features
   (i.e. grep).
 
 Minor improvements
-------------------
+""""""""""""""""""
 
 * CLI: improve configuration error handling (`T158747`_).
 * Fix Pylint and other validation tools reported errors (`T154588`_).
@@ -211,7 +210,7 @@ Minor improvements
   commands property (`T171679`_).
 
 Bug Fixes
----------
+"""""""""
 
 * PuppetDB backend: do not auto upper case the first character when the query is a regex (`T161730`_).
 * PuppetDB backend: forbid resource's parameters regex as PuppetDB API v3 do not support regex match for resource's
@@ -227,17 +226,17 @@ Bug Fixes
   `Prospector issue #230`_ for more details.
 
 `v0.0.2`_ (2017-03-15)
-======================
+^^^^^^^^^^^^^^^^^^^^^^
 
-Configuration breaking changes:
--------------------------------
+Configuration breaking changes
+""""""""""""""""""""""""""""""
 
 * Add support for batch processing (`T159968`_):
 
   * Moved the ``environment`` block in the configuration file to the top level from within a specific transport.
 
-API breaking changes:
----------------------
+API breaking changes
+""""""""""""""""""""
 
 * Add support for batch processing (`T159968`_):
 
@@ -256,7 +255,7 @@ API breaking changes:
   * Unify the reporting lines format and logic between ``sync`` and ``async`` modes for coherence.
 
 New features
-------------
+""""""""""""
 
 * Add support for ``not`` in simple hosts selection queries (`T158748`_).
 * Add support for batch processing (`T159968`_):
@@ -277,7 +276,7 @@ New features
 * PuppetDB backend: automatically upper case the first character in resource names (`T159970`_).
 
 Minor improvements
-------------------
+""""""""""""""""""
 
 * Moved ``config.yaml`` to a ``doc/examples/`` directory. It simplify the ship of the example file when packaging.
 * Allow to ignore selected ``urllib3`` warnings (`T158758`_).
@@ -286,12 +285,12 @@ Minor improvements
 * Add integration tests for ClusterShell transport using Docker (`T159969`_).
 
 Bug Fixes
----------
+"""""""""
 
 * Match the whole string for hosts regex matching (`T158746`_).
 
 `v0.0.1`_ (2017-02-17)
-======================
+^^^^^^^^^^^^^^^^^^^^^^
 
 * First released version (`T154588`_).
 

@@ -6,7 +6,17 @@ from cumin import CuminError
 
 
 class Transport(object):
-    """Transport factory class."""
+    """Transport factory class.
+
+    The transport layer is the one used to convey the commands to be executed into the selected hosts. The transport
+    abstraction allow to specify a mode to choose the execution plan, an event handler class and a success threshold.
+    Those can be used by the chosen transport to customize the behavior of the execution plan.
+
+    All the transports share a common interface that is defined in the :py:class:`cumin.transports.BaseWorker` class
+    and they are instantiated through the :py:class:`cumin.transport.Transport` factory class. Each transport module
+    need to define a ``worker_class`` module variable that is a pointer to the transport class for dynamic
+    instantiation.
+    """
 
     @staticmethod
     def new(config, target, logger=None):

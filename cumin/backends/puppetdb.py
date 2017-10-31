@@ -12,58 +12,25 @@ from requests.packages import urllib3
 from cumin.backends import BaseQuery, InvalidQueryError
 
 
-CATEGORIES = (
-    'C',  # Class shortcut (R:Class = class_path)
-    'F',  # Fact
-    'O',  # Role class shortcut (R:Class = role::class_path)
-    'P',  # Profile class shortcut (RClass = profile::class_path)
-    'R',  # Resource
-)
-""":py:func:`tuple`: available categories in the grammar."""
+CATEGORIES = ('C', 'F', 'O', 'P', 'R')
+""":py:func:`tuple`: available categories in the grammar.
+
+* ``C``: shortcut for querying resources of type ``Class``, equivalent of `R:Class = class_path``.
+* ``F``: for querying facts.
+* ``O``: shortcut for querying resources of type ``Class`` that starts with ``Role::``.
+* ``P``: shortcut for querying resources of type ``Class`` that starts with ``Profile::``.
+* ``R``: for querying generic resources.
+"""
 
 OPERATORS = ('=', '>=', '<=', '<', '>', '~')
-""":py:func:`tuple`: available operators in the grammar, the same available in PuppetDB API."""
+""":py:func:`tuple`: available operators in the grammar, the same available in PuppetDB API.
+
+The ``~`` one is used for regex matching.
+"""
 
 
 def grammar():
     """Define the query grammar.
-
-    Some query examples:
-
-    * All hosts: ``*``
-    * Hosts globbing: ``host10*``
-    * :py:class:`ClusterShell.NodeSet.NodeSet` syntax for hosts expansion: ``host10[10-42].domain``
-    * Category based key-value selection:
-
-      * ``R:Resource::Name``: query all the hosts that have a resource of type `Resource::Name`.
-      * ``R:Resource::Name = 'resource-title'``: query all the hosts that have a resource of type `Resource::Name`
-        whose title is ``resource-title``. For example ``R:Class = MyModule::MyClass``.
-      * ``R:Resource::Name@field = 'some-value'``: query all the hosts that have a resource of type ``Resource::Name``
-        whose field ``field`` has the value ``some-value``. The valid fields are: ``tag``, ``certname``, ``type``,
-        ``title``, ``exported``, ``file``, ``line``. The previous syntax is a shortcut for this one with the field
-        ``title``.
-      * ``R:Resource::Name%param = 'some-value'``: query all the hosts that have a resource of type ``Resource::Name``
-        whose parameter ``param`` has the value ``some-value``.
-      * ``C:Class::Name``: special shortcut to query all the hosts that have a resource of type ``Class`` whose name
-        is ``Class::Name``. The ``Class::Name`` part is completely arbitrary and depends on the puppet hierarchy
-        chosen. It's equivalent to ``R:Class = Class::Name``, with the addition that the ``param`` and ``field``
-        selectors described above can be used directly without the need to add another condition.
-      * ``O:Module::Name``: special shortcut to query all the hosts that have a resource of type ``Class`` whose name
-        is ``Role::Module::Name``. The ``Module::Name`` part is completely arbitrary and depends on the puppet
-        hierarchy chosen. It's equivalent to ``R:Class = Role::Module::Name``, with the addition that the ``param`` and
-        ``field`` selectors described above can be used directly without the need to add another condition, although
-        usually roles should not have parameters in the role/profile Puppet paradigm.
-      * ``P:Module::Name``: special shortcut to query all the hosts that have a resource of type ``Class`` whose name
-        is ``Profile::Module::Name``. The ``Module::Name`` part is completely arbitrary and depends on the puppet
-        hierarchy chosen. It's equivalent to ``R:Class = Profile::Module::Name``, with the addition that the ``param``
-        and ``field`` selectors described above can be used directly without the need to add another condition.
-      * ``F:FactName = value``: query all the hosts that have a fact ``FactName``, as reported by facter, with the
-        value ``value``.
-      * Mixed facts/resources queries are not supported, but the same result can be achieved using the main grammar
-        with multiple subqueries for the PuppetDB backend.
-
-    * A complex selection for facts:
-      ``host10[10-42].*.domain or (not F:key1 = value1 and host10*) or (F:key2 > value2 and F:key3 ~ '^value[0-9]+')``
 
     Backus-Naur form (BNF) of the grammar::
 
@@ -120,6 +87,53 @@ class PuppetDBQuery(BaseQuery):
 
     The `puppetdb` backend allow to use an existing PuppetDB instance for the hosts selection.
     At the moment only PuppetDB v3 API are implemented.
+
+    * Each query part can be composed with the others using boolean operators (``and``, ``or``, ``not``)
+    * Multiple query parts can be grouped together with parentheses (``(``, ``)``).
+    * A query part can be of two different types:
+
+      * ``Hostname matching``: this is a simple string that be used to match directly the hostname of the hosts in the
+        selected backend. It allows for glob expansion (``*``) and the use of the powerful
+        :py:class:`ClusterShell.NodeSet.NodeSet`.
+      * ``Category matching``: an identifier composed by a category, a colon and a key, followed by a comparison
+        operator and a value, as in ``F:key = value``.
+
+    Some query examples:
+
+    * All hosts: ``*``
+    * Hosts globbing: ``host10*``
+    * :py:class:`ClusterShell.NodeSet.NodeSet` syntax for hosts expansion: ``host10[10-42].domain``
+    * Category based key-value selection:
+
+      * ``R:Resource::Name``: query all the hosts that have a resource of type `Resource::Name`.
+      * ``R:Resource::Name = 'resource-title'``: query all the hosts that have a resource of type `Resource::Name`
+        whose title is ``resource-title``. For example ``R:Class = MyModule::MyClass``.
+      * ``R:Resource::Name@field = 'some-value'``: query all the hosts that have a resource of type ``Resource::Name``
+        whose field ``field`` has the value ``some-value``. The valid fields are: ``tag``, ``certname``, ``type``,
+        ``title``, ``exported``, ``file``, ``line``. The previous syntax is a shortcut for this one with the field
+        ``title``.
+      * ``R:Resource::Name%param = 'some-value'``: query all the hosts that have a resource of type ``Resource::Name``
+        whose parameter ``param`` has the value ``some-value``.
+      * ``C:Class::Name``: special shortcut to query all the hosts that have a resource of type ``Class`` whose name
+        is ``Class::Name``. The ``Class::Name`` part is completely arbitrary and depends on the puppet hierarchy
+        chosen. It's equivalent to ``R:Class = Class::Name``, with the addition that the ``param`` and ``field``
+        selectors described above can be used directly without the need to add another condition.
+      * ``O:Module::Name``: special shortcut to query all the hosts that have a resource of type ``Class`` whose name
+        is ``Role::Module::Name``. The ``Module::Name`` part is completely arbitrary and depends on the puppet
+        hierarchy chosen. It's equivalent to ``R:Class = Role::Module::Name``, with the addition that the ``param`` and
+        ``field`` selectors described above can be used directly without the need to add another condition, although
+        usually roles should not have parameters in the role/profile Puppet paradigm.
+      * ``P:Module::Name``: special shortcut to query all the hosts that have a resource of type ``Class`` whose name
+        is ``Profile::Module::Name``. The ``Module::Name`` part is completely arbitrary and depends on the puppet
+        hierarchy chosen. It's equivalent to ``R:Class = Profile::Module::Name``, with the addition that the ``param``
+        and ``field`` selectors described above can be used directly without the need to add another condition.
+      * ``F:FactName = value``: query all the hosts that have a fact ``FactName``, as reported by facter, with the
+        value ``value``.
+      * Mixed facts/resources queries are not supported, but the same result can be achieved using the main grammar
+        with multiple subqueries for the PuppetDB backend.
+
+    * A complex selection for facts:
+      ``host10[10-42].*.domain or (not F:key1 = value1 and host10*) or (F:key2 > value2 and F:key3 ~ '^value[0-9]+')``
     """
 
     base_url_template = 'https://{host}:{port}/v3/'
