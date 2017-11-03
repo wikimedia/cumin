@@ -9,13 +9,6 @@ from cumin.backends import BaseQueryAggregator, InvalidQueryError
 def grammar():
     """Define the query grammar.
 
-    Some query examples:
-
-    * Simple selection: ``host1.domain``
-    * ClusterShell syntax for hosts expansion: ``host10[10-42].domain,host2010.other-domain``
-    * A complex selection:
-      ``host100[1-5].domain or (host10[30-40].domain and (host10[10-42].domain and not host33.domain))``
-
     Backus-Naur form (BNF) of the grammar::
 
         <grammar> ::= <item> | <item> <boolean> <grammar>
@@ -58,6 +51,13 @@ class DirectQuery(BaseQueryAggregator):
 
     The typical usage for the `direct` backend is as a reliable alternative in cases in which the primary host
     selection mechanism is not working and also for testing the transports without any external backend dependency.
+
+    Some query examples:
+
+    * Simple selection: ``host1.domain``
+    * ClusterShell syntax for hosts expansion: ``host10[10-42].domain,host2010.other-domain``
+    * A complex selection:
+      ``host100[1-5].domain or (host10[30-40].domain and (host10[10-42].domain and not host33.domain))``
     """
 
     grammar = grammar()

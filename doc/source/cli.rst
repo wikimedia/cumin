@@ -1,5 +1,5 @@
-CLI
-===
+Cumin CLI
+=========
 
 .. argparse::
    :module: cumin.cli

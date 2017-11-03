@@ -238,8 +238,8 @@ class State(object):
         """Attribute accessor.
 
         :Accessible properties:
-            - `current` (:py:class:`int`): retuns the current state.
-            - `is_{valid_state_name}` (:py:class:`bool`): for each valid state name, returns :py:data:`True` if the
+            * `current` (:py:class:`int`): retuns the current state.
+            * `is_{valid_state_name}` (:py:class:`bool`): for each valid state name, returns :py:data:`True` if the
               current state matches the state in the variable name. :py:data:`False` otherwise.
 
         :Parameters:

@@ -14,7 +14,21 @@ from cumin.transports import BaseWorker, raise_error, State, WorkerError
 
 
 class ClusterShellWorker(BaseWorker):
-    """It provides a Cumin worker for SSH using the ClusterShell library."""
+    """It provides a Cumin worker for SSH using the ClusterShell library.
+
+    This transport uses the :py:mod:`ClusterShell` Python library to connect to the selected hosts and execute a
+    list of commands. This transport accept the following customizations:
+
+    * ``sync`` execution mode: given a list of commands, the first one will be executed on all the hosts, then, if the
+      success ratio is reached, the second one will be executed on all hosts where the first one was successful, and so
+      on.
+    * ``async`` execution mode: given a list of commands, on each hosts the commands will be executed sequentially,
+      interrupting the execution on any single host at the first command that fails. The execution on the hosts is
+      independent between each other.
+    * custom execution mode: can be achieved creating a custom event handler class that extends the ``BaseEventHandler``
+      class defined in ``cumin/transports/clustershell.py``, implementing its abstract methods and setting to this class
+      object the handler to the transport.
+    """
 
     def __init__(self, config, target, logger=None):
         """Worker ClusterShell constructor.

@@ -13,17 +13,6 @@ from cumin.backends import BaseQuery, InvalidQueryError
 def grammar():
     """Define the query grammar.
 
-    Some query examples:
-
-    * All hosts in all OpenStack projects: ``*``
-    * All hosts in a specific OpenStack project: ``project:project_name``
-    * Filter hosts using any parameter allowed by the OpenStack list-servers API: ``name:host1 image:UUID``
-      See `OpenStack Compute API list-servers <https://developer.openstack.org/api-ref/compute/#list-servers>`_ for
-      more details. Multiple filters can be added separated by space. The value can be enclosed in single or double
-      quotes. If the ``project`` key is not specified the hosts will be selected from all projects.
-    * To mix multiple selections the general grammar must be used with multiple subqueries:
-      ``O{project:project1} or O{project:project2}``
-
     Backus-Naur form (BNF) of the grammar::
 
         <grammar> ::= "*" | <items>
@@ -92,9 +81,37 @@ def _get_nova_client(config, project):
 
 
 class OpenStackQuery(BaseQuery):
-    """OpenStackQuery query builder.
+    r"""OpenStackQuery query builder.
 
     Query VMs deployed in an OpenStack infrastructure using the API.
+    This is an optional backend, its dependencies will not be installed automatically, see the Installation section
+    of the documentation for more details.
+
+    * Each query can specify multiple parameters to filter the hosts selection in the form ``key:value``.
+    * The special ``project`` key allow to filter by the OpenStack project name: ``project:project_name``. If not
+      specified all the visible and enabled projects will be queried.
+    * Any other ``key:value`` pair will be passed as is to the
+      `OpenStack Compute API list-servers <https://developer.openstack.org/api-ref/compute/#list-servers>`_. Multiple
+      filters can be added separated by space. The value can be enclosed in single or double quotes:
+      ``name:"host1.*\.domain" image:UUID``
+    * By default the filters ``status:ACTIVE`` and ``vm_state:ACTIVE`` are also added, but will be overridden if
+      specified in the query.
+    * To mix multiple selections the general grammar must be used with multiple subqueries:
+      ``O{project:project1} or O{project:project2}``
+    * The special query ``*`` is a shortcut to select all hosts in all OpenStack projects.
+    * See the example configuration in ``doc/examples/config.yaml`` for all the OpenStack-related parameters that can
+      be set.
+
+    Some query examples:
+
+    * All hosts in all OpenStack projects: ``*``
+    * All hosts in a specific OpenStack project: ``project:project_name``
+    * Filter hosts using any parameter allowed by the OpenStack list-servers API: ``name:host1 image:UUID``
+      See `OpenStack Compute API list-servers <https://developer.openstack.org/api-ref/compute/#list-servers>`_ for
+      more details. Multiple filters can be added separated by space. The value can be enclosed in single or double
+      quotes. If the ``project`` key is not specified the hosts will be selected from all projects.
+    * To mix multiple selections the general grammar must be used with multiple subqueries:
+      ``O{project:project1} or O{project:project2}``
     """
 
     grammar = grammar()

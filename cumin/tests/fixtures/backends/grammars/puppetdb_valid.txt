@@ -31,3 +31,9 @@ F:key1 = value or (F:key2 < 5 and (hostname or F:key3 = value)) and F:key4 = val
 not F:key1 = value or not ( not F:key2 < 5 and not (not hostname or not F:key3 = value)) and not F:key4 = value
 not F:key1 or not ( not F:key2 < 5 and not (not hostname or not F:key3)) and not F:key4 = value
 (F:key1 = value and F:key2 = "another value") or (F:key3 = Value and F:key4 > 8.1)
+O:Module::class
+O:Module::class%param = 'some value'
+O:Module::class@tag ~ 'some [r]egex'
+P:Module::class
+P:Module::class%param = 'some value'
+P:Module::class@tag ~ 'some [r]egex'

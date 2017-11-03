@@ -2,8 +2,8 @@
 #
 # Cumin looks for an aliases.yaml file in the same directory of the loaded main configuration file.
 # Aliases are resolved recursively at runtime, hence they can be nested.
-# Aliases are defined in the form:
-#     alias_name: query_ tring using the global grammar
+# Aliases must use the global grammar and defined in the form:
+#     alias_name: query_string
 #
 alias_direct: D{host1 or host2}  # Use the direct backend
 alias_puppetdb: P{R:Class = My::Class}  # Use the PuppetDB backend
