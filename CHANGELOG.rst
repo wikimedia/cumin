@@ -9,6 +9,7 @@ New features
 """"""""""""
 
 * PuppetDB backend: Class, Roles and Profiles shortcuts (`T178279`_):
+
   * It is becoming common practice to use the role/profile paradigm in Puppet, where each host has only one role named
     ``Role::Module::Name`` that includes multiple profiles of the type ``Profile::Module::Name``. If this practice is
     used, queries for those resources in Cumin will be very common and not user-friendly, requiring to write queries of
@@ -23,6 +24,7 @@ Minor improvements
 """"""""""""""""""
 
 * Refactor documentation:
+
   * Moved most of the content from the README to the classes, function and documentation pages where it really belongs.
   * Add documentation files for an introduction to cumin, how to install it, how to develop it and with the release
     notes.
