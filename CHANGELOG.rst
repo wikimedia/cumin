@@ -1,6 +1,40 @@
 Cumin Changelog
 ---------------
 
+
+`v1.3.0`_ (2017-11-03)
+^^^^^^^^^^^^^^^^^^^^^^
+
+New features
+""""""""""""
+
+* PuppetDB backend: Class, Roles and Profiles shortcuts (`T178279`_):
+  * It is becoming common practice to use the role/profile paradigm in Puppet, where each host has only one role named
+    ``Role::Module::Name`` that includes multiple profiles of the type ``Profile::Module::Name``. If this practice is
+    used, queries for those resources in Cumin will be very common and not user-friendly, requiring to write queries of
+    the type ``R:Class = Role::Module::Name``. Add support to Roles and Profiles so that they can be queried via
+    shortcuts with ``O:Module::Name`` for roles and ``P:Module::Name`` for profiles.
+  * Add also a generic class shortcut to quickly query a class resource with ``C:class_name`` or ``C:path::to::class``.
+  * The special syntax for fields ``@field`` and parameters ``%param`` are also supported. When querying for any of the
+    above shortcuts, like ``P:Module::Name%param = value``. The generated query will include two subqueries in ``AND``
+    between them, one for the class title and the other for the class parameter.
+
+Minor improvements
+""""""""""""""""""
+
+* Refactor documentation:
+  * Moved most of the content from the README to the classes, function and documentation pages where it really belongs.
+  * Add documentation files for an introduction to cumin, how to install it, how to develop it and with the release
+    notes.
+  * Add animated GIF to the README and documentation introduction.
+
+Bug Fixes
+"""""""""
+
+* Documentation: amend CHANGELOG and TODO for the addition of the manpage in `v1.2.2`_ (`T159308`_).
+* Documentation: add ReadTheDocs specific configuration.
+* Documentation: fix ReadTheDocs CSS override
+
 `v1.2.2`_ (2017-10-11)
 ^^^^^^^^^^^^^^^^^^^^^^
 
@@ -326,6 +360,7 @@ Bug Fixes
 .. _`T174911`: https://phabricator.wikimedia.org/T174911
 .. _`T175711`: https://phabricator.wikimedia.org/T175711
 .. _`T176314`: https://phabricator.wikimedia.org/T176314
+.. _`T178279`: https://phabricator.wikimedia.org/T178279
 
 .. _`v0.0.1`: https://github.com/wikimedia/cumin/releases/tag/v0.0.1
 .. _`v0.0.2`: https://github.com/wikimedia/cumin/releases/tag/v0.0.2
@@ -334,3 +369,4 @@ Bug Fixes
 .. _`v1.1.1`: https://github.com/wikimedia/cumin/releases/tag/v1.1.1
 .. _`v1.2.1`: https://github.com/wikimedia/cumin/releases/tag/v1.2.1
 .. _`v1.2.2`: https://github.com/wikimedia/cumin/releases/tag/v1.2.2
+.. _`v1.3.0`: https://github.com/wikimedia/cumin/releases/tag/v1.3.0
