@@ -9,6 +9,9 @@ import pyparsing as pp
 from cumin import backends, CuminError
 
 
+INTERNAL_BACKEND_PREFIX = 'cumin.backends'
+
+
 Backend = namedtuple('Backend', ['keyword', 'name', 'cls'])
 """:py:func:`collections.namedtuple` that define a Backend object.
 
@@ -19,40 +22,32 @@ Keyword Arguments:
 """
 
 
-def get_registered_backends():
+def get_registered_backends(external=()):
     """Get a mapping of all the registered backends with their keyword.
+
+    Arguments:
+        external (list, tuple, optional): external backend modules to register.
 
     Returns:
         dict: A dictionary with a ``{keyword: Backend object}`` mapping for each available backend.
 
     Raises:
-        cumin.CuminError: If unable to register a backend because the key is already used by another backend.
+        cumin.CuminError: If unable to register a backend.
 
     """
     available_backends = {}
-    backend_names = [name for _, name, ispkg in pkgutil.iter_modules(backends.__path__) if not ispkg]
+    backend_names = ['{prefix}.{backend}'.format(prefix=INTERNAL_BACKEND_PREFIX, backend=name)
+                     for _, name, ispkg in pkgutil.iter_modules(backends.__path__) if not ispkg]
 
-    for name in backend_names:
-        try:
-            backend = importlib.import_module('cumin.backends.{backend}'.format(backend=name))
-        except ImportError:
-            continue  # Backend not available, are all dependencies installed?
-
-        keyword = backend.GRAMMAR_PREFIX
-        if keyword in available_backends:
-            raise CuminError("Unable to register backend {name}, keyword '{key}' already registered: {backends}".format(
-                name=name, key=keyword, backends=available_backends))
-
-        available_backends[keyword] = Backend(name=name, keyword=keyword, cls=backend.query_class)
+    for name in backend_names + list(external):
+        keyword, backend = _import_backend(name, available_backends)
+        if keyword is not None and backend is not None:
+            available_backends[keyword] = backend
 
     return available_backends
 
 
-REGISTERED_BACKENDS = get_registered_backends()
-""":py:class:`dict`: Hold the dictionary of available backends generated at load time mapped by their keyword."""
-
-
-def grammar():
+def grammar(backend_keys):
     """Define the main multi-query grammar.
 
     Cumin provides a user-friendly generic query language that allows to combine the results of subqueries for multiple
@@ -77,6 +72,9 @@ def grammar():
     Given that the pyparsing library defines the grammar in a BNF-like style, for the details of the tokens not
     specified above check directly the source code.
 
+    Arguments:
+        backend_keys (list): list of the GRAMMAR_PREFIX for each registered backend.
+
     Returns:
         pyparsing.ParserElement: the grammar parser.
 
@@ -90,7 +88,7 @@ def grammar():
     rpar = pp.Literal(')')('close_subgroup')
 
     # Backend query: P{PuppetDB specific query}
-    query_start = pp.Combine(pp.oneOf(REGISTERED_BACKENDS.keys(), caseless=True)('backend') + pp.Literal('{'))
+    query_start = pp.Combine(pp.oneOf(backend_keys, caseless=True)('backend') + pp.Literal('{'))
     query_end = pp.Literal('}')
     # Allow the backend specific query to use the end_query token as well, as long as it's in a quoted string
     # and fail if there is a query_start token before the first query_end is reached
@@ -107,3 +105,44 @@ def grammar():
     full_grammar << pp.Group(item) + pp.ZeroOrMore(pp.Group(boolean + item))  # pylint: disable=expression-not-assigned
 
     return full_grammar
+
+
+def _import_backend(module, available_backends):
+    """Dynamically import a backend for Cumin and validate it.
+
+    Arguments:
+        module (str): the full module name of the backend to register. Must be importable from Python ``PATH``.
+        available_backends (dict): dictionary with a ``{keyword: Backend object}`` mapping for all registered backends.
+
+    Returns:
+        tuple: with two elements: ``(keyword, Backend object)`` of the imported backend.
+
+    """
+    try:
+        backend = importlib.import_module(module)
+    except ImportError as e:
+        if module.startswith(INTERNAL_BACKEND_PREFIX):
+            return (None, None)  # Internal backend not available, are all the dependencies installed?
+        else:
+            raise CuminError("Unable to import backend '{module}': {e}".format(module=module, e=e))
+
+    name = module.split('.')[-1]
+    message = "Unable to register backend '{name}' in module '{module}'".format(name=name, module=module)
+    try:
+        keyword = backend.GRAMMAR_PREFIX
+    except AttributeError:
+        raise CuminError('{message}: GRAMMAR_PREFIX module attribute not found'.format(message=message))
+
+    if keyword in available_backends:
+        raise CuminError(("{message}: keyword '{key}' already registered: {backends}").format(
+            message=message, key=keyword, backends=available_backends))
+
+    try:
+        class_obj = backend.query_class
+    except AttributeError:
+        raise CuminError('{message}: query_class module attribute not found'.format(message=message))
+
+    if not issubclass(class_obj, backends.BaseQuery):
+        raise CuminError('{message}: query_class module attribute is not a subclass of cumin.backends.BaseQuery')
+
+    return (keyword, Backend(name=name, keyword=keyword, cls=class_obj))

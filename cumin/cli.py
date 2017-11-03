@@ -110,10 +110,11 @@ def get_parser():
     parser.add_argument('--force', action='store_true',
                         help=('USE WITH CAUTION! Force the execution without confirmation of the affected hosts. '
                               '[default: False]'))
-    parser.add_argument('--backend', choices=backends_names,
+    parser.add_argument('--backend',
                         help=('Override the default backend selected in the configuration file for this execution. The '
                               'backend-specific configuration must be already present in the configuration file. '
-                              '[default: None]'))
+                              'One of [{backends}] or any external backend listed in the configuration file '
+                              '[default: None]').format(backends=', '.join(backends_names)))
     parser.add_argument('--transport', choices=transports_names,
                         help=('Override the default transport selected in the configuration file for this execution. '
                               'The transport-specific configuration must already be present in the configuration file. '

@@ -1,8 +1,8 @@
 """Query handling: factory and builder."""
 from pyparsing import ParseException, ParseResults
 
+from cumin import grammar
 from cumin.backends import BaseQuery, BaseQueryAggregator, InvalidQueryError
-from cumin.grammar import grammar, REGISTERED_BACKENDS
 
 
 class Query(BaseQueryAggregator):
@@ -24,8 +24,16 @@ class Query(BaseQueryAggregator):
 
     """
 
-    grammar = grammar()
-    """:py:class:`pyparsing.ParserElement`: Load the grammar parser only once in a singleton-like way."""
+    def __init__(self, config, logger=None):
+        """Query constructor, initialize the registered backends.
+
+        :Parameters:
+            according to parent :py:meth:`cumin.backends.BaseQueryAggregator.__init__`.
+        """
+        super(Query, self).__init__(config, logger=logger)
+        external = self.config.get('plugins', {}).get('backends', [])
+        self.registered_backends = grammar.get_registered_backends(external=external)
+        self.grammar = grammar.grammar(self.registered_backends.keys())
 
     def execute(self, query_string):
         """Override parent class execute method to implement the multi-query capability.
@@ -73,13 +81,13 @@ class Query(BaseQueryAggregator):
             cumin.backends.InvalidQueryError: if unable to get the default backend from the registered backends.
 
         """
-        for registered_backend in REGISTERED_BACKENDS.values():
+        for registered_backend in self.registered_backends.values():
             if registered_backend.name == self.config['default_backend']:
                 backend = registered_backend
                 break
         else:
             raise InvalidQueryError("Default backend '{name}' is not registered: {backends}".format(
-                name=self.config['default_backend'], backends=REGISTERED_BACKENDS))
+                name=self.config['default_backend'], backends=self.registered_backends))
 
         query = backend.cls(self.config, logger=self.logger)
 
@@ -107,7 +115,7 @@ class Query(BaseQueryAggregator):
 
         if 'backend' in token_dict and 'query' in token_dict:
             element = self._get_stack_element()
-            query = REGISTERED_BACKENDS[token_dict['backend']].cls(self.config, logger=self.logger)
+            query = self.registered_backends[token_dict['backend']].cls(self.config, logger=self.logger)
             element['hosts'] = query.execute(token_dict['query'])
             if 'bool' in token_dict:
                 element['bool'] = token_dict['bool']

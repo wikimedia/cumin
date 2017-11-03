@@ -35,3 +35,8 @@ clustershell:
     ssh_options:  # SSH options passed to ClusterShell [optional]
         - 'some_option'
     fanout: 16  # Max size of the sliding window of concurrent workers active at any given time [optional, default: 64]
+
+# Plugins-specific configuration
+plugins:
+    backends:  # External backends. Each module must define GRAMMAR_PREFIX and query_class, and be in Python PATH
+        - external.backend.module

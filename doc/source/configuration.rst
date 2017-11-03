@@ -1,6 +1,8 @@
 Configuration
 =============
 
+.. _config.yaml:
+
 config.yaml
 -----------
 

@@ -39,6 +39,17 @@ Those are the available backends:
   backend.
 * **Direct**: a fallback backend without extenal dependecies with :py:class:`ClusterShell.NodeSet.NodeSet` group
   expansion capabilities. See the :py:class:`cumin.backends.direct.DirectQuery` class documentation for the details.
+* **Custom**: is possible to plug-in custom backends developed externally from Cumin, as long as they:
+
+  * are included in the Python ``PATH``.
+  * define a ``GRAMMAR_PREFIX`` module constant that doesn't conflict with the other backend prefixes.
+  * define a ``query_class`` module variable that points to a class that inherit from
+    :py:class:`cumin.backends.BaseQuery`.
+  * are listed in the configuration file in the ``plugins->backends`` section, see :ref:`config.yaml`.
+
+  An example of external backend can be found in the source code as part of the tests in the
+  ``cumin.tests.unit.backends.external.ok`` module.
+
 
 Transports
 ^^^^^^^^^^
