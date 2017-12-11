@@ -86,7 +86,8 @@ class PuppetDBQuery(BaseQuery):
     """PuppetDB query builder.
 
     The `puppetdb` backend allow to use an existing PuppetDB instance for the hosts selection.
-    At the moment only PuppetDB v3 API are implemented.
+    The supported PuppetDB API versions are 3 and 4. It can be specified via the api_version configuration key, if
+    not configured, the v4 will be used.
 
     * Each query part can be composed with the others using boolean operators (``and``, ``or``, ``not``)
     * Multiple query parts can be grouped together with parentheses (``(``, ``)``).
@@ -136,17 +137,13 @@ class PuppetDBQuery(BaseQuery):
       ``host10[10-42].*.domain or (not F:key1 = value1 and host10*) or (F:key2 > value2 and F:key3 ~ '^value[0-9]+')``
     """
 
-    base_url_template = 'https://{host}:{port}/v3/'
+    base_url_template = 'https://{host}:{port}'
     """:py:class:`str`: string template in the :py:meth:`str.format` style used to generate the base URL of the
     PuppetDB server."""
 
     endpoints = {'C': 'resources', 'F': 'nodes', 'O': 'resources', 'P': 'resources', 'R': 'resources'}
     """:py:class:`dict`: dictionary with the mapping of the available categories in the grammar to the PuppetDB API
     endpoints."""
-
-    hosts_keys = {'nodes': 'name', 'resources': 'certname'}
-    """:py:class:`dict`: dictionary with the mapping of the available endpoints of the PuppetDB API to the field to
-    query to get the hostname."""
 
     category_prefixes = {'C': '', 'O': 'Role', 'P': 'Profile'}
     """:py:class:`dict`: dictionary with the mapping of special categories to title prefixes."""
@@ -166,9 +163,19 @@ class PuppetDBQuery(BaseQuery):
         self.current_group = self.grouped_tokens
         self._endpoint = None
         puppetdb_config = self.config.get('puppetdb', {})
-        self.url = self.base_url_template.format(
+        base_url = self.base_url_template.format(
             host=puppetdb_config.get('host', 'localhost'),
             port=puppetdb_config.get('port', 443))
+
+        self.api_version = puppetdb_config.get('api_version', 4)
+        if self.api_version == 3:
+            self.url = base_url + '/v3/'
+            self.hosts_keys = {'nodes': 'name', 'resources': 'certname'}
+        elif self.api_version == 4:
+            self.url = base_url + '/pdb/query/v4/'
+            self.hosts_keys = {'nodes': 'certname', 'resources': 'certname'}
+        else:
+            raise InvalidQueryError('Unsupported PuppetDB API version {ver}'.format(ver=self.api_version))
 
         for exception in puppetdb_config.get('urllib3_disable_warnings', []):
             urllib3.disable_warnings(category=getattr(urllib3.exceptions, exception))
@@ -366,7 +373,7 @@ class PuppetDBQuery(BaseQuery):
 
         elif '%' in key:
             # Querying a specific parameter of the resource
-            if operator == '~':
+            if operator == '~' and self.api_version == 3:
                 raise InvalidQueryError('Regex operations are not supported in PuppetDB API v3 for resource parameters')
             key, param = key.split('%', 1)
             query_part = ', ["{op}", ["parameter", "{param}"], "{value}"]'.format(op=operator, param=param, value=value)
@@ -492,7 +499,11 @@ class PuppetDBQuery(BaseQuery):
             requests.HTTPError: if the PuppetDB API call fails.
 
         """
-        resources = requests.get(self.url + self.endpoint, params={'query': query}, verify=True)
+        if self.api_version == 3:
+            resources = requests.get(self.url + self.endpoint, params={'query': query}, verify=True)
+        else:
+            resources = requests.post(self.url + self.endpoint, json={'query': query}, verify=True)
+
         resources.raise_for_status()
         return resources.json()
 

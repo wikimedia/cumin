@@ -16,6 +16,7 @@ environment:
 puppetdb:
     host: puppetdb.local
     port: 443
+    api_version: 4  # Supported versions are v3 and v4. If not specified, v4 will be used.
     urllib3_disable_warnings:  # List of Python urllib3 exceptions to ignore
         - SubjectAltNameWarning
 
