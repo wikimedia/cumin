@@ -316,6 +316,11 @@ class TestTarget(object):
         self.hosts_list = ['host' + str(i) for i in xrange(10)]
         self.hosts = NodeSet.fromlist(self.hosts_list)
 
+    def test_instantiation_no_hosts(self):
+        """Creating a Target instance with empty hosts should raise WorkerError."""
+        with pytest.raises(transports.WorkerError, match="must be a non-empty ClusterShell's NodeSet or list"):
+            transports.Target([])
+
     def test_instantiation_nodeset(self):
         """Creating a Target instance with a NodeSet and without optional parameter should return their defaults."""
         target = transports.Target(self.hosts)
@@ -332,7 +337,7 @@ class TestTarget(object):
 
     def test_instantiation_invalid(self):
         """Creating a Target instance with invalid hosts should raise WorkerError."""
-        with pytest.raises(transports.WorkerError, match="must be a ClusterShell's NodeSet or a list"):
+        with pytest.raises(transports.WorkerError, match="must be a non-empty ClusterShell's NodeSet or list"):
             transports.Target(set(self.hosts_list))
 
     @mock.patch('cumin.transports.logging.Logger.debug')

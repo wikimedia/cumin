@@ -339,17 +339,20 @@ class Target(object):
                 batch and the start in the next host. It must be a positive float or None to unset it.
 
         Raises:
-            cumin.transports.WorkerError: if the `hosts` parameter is invalid.
+            cumin.transports.WorkerError: if the `hosts` parameter is empty or invalid.
 
         """
         self.logger = logging.getLogger('.'.join((self.__module__, self.__class__.__name__)))
 
-        if isinstance(hosts, NodeSet):
+        message = "must be a non-empty ClusterShell's NodeSet or list"
+        if not hosts:
+            raise_error('hosts', message, hosts)
+        elif isinstance(hosts, NodeSet):
             self.hosts = hosts
         elif isinstance(hosts, list):
             self.hosts = NodeSet.fromlist(hosts)
         else:
-            raise_error('hosts', "must be a ClusterShell's NodeSet or a list", hosts)
+            raise_error('hosts', message, hosts)
 
         self.batch_size = self._compute_batch_size(batch_size, self.hosts)
         self.batch_sleep = Target._compute_batch_sleep(batch_sleep)
@@ -437,6 +440,9 @@ class BaseWorker(object):
 
         Returns:
             int: ``0`` on success, a positive integer on failure.
+
+        Raises:
+            cumin.transports.WorkerError: if misconfigured.
 
         """
 

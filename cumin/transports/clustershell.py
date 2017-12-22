@@ -56,12 +56,7 @@ class ClusterShellWorker(BaseWorker):
             according to parent :py:meth:`cumin.transports.BaseWorker.execute`.
         """
         if not self.commands:
-            self.logger.warning('No commands provided')
-            return
-
-        if not self.target.hosts:
-            self.logger.warning('No target hosts provided')
-            return
+            raise WorkerError('No commands provided.')
 
         if self.handler is None:
             raise WorkerError('An EventHandler is mandatory.')
