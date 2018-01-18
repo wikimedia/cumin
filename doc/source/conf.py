@@ -67,7 +67,7 @@ master_doc = 'index'
 # General information about the project.
 project = u'Cumin'
 title = u'{project} Documentation'.format(project=project)
-copyright = u"2017, Riccardo Coccioli <rcoccioli@wikimedia.org>, Wikimedia Foundation, Inc."
+copyright = u"2017-2018, Riccardo Coccioli <rcoccioli@wikimedia.org>, Wikimedia Foundation, Inc."
 author = u'Riccardo Coccioli'
 
 # The version info for the project you're documenting, acts as replacement for
