@@ -1,10 +1,15 @@
+cumin (2.0.0-1) jessie-wikimedia; urgency=medium
+
+  * v2.0.0 upstream release.
+
+ -- Riccardo Coccioli <rcoccioli@wikimedia.org>  Fri, 19 Jan 2018 17:48:55 +0100
+
 cumin (1.3.0-1) jessie-wikimedia; urgency=medium
 
   * v1.3.0 upstream release.
   * Fix upstream-tag in debian/gbp.conf.
 
  -- Riccardo Coccioli <rcoccioli@wikimedia.org>  Fri, 03 Nov 2017 16:05:12 +0100
-
 
 cumin (1.2.2-1) jessie-wikimedia; urgency=medium
 
@@ -20,7 +25,6 @@ cumin (1.2.2-1) jessie-wikimedia; urgency=medium
   * Add watch file to track GitHub releases
 
  -- Riccardo Coccioli <rcoccioli@wikimedia.org>  Wed, 11 Oct 2017 22:43:05 +0200
-
 
 cumin (1.2.1-1) jessie-wikimedia; urgency=medium
 
