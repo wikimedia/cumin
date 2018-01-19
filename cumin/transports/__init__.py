@@ -325,7 +325,7 @@ class State(object):
 class Target(object):
     """Targets management class."""
 
-    def __init__(self, hosts, batch_size=None, batch_sleep=None, logger=None):
+    def __init__(self, hosts, batch_size=None, batch_sleep=None):
         """Constructor, inizialize the Target with the list of hosts and additional parameters.
 
         Arguments:
@@ -337,20 +337,22 @@ class Target(object):
                 It must be a positive integer or :py:data:`None` to unset it.
             batch_sleep (int, optional): sleep time in seconds between the end of execution of one host in the
                 batch and the start in the next host. It must be a positive float or None to unset it.
-            logger (logging.Logger, optional): a logger instance.
 
         Raises:
-            cumin.transports.WorkerError: if the `hosts` parameter is invalid.
+            cumin.transports.WorkerError: if the `hosts` parameter is empty or invalid.
 
         """
-        self.logger = logger or logging.getLogger(__name__)
+        self.logger = logging.getLogger('.'.join((self.__module__, self.__class__.__name__)))
 
-        if isinstance(hosts, NodeSet):
+        message = "must be a non-empty ClusterShell's NodeSet or list"
+        if not hosts:
+            raise_error('hosts', message, hosts)
+        elif isinstance(hosts, NodeSet):
             self.hosts = hosts
         elif isinstance(hosts, list):
             self.hosts = NodeSet.fromlist(hosts)
         else:
-            raise_error('hosts', "must be a ClusterShell's NodeSet or a list", hosts)
+            raise_error('hosts', message, hosts)
 
         self.batch_size = self._compute_batch_size(batch_size, self.hosts)
         self.batch_sleep = Target._compute_batch_sleep(batch_sleep)
@@ -384,8 +386,8 @@ class Target(object):
         if batch_size is None:
             batch_size = hosts_size
         elif batch_size > hosts_size:
-            self.logger.debug(("Provided batch_size '{batch_size}' is greater than the number of hosts '{hosts_size}'"
-                               ", using '{hosts_size}' as value").format(batch_size=batch_size, hosts_size=hosts_size))
+            self.logger.debug(("Provided batch_size '%d' is greater than the number of hosts '%d'"
+                               ", using '%d' as value"), batch_size, hosts_size, hosts_size)
             batch_size = hosts_size
 
         return batch_size
@@ -411,19 +413,17 @@ class BaseWorker(object):
 
     __metaclass__ = ABCMeta
 
-    def __init__(self, config, target, logger=None):
+    def __init__(self, config, target):
         """Worker constructor. Setup environment variables and initialize properties.
 
         Arguments:
             config (dict): a dictionary with the parsed configuration file.
             target (Target): a Target instance.
-            logger (logging.Logger, optional): an optional logger instance.
         """
         self.config = config
         self.target = target
-        self.logger = logger or logging.getLogger(__name__)
-        self.logger.trace('Transport {name} created with config: {config}'.format(
-            name=type(self).__name__, config=config))
+        self.logger = logging.getLogger('.'.join((self.__module__, self.__class__.__name__)))
+        self.logger.trace('Transport %s created with config: %s', type(self).__name__, config)
 
         # Initialize setters values
         self._commands = None
@@ -440,6 +440,9 @@ class BaseWorker(object):
 
         Returns:
             int: ``0`` on success, a positive integer on failure.
+
+        Raises:
+            cumin.transports.WorkerError: if misconfigured.
 
         """
 

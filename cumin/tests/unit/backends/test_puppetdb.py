@@ -2,7 +2,6 @@
 # pylint: disable=invalid-name
 import mock
 import pytest
-import requests_mock
 
 from ClusterShell.NodeSet import NodeSet
 from requests.exceptions import HTTPError
@@ -37,23 +36,37 @@ def test_hosts_selection():
     assert parsed[0].asDict() == hosts
 
 
-class TestPuppetDBQuery(object):
-    """PuppetDB backend query test class."""
+class TestPuppetDBQueryV3(object):
+    """PuppetDB backend query test class for API version 3."""
 
     def setup_method(self, _):
-        """Setup an instace of PuppetDBQuery for each test."""
-        self.query = puppetdb.PuppetDBQuery({})  # pylint: disable=attribute-defined-outside-init
+        """Set an instance of PuppetDBQuery for each test."""
+        config = {'puppetdb': {'api_version': 3}}
+        self.query = puppetdb.PuppetDBQuery(config)  # pylint: disable=attribute-defined-outside-init
 
     def test_instantiation(self):
         """An instance of PuppetDBQuery should be an instance of BaseQuery."""
         assert isinstance(self.query, BaseQuery)
         assert self.query.url == 'https://localhost:443/v3/'
 
+
+class TestPuppetDBQueryV4(object):
+    """PuppetDB backend query test class for API version 4."""
+
+    def setup_method(self, _):
+        """Set an instance of PuppetDBQuery for each test."""
+        self.query = puppetdb.PuppetDBQuery({})  # pylint: disable=attribute-defined-outside-init
+
+    def test_instantiation(self):
+        """An instance of PuppetDBQuery should be an instance of BaseQuery."""
+        assert isinstance(self.query, BaseQuery)
+        assert self.query.url == 'https://localhost:443/pdb/query/v4/'
+
     def test_endpoint_getter(self):
         """Access to endpoint property should return nodes by default."""
         assert self.query.endpoint == 'nodes'
 
-    @pytest.mark.parametrize('endpoint', puppetdb.PuppetDBQuery.hosts_keys)
+    @pytest.mark.parametrize('endpoint', set(puppetdb.PuppetDBQuery.endpoints.values()))
     def test_endpoint_setter_valid(self, endpoint):
         """Setting the endpoint property should accept valid values."""
         self.query.endpoint = endpoint
@@ -81,12 +94,71 @@ class TestPuppetDBQuery(object):
             self.query.endpoint = 'resources'
 
 
+def test_puppetdb_query_init_invalid():
+    """Instantiating PuppetDBQuery with an unsupported API version should raise InvalidQueryError."""
+    with pytest.raises(InvalidQueryError, match='Unsupported PuppetDB API version'):
+        puppetdb.PuppetDBQuery({'puppetdb': {'api_version': 99}})
+
+
 @mock.patch.object(puppetdb.PuppetDBQuery, '_api_call')
-class TestPuppetDBQueryBuild(object):
-    """PuppetDB backend query build test class."""
+class TestPuppetDBQueryBuildV3(object):
+    """PuppetDB backend API v3 query build test class."""
 
     def setup_method(self, _):
-        """Setup an instace of PuppetDBQuery for each test."""
+        """Set an instace of PuppetDBQuery for each test."""
+        config = {'puppetdb': {'api_version': 3}}
+        self.query = puppetdb.PuppetDBQuery(config)  # pylint: disable=attribute-defined-outside-init
+
+    def test_add_category_resource_parameter_regex(self, mocked_api_call):
+        """A resource's parameter query with a regex should raise InvalidQueryError."""
+        with pytest.raises(InvalidQueryError, match='Regex operations are not supported in PuppetDB'):
+            self.query.execute('R:resource%param ~ value.*')
+            assert not mocked_api_call.called
+
+    def test_add_hosts(self, mocked_api_call):
+        """A host query should add the proper query token to the current_group."""
+        # No hosts
+        self.query.execute('host1!host1')
+        mocked_api_call.assert_called_with('')
+        # Single host
+        self.query.execute('host')
+        mocked_api_call.assert_called_with('["or", ["=", "name", "host"]]')
+        # Multiple hosts
+        self.query.execute('host[1-2]')
+        mocked_api_call.assert_called_with('["or", ["=", "name", "host1"], ["=", "name", "host2"]]')
+        # Negated query
+        self.query.execute('not host[1-2]')
+        mocked_api_call.assert_called_with('["not", ["or", ["=", "name", "host1"], ["=", "name", "host2"]]]')
+        # Globbing hosts
+        self.query.execute('host1*.domain')
+        mocked_api_call.assert_called_with(r'["or", ["~", "name", "^host1.*\\.domain$"]]')
+
+    def test_and(self, mocked_api_call):
+        """A query with 'and' should set the boolean property to the current group to 'and'."""
+        self.query.execute('host1 and host2')
+        assert self.query.current_group['bool'] == 'and'
+        mocked_api_call.assert_called_with('["and", ["or", ["=", "name", "host1"]], ["or", ["=", "name", "host2"]]]')
+
+    def test_or(self, mocked_api_call):
+        """A query with 'or' should set the boolean property to the current group to 'or'."""
+        self.query.execute('host1 or host2')
+        assert self.query.current_group['bool'] == 'or'
+        mocked_api_call.assert_called_with('["or", ["or", ["=", "name", "host1"]], ["or", ["=", "name", "host2"]]]')
+
+    def test_and_and(self, mocked_api_call):
+        """A query with 'and' and 'and' should set the boolean property to the current group to 'and'."""
+        self.query.execute('host1 and host2 and host3')
+        assert self.query.current_group['bool'] == 'and'
+        mocked_api_call.assert_called_with(
+            '["and", ["or", ["=", "name", "host1"]], ["or", ["=", "name", "host2"]], ["or", ["=", "name", "host3"]]]')
+
+
+@mock.patch.object(puppetdb.PuppetDBQuery, '_api_call')
+class TestPuppetDBQueryBuildV4(object):
+    """PuppetDB backend API v4 query build test class."""
+
+    def setup_method(self, _):
+        """Set an instace of PuppetDBQuery for each test."""
         self.query = puppetdb.PuppetDBQuery({})  # pylint: disable=attribute-defined-outside-init
 
     def test_add_category_fact(self, mocked_api_call):
@@ -142,10 +214,10 @@ class TestPuppetDBQueryBuild(object):
             '["and", ["=", "type", "Resource"], ["=", ["parameter", "param"], "value"]]')
 
     def test_add_category_resource_parameter_regex(self, mocked_api_call):
-        """A resource's parameter query with a regex should raise InvalidQueryError."""
-        with pytest.raises(InvalidQueryError, match='Regex operations are not supported in PuppetDB'):
-            self.query.execute('R:resource%param ~ value.*')
-            assert not mocked_api_call.called
+        """A resource's parameter query with a regex should add the propery query token to the object."""
+        self.query.execute('R:resource%param ~ value.*')
+        mocked_api_call.assert_called_with(
+            '["and", ["=", "type", "Resource"], ["~", ["parameter", "param"], "value.*"]]')
 
     def test_add_category_resource_field(self, mocked_api_call):
         """A resource's field query should add the proper query token to the current_group."""
@@ -302,28 +374,30 @@ class TestPuppetDBQueryBuild(object):
         mocked_api_call.assert_called_with('')
         # Single host
         self.query.execute('host')
-        mocked_api_call.assert_called_with('["or", ["=", "name", "host"]]')
+        mocked_api_call.assert_called_with('["or", ["=", "certname", "host"]]')
         # Multiple hosts
         self.query.execute('host[1-2]')
-        mocked_api_call.assert_called_with('["or", ["=", "name", "host1"], ["=", "name", "host2"]]')
+        mocked_api_call.assert_called_with('["or", ["=", "certname", "host1"], ["=", "certname", "host2"]]')
         # Negated query
         self.query.execute('not host[1-2]')
-        mocked_api_call.assert_called_with('["not", ["or", ["=", "name", "host1"], ["=", "name", "host2"]]]')
+        mocked_api_call.assert_called_with('["not", ["or", ["=", "certname", "host1"], ["=", "certname", "host2"]]]')
         # Globbing hosts
         self.query.execute('host1*.domain')
-        mocked_api_call.assert_called_with(r'["or", ["~", "name", "^host1.*\\.domain$"]]')
+        mocked_api_call.assert_called_with(r'["or", ["~", "certname", "^host1.*\\.domain$"]]')
 
     def test_and(self, mocked_api_call):
         """A query with 'and' should set the boolean property to the current group to 'and'."""
         self.query.execute('host1 and host2')
         assert self.query.current_group['bool'] == 'and'
-        mocked_api_call.assert_called_with('["and", ["or", ["=", "name", "host1"]], ["or", ["=", "name", "host2"]]]')
+        mocked_api_call.assert_called_with(
+            '["and", ["or", ["=", "certname", "host1"]], ["or", ["=", "certname", "host2"]]]')
 
     def test_or(self, mocked_api_call):
         """A query with 'or' should set the boolean property to the current group to 'or'."""
         self.query.execute('host1 or host2')
         assert self.query.current_group['bool'] == 'or'
-        mocked_api_call.assert_called_with('["or", ["or", ["=", "name", "host1"]], ["or", ["=", "name", "host2"]]]')
+        mocked_api_call.assert_called_with(
+            '["or", ["or", ["=", "certname", "host1"]], ["or", ["=", "certname", "host2"]]]')
 
     def test_and_or(self, mocked_api_call):
         """A query with 'and' and 'or' in the same group should raise InvalidQueryError."""
@@ -336,84 +410,60 @@ class TestPuppetDBQueryBuild(object):
         self.query.execute('host1 and host2 and host3')
         assert self.query.current_group['bool'] == 'and'
         mocked_api_call.assert_called_with(
-            '["and", ["or", ["=", "name", "host1"]], ["or", ["=", "name", "host2"]], ["or", ["=", "name", "host3"]]]')
+            ('["and", ["or", ["=", "certname", "host1"]], ["or", ["=", "certname", "host2"]], '
+             '["or", ["=", "certname", "host3"]]]'))
 
 
-@requests_mock.Mocker()
-class TestPuppetDBQueryExecute(object):
-    """PuppetDBQuery test execute() method class."""
+def test_nodes_endpoint(query_requests):
+    """Calling execute() with a query that goes to the nodes endpoint should return the list of hosts."""
+    hosts = query_requests[0].execute('nodes_host[1-2]')
+    assert hosts == NodeSet('nodes_host[1-2]')
+    assert query_requests[1].call_count == 1
 
-    def setup_method(self, _):
-        """Setup an instace of PuppetDBQuery for each test."""
-        # pylint: disable=attribute-defined-outside-init
-        self.query = puppetdb.PuppetDBQuery({'puppetdb': {'urllib3_disable_warnings': ['SubjectAltNameWarning']}})
 
-    def _register_requests_uris(self, requests):
-        """Setup the requests library mock for each test."""
-        # Register a requests valid response for each endpoint
-        for endpoint, key in self.query.hosts_keys.items():
-            requests.register_uri('GET', self.query.url + endpoint + '?query=', status_code=200, json=[
-                {key: endpoint + '_host1', 'key': 'value1'}, {key: endpoint + '_host2', 'key': 'value2'}])
+def test_resources_endpoint(query_requests):
+    """Calling execute() with a query that goes to the resources endpoint should return the list of hosts."""
+    hosts = query_requests[0].execute('R:Class = value')
+    assert hosts == NodeSet('resources_host[1-2]')
+    assert query_requests[1].call_count == 1
 
-        # Register a requests response for a non matching query
-        requests.register_uri(
-            'GET', self.query.url + self.query.endpoints['F'] + '?query=["or", ["=", "name", "non_existent_host"]]',
-            status_code=200, json=[], complete_qs=True)
-        # Register a requests response for an invalid query
-        requests.register_uri(
-            'GET', self.query.url + self.query.endpoints['F'] + '?query=["or", ["=", "name", "invalid_query"]]',
-            status_code=400, complete_qs=True)
 
-    def test_nodes_endpoint(self, requests):
-        """Calling execute() with a query that goes to the nodes endpoint should return the list of hosts."""
-        self._register_requests_uris(requests)
-        hosts = self.query.execute('nodes_host[1-2]')
-        assert hosts == NodeSet('nodes_host[1-2]')
-        assert requests.call_count == 1
+def test_with_boolean_operator(query_requests):
+    """Calling execute() with a query with a boolean operator should return the list of hosts."""
+    hosts = query_requests[0].execute('nodes_host1 or nodes_host2')
+    assert hosts == NodeSet('nodes_host[1-2]')
+    assert query_requests[1].call_count == 1
 
-    def test_resources_endpoint(self, requests):
-        """Calling execute() with a query that goes to the resources endpoint should return the list of hosts."""
-        self._register_requests_uris(requests)
-        hosts = self.query.execute('R:Class = value')
-        assert hosts == NodeSet('resources_host[1-2]')
-        assert requests.call_count == 1
 
-    def test_with_boolean_operator(self, requests):
-        """Calling execute() with a query with a boolean operator should return the list of hosts."""
-        self._register_requests_uris(requests)
-        hosts = self.query.execute('nodes_host1 or nodes_host2')
-        assert hosts == NodeSet('nodes_host[1-2]')
-        assert requests.call_count == 1
+def test_with_subgroup(query_requests):
+    """Calling execute() with a query with a subgroup return the list of hosts."""
+    hosts = query_requests[0].execute('(nodes_host1 or nodes_host2)')
+    assert hosts == NodeSet('nodes_host[1-2]')
+    assert query_requests[1].call_count == 1
 
-    def test_with_subgroup(self, requests):
-        """Calling execute() with a query with a subgroup return the list of hosts."""
-        self._register_requests_uris(requests)
-        hosts = self.query.execute('(nodes_host1 or nodes_host2)')
-        assert hosts == NodeSet('nodes_host[1-2]')
-        assert requests.call_count == 1
 
-    def test_empty(self, requests):
-        """Calling execute() with a query that return no hosts should return an empty list."""
-        self._register_requests_uris(requests)
-        hosts = self.query.execute('non_existent_host')
-        assert hosts == NodeSet()
-        assert requests.call_count == 1
+def test_empty(query_requests):
+    """Calling execute() with a query that return no hosts should return an empty list."""
+    hosts = query_requests[0].execute('non_existent_host')
+    assert hosts == NodeSet()
+    assert query_requests[1].call_count == 1
 
-    def test_error(self, requests):
-        """Calling execute() if the request fails it should raise the requests exception."""
-        self._register_requests_uris(requests)
-        with pytest.raises(HTTPError):
-            self.query.execute('invalid_query')
-            assert requests.call_count == 1
 
-    def test_complex_query(self, requests):
-        """Calling execute() with a complex query should return the exptected structure."""
-        category = 'R'
-        endpoint = self.query.endpoints[category]
-        key = self.query.hosts_keys[endpoint]
-        requests.register_uri('GET', self.query.url + endpoint + '?query=', status_code=200, json=[
-            {key: endpoint + '_host1', 'key': 'value1'}, {key: endpoint + '_host2', 'key': 'value2'}])
+def test_error(query_requests):
+    """Calling execute() if the request fails it should raise the requests exception."""
+    with pytest.raises(HTTPError):
+        query_requests[0].execute('invalid_query')
+        assert query_requests[1].call_count == 1
 
-        hosts = self.query.execute('(resources_host1 or resources_host2) and R:Class = MyClass')
-        assert hosts == NodeSet('resources_host[1-2]')
-        assert requests.call_count == 1
+
+def test_complex_query(query_requests):
+    """Calling execute() with a complex query should return the exptected structure."""
+    category = 'R'
+    endpoint = query_requests[0].endpoints[category]
+    key = query_requests[0].hosts_keys[endpoint]
+    query_requests[1].register_uri('GET', query_requests[0].url + endpoint + '?query=', status_code=200, json=[
+        {key: endpoint + '_host1', 'key': 'value1'}, {key: endpoint + '_host2', 'key': 'value2'}])
+
+    hosts = query_requests[0].execute('(resources_host1 or resources_host2) and R:Class = MyClass')
+    assert hosts == NodeSet('resources_host[1-2]')
+    assert query_requests[1].call_count == 1

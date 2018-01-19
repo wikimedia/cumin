@@ -1,6 +1,62 @@
 Cumin Changelog
 ---------------
 
+`v2.0.0`_ (2018-01-19)
+^^^^^^^^^^^^^^^^^^^^^^
+
+API breaking changes
+""""""""""""""""""""
+
+* Logging: uniform loggers (`T179002`_):
+
+  * Remove optional parameter logger from all classes where it was accepted, the classes instantiate the proper logger
+    based on the current module and class name.
+
+* ClusterShell backend: fix ``execute()`` return code:
+
+  * The return code of the ``execute()`` method was not respecting the parent class contract for its return code when
+    there are no commands set or no hosts to target.
+  * Make the ``Target`` class raise a ``WorkerError`` exception on instantiation if there are no target hosts.
+  * Make the ``execute()`` method raise a ``WorkerError`` exception if there are no commands to execute.
+
+New features
+""""""""""""
+
+* Backends: add support to external backends plugins (`T178342`_):
+
+  * Custom external backends can be developed outside of Cumin and used by Cumin as any other backend.
+  * The external backends must:
+
+    * Be present in Python ``PATH``.
+    * Define a ``GRAMMAR_PREFIX`` attribute that doesn't conflict with built-in backends prefixes.
+    * Define a ``query_class`` attribute pointing to a class that inherit from ``cumin.backends.BaseQuery``.
+
+  * The CLI is not anymore able to enforce that the ``--backend`` parameter is valid when parsing the command line
+    arguments, but will fail later on with a clear message.
+
+* PuppetDB backend: add support for PuppetDB API v4 (`T182575`_):
+
+  * Allow to set the API version via configuration.
+  * Default to API v4 as v3 is obsolete.
+  * Use POST for API v4 to overcome GET limits on large queries, fixes `T166397`_.
+  * Bumped minimum version for ``requests-mock`` to ``1.3.0``.
+
+Minor improvements
+""""""""""""""""""
+
+* Logging: uniform loggers (`T179002`_):
+
+  * Use proper hierarchical loggers across the project.
+  * For classes inherited from a base abstract class, the logger is defined only in the base abstract class, with the
+    name of the concrete class that is calling it.
+  * Changed CLI logging format to take advantage of the hirarchical logging.
+
+* Logging: use ``%`` syntax for parameters (`T179002`_):
+
+  * For optimization purposes and to adhere to Python best practices, use ``%s`` syntax in logging messages and pass
+    the replacement parameters to the logging function. Some messages are still pre-formatted before the call to the
+    logging function because used also for other purposes.
+  * pylint: re-enable the check for logging-format-interpolation.
 
 `v1.3.0`_ (2017-11-03)
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -9,6 +65,7 @@ New features
 """"""""""""
 
 * PuppetDB backend: Class, Roles and Profiles shortcuts (`T178279`_):
+
   * It is becoming common practice to use the role/profile paradigm in Puppet, where each host has only one role named
     ``Role::Module::Name`` that includes multiple profiles of the type ``Profile::Module::Name``. If this practice is
     used, queries for those resources in Cumin will be very common and not user-friendly, requiring to write queries of
@@ -23,6 +80,7 @@ Minor improvements
 """"""""""""""""""
 
 * Refactor documentation:
+
   * Moved most of the content from the README to the classes, function and documentation pages where it really belongs.
   * Add documentation files for an introduction to cumin, how to install it, how to develop it and with the release
     notes.
@@ -350,6 +408,7 @@ Bug Fixes
 .. _`T164838`: https://phabricator.wikimedia.org/T164838
 .. _`T165838`: https://phabricator.wikimedia.org/T165838
 .. _`T165842`: https://phabricator.wikimedia.org/T165842
+.. _`T166397`: https://phabricator.wikimedia.org/T166397
 .. _`T167392`: https://phabricator.wikimedia.org/T167392
 .. _`T167394`: https://phabricator.wikimedia.org/T167394
 .. _`T169640`: https://phabricator.wikimedia.org/T169640
@@ -361,6 +420,9 @@ Bug Fixes
 .. _`T175711`: https://phabricator.wikimedia.org/T175711
 .. _`T176314`: https://phabricator.wikimedia.org/T176314
 .. _`T178279`: https://phabricator.wikimedia.org/T178279
+.. _`T178342`: https://phabricator.wikimedia.org/T178342
+.. _`T179002`: https://phabricator.wikimedia.org/T179002
+.. _`T182575`: https://phabricator.wikimedia.org/T182575
 
 .. _`v0.0.1`: https://github.com/wikimedia/cumin/releases/tag/v0.0.1
 .. _`v0.0.2`: https://github.com/wikimedia/cumin/releases/tag/v0.0.2
@@ -370,3 +432,4 @@ Bug Fixes
 .. _`v1.2.1`: https://github.com/wikimedia/cumin/releases/tag/v1.2.1
 .. _`v1.2.2`: https://github.com/wikimedia/cumin/releases/tag/v1.2.2
 .. _`v1.3.0`: https://github.com/wikimedia/cumin/releases/tag/v1.3.0
+.. _`v2.0.0`: https://github.com/wikimedia/cumin/releases/tag/v2.0.0

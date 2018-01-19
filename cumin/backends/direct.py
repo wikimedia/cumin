@@ -74,7 +74,7 @@ class DirectQuery(BaseQueryAggregator):
                 type=type(token), token=token))
 
         token_dict = token.asDict()
-        self.logger.trace('Token is: {token_dict} | {token}'.format(token_dict=token_dict, token=token))
+        self.logger.trace('Token is: %s | %s', token_dict, token)
 
         if 'hosts' in token_dict:
             element = self._get_stack_element()

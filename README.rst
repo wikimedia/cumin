@@ -10,6 +10,7 @@ with different backend modules and combine their results for a fine grained sele
 selected, and can provide multiple execution strategies. The executed commands outputs are automatically grouped for an
 easy-to-read result.
 
+
 It can be used both via its command line interface (CLI) `cumin` and as a Python 2 library. Python 3 support will be
 added soon, as the last dependency that was Python 2 only added support for Python 3 recently.
 
