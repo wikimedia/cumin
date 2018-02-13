@@ -317,32 +317,32 @@ class TestTarget(object):
         self.hosts_list = ['host' + str(i) for i in range(10)]
         self.hosts = cumin.nodeset_fromlist(self.hosts_list)
 
-    def test_instantiation_no_hosts(self):
+    def test_init_no_hosts(self):
         """Creating a Target instance with empty hosts should raise WorkerError."""
         with pytest.raises(transports.WorkerError, match="must be a non-empty ClusterShell NodeSet or list"):
             transports.Target([])
 
-    def test_instantiation_nodeset(self):
+    def test_init_nodeset(self):
         """Creating a Target instance with a NodeSet and without optional parameter should return their defaults."""
         target = transports.Target(self.hosts)
         assert target.hosts == self.hosts
         assert target.batch_size == len(self.hosts)
         assert target.batch_sleep == 0.0
 
-    def test_instantiation_list(self):
+    def test_init_list(self):
         """Creating a Target instance with a list and without optional parameter should return their defaults."""
         target = transports.Target(self.hosts_list)
         assert target.hosts == self.hosts
         assert target.batch_size == len(self.hosts)
         assert target.batch_sleep == 0.0
 
-    def test_instantiation_invalid(self):
+    def test_init_invalid(self):
         """Creating a Target instance with invalid hosts should raise WorkerError."""
         with pytest.raises(transports.WorkerError, match="must be a non-empty ClusterShell NodeSet or list"):
             transports.Target(set(self.hosts_list))
 
     @mock.patch('cumin.transports.logging.Logger.debug')
-    def test_instantiation_batch_size(self, mocked_logger):
+    def test_init_batch_size(self, mocked_logger):
         """Creating a Target instance with a batch_size should set it to it's value, if valid."""
         target = transports.Target(self.hosts, batch_size=5)
         assert target.batch_size == 5
@@ -354,10 +354,33 @@ class TestTarget(object):
         target = transports.Target(self.hosts, batch_size=None)
         assert target.batch_size == len(self.hosts)
 
-        with pytest.raises(transports.WorkerError):
+        with pytest.raises(transports.WorkerError, match='must be a positive integer'):
             transports.Target(self.hosts, batch_size=0)
 
-    def test_instantiation_batch_sleep(self):
+    def test_init_batch_size_perc(self):
+        """Creating a Target instance with a batch_size_ratio should set batch_size to the appropriate value."""
+        target = transports.Target(self.hosts, batch_size_ratio=0.5)
+        assert target.batch_size == 5
+
+        target = transports.Target(self.hosts, batch_size_ratio=1.0)
+        assert target.batch_size == len(self.hosts)
+
+        target = transports.Target(self.hosts, batch_size_ratio=None)
+        assert target.batch_size == len(self.hosts)
+
+        with pytest.raises(transports.WorkerError, match='parameters are mutually exclusive'):
+            transports.Target(self.hosts, batch_size=1, batch_size_ratio=0.5)
+
+        with pytest.raises(transports.WorkerError, match='has generated a batch_size of 0 hosts'):
+            transports.Target(self.hosts, batch_size_ratio=0.0)
+
+    @pytest.mark.parametrize('ratio', (1, 2.0, -0.1))
+    def test_init_batch_size_perc_range(self, ratio):
+        """Creating a Target instance with an invalid batch_size_ratio should raise WorkerError."""
+        with pytest.raises(transports.WorkerError, match='must be a float between 0.0 and 1.0'):
+            transports.Target(self.hosts, batch_size_ratio=ratio)
+
+    def test_init_batch_sleep(self):
         """Creating a Target instance with a batch_sleep should set it to it's value, if valid."""
         target = transports.Target(self.hosts, batch_sleep=5.0)
         assert target.batch_sleep == pytest.approx(5.0)

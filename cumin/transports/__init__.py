@@ -396,7 +396,7 @@ class State(object):
 class Target(object):
     """Targets management class."""
 
-    def __init__(self, hosts, batch_size=None, batch_sleep=None):
+    def __init__(self, hosts, batch_size=None, batch_size_ratio=None, batch_sleep=None):
         """Constructor, inizialize the Target with the list of hosts and additional parameters.
 
         Arguments:
@@ -404,13 +404,17 @@ class Target(object):
                 :py:class:`ClusterShell.NodeSet.NodeSet` and :py:class:`list` are accepted and converted automatically
                 to :py:class:`ClusterShell.NodeSet.NodeSet` internally.
             batch_size (int, optional): set the batch size so that no more that this number of hosts are targeted
-                at any given time. If greater than the number of hosts it will be auto-resized to the number of hosts.
-                It must be a positive integer or :py:data:`None` to unset it.
+                at any given time. It must be a positive integer. If greater than the number of hosts it will be
+                auto-resized to the number of hosts.
+            batch_size_ratio (float, optional): set the batch size with a ratio so that no more that this fraction
+                of hosts are targeted at any given time. It must be a float between 0 and 1 and will raise exception
+                if after rounding it there are 0 hosts selected.
             batch_sleep (int, optional): sleep time in seconds between the end of execution of one host in the
-                batch and the start in the next host. It must be a positive float or None to unset it.
+                batch and the start in the next host. It must be a positive float.
 
         Raises:
-            cumin.transports.WorkerError: if the `hosts` parameter is empty or invalid.
+            cumin.transports.WorkerError: if the `hosts` parameter is empty or invalid, if both the `batch_size` and
+                `batch_size_ratio` parameters are set or if the `batch_size_ratio` selects no hosts.
 
         """
         self.logger = logging.getLogger('.'.join((self.__module__, self.__class__.__name__)))
@@ -424,6 +428,18 @@ class Target(object):
             self.hosts = nodeset_fromlist(hosts)
         else:
             raise_error('hosts', message, hosts)
+
+        if batch_size is not None and batch_size_ratio is not None:
+            raise WorkerError(("The 'batch_size' and 'batch_size_ratio' parameters are mutually exclusive but they're "
+                               "both set."))
+
+        if batch_size_ratio is not None:
+            if not isinstance(batch_size_ratio, float) or not 0.0 <= batch_size_ratio <= 1.0:
+                raise_error('batch_size_ratio', 'must be a float between 0.0 and 1.0', batch_size_ratio)
+
+            batch_size = round(len(self.hosts) * batch_size_ratio)
+            if batch_size == 0:
+                raise_error('batch_size_ratio', 'has generated a batch_size of 0 hosts', batch_size_ratio)
 
         self.batch_size = self._compute_batch_size(batch_size, self.hosts)
         self.batch_sleep = Target._compute_batch_sleep(batch_sleep)
@@ -443,8 +459,8 @@ class Target(object):
 
         Arguments:
             batch_size (int, None): a positive integer to indicate the batch_size to apply when executing the worker or
-                :py:data:`None` to get its default value. If greater than the number of hosts, the number of hosts
-                will be used as value instead.
+                :py:data:`None` to get its default value of all the hosts. If greater than the number of hosts, the
+                number of hosts will be used as value instead.
             hosts (ClusterShell.NodeSet.NodeSet): the list of hosts to use to calculate the batch size.
 
         Returns:

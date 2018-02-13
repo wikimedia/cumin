@@ -52,6 +52,32 @@ def test_parse_args_no_mode():
         cli.parse_args(_ARGV[:index] + _ARGV[index + 1:])
 
 
+def test_target_batch_size():
+    """Calling target_batch_size() should properly parse integer values."""
+    assert cli.target_batch_size('1') == {'value': 1, 'ratio': None}
+    assert cli.target_batch_size('100') == {'value': 100, 'ratio': None}
+
+
+@pytest.mark.parametrize('percentage', (('0%', 0.0), ('50%', 0.5), ('100%', 1.0)))
+def test_target_batch_size_perc(percentage):
+    """Calling target_batch_size() with a valid percentage should properly parse it."""
+    assert cli.target_batch_size(percentage[0]) == {'value': None, 'ratio': percentage[1]}
+
+
+@pytest.mark.parametrize('percentage', ('-1%', '101%'))
+def test_target_batch_size_perc_ko(percentage):
+    """Calling target_batch_size() with invalid percentage should raise argparse.ArgumentTypeError."""
+    with pytest.raises(argparse.ArgumentTypeError, match='not a valid percentage'):
+        cli.target_batch_size(percentage)
+
+
+@pytest.mark.parametrize('value', ('0', '-1'))
+def test_target_batch_size_val_ko(value):
+    """Calling target_batch_size() with invalid value should raise argparse.ArgumentTypeError."""
+    with pytest.raises(argparse.ArgumentTypeError, match='is not a valid value'):
+        cli.target_batch_size(value)
+
+
 def test_get_running_user():
     """Unsufficient permissions or unknown user should raise CuminError and a proper user should be detected."""
     env = {'USER': None, 'SUDO_USER': None}

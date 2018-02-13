@@ -89,13 +89,14 @@ def get_parser():
                         help=(('Percentage threshold to consider an execution unit successful. Required in sync mode, '
                                'optional in async mode when -b/--batch-size is used. Accepted values are integers '
                                'in the range 0-100. [default: 100]')))
-    parser.add_argument('-b', '--batch-size', type=int,
+    parser.add_argument('-b', '--batch-size', type=target_batch_size, default={'value': None, 'ratio': None},
                         help=('The commands will be executed with a sliding batch of this size. The batch mode depends '
                               'on the -m/--mode option when multiple commands are specified. In sync mode the first '
                               'command is executed in batch to all hosts before proceeding with the next one. In async '
                               'mode all commands are executed on the first batch of hosts, proceeding with the next '
                               'hosts as soon as one host completes all the commands. The -p/--success-percentage is '
-                              'checked before starting the execution in each host. [default: None (# of hosts)]'))
+                              'checked before starting the execution in each host. It accept an absolute integer '
+                              '(i.e. 10) or a percentage (i.e. 50%). [default: None (# of hosts)]'))
     parser.add_argument('-s', '--batch-sleep', type=float,
                         help=('Sleep in seconds (float) to wait before starting the execution on the next host when '
                               '-b/--batch-size is used. [default: None]'))
@@ -131,6 +132,41 @@ def get_parser():
                         help='Command to be executed. If no commands are specified, --dry-run is set.')
 
     return parser
+
+
+def target_batch_size(string):
+    """Validator for the --batch-size command line argument to be used as type in ArgumentParser.
+
+    Arguments:
+        string: the input string to be validated and parsed.
+
+    Returns:
+        dict: a dictionary with the batch size absolute value as integer (`value` key) or the ratio value as float
+            (`ratio` key) to be used when instantiating a Target object.
+
+    """
+    is_percentage = False
+    orig = string
+    if string[-1] == '%':
+        is_percentage = True
+        string = string[:-1]
+
+    value = int(string)
+    if is_percentage and not (0 <= value <= 100):  # pylint: disable=superfluous-parens
+        raise argparse.ArgumentTypeError(
+            '{size} is not a valid percentage, expected in range 0%-100% or positive integer.'.format(size=orig))
+
+    if not is_percentage and value <= 0:
+        raise argparse.ArgumentTypeError(
+            '{size} is not a valid value, expected positive integer or percentage in range 0%-100%'.format(size=orig))
+
+    ret = {'value': None, 'ratio': None}
+    if is_percentage:
+        ret['ratio'] = value / 100
+    else:
+        ret['value'] = value
+
+    return ret
 
 
 def parse_args(argv):
@@ -337,7 +373,8 @@ def run(args, config):
     if not hosts:
         return 0
 
-    target = transports.Target(hosts, batch_size=args.batch_size, batch_sleep=args.batch_sleep)
+    target = transports.Target(hosts, batch_size=args.batch_size['value'], batch_size_ratio=args.batch_size['ratio'],
+                               batch_sleep=args.batch_sleep)
     worker = transport.Transport.new(config, target)
 
     ok_codes = None
