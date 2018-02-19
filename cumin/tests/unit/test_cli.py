@@ -33,6 +33,16 @@ def test_get_parser():
     assert parser.prog == 'cumin'
 
 
+def test_parse_args_help(capsys):
+    """Calling cumin with -h/--help should return its help message."""
+    with pytest.raises(SystemExit) as e:
+        cli.parse_args(['-h'])
+
+    out, _ = capsys.readouterr()
+    assert e.value.code == 0
+    assert 'Cumin CLI - Automation and orchestration framework written in Python' in out
+
+
 def test_parse_args_ok():
     """A standard set of command line parameters should be properly parsed into their respective variables."""
     args = cli.parse_args(_ARGV)
