@@ -1,6 +1,14 @@
 Cumin Changelog
 ---------------
 
+`v3.0.1`_ (2018-02-19)
+^^^^^^^^^^^^^^^^^^^^^^
+
+Bug Fixes
+"""""""""
+
+* CLI: fix help message
+
 `v3.0.0`_ (2018-02-19)
 ^^^^^^^^^^^^^^^^^^^^^^
 
@@ -473,3 +481,4 @@ Bug Fixes
 .. _`v1.3.0`: https://github.com/wikimedia/cumin/releases/tag/v1.3.0
 .. _`v2.0.0`: https://github.com/wikimedia/cumin/releases/tag/v2.0.0
 .. _`v3.0.0`: https://github.com/wikimedia/cumin/releases/tag/v3.0.0
+.. _`v3.0.1`: https://github.com/wikimedia/cumin/releases/tag/v3.0.1
