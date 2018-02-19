@@ -1,3 +1,10 @@
+cumin (3.0.0-1) jessie-wikimedia; urgency=medium
+
+  * v3.0.0 upstream release.
+  * Migration to Python 3, dropping support of Python 2.
+
+ -- Riccardo Coccioli <rcoccioli@wikimedia.org>  Mon, 19 Feb 2018 16:54:25 +0100
+
 cumin (2.0.0-1) jessie-wikimedia; urgency=medium
 
   * v2.0.0 upstream release.

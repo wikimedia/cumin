@@ -4,39 +4,39 @@ Priority: optional
 Maintainer: Riccardo Coccioli <rcoccioli@wikimedia.org>
 Standards-Version: 3.9.8
 Build-Depends:
-  clustershell,
   debhelper (>= 10),
   dh-python (>= 2.20160609~),
-  python-all (>= 2.7),
-  python-colorama,
-  python-flake8,
-  python-keystoneauth1,
-  python-keystoneclient,
-  python-mock (>= 2.0.0),
-  python-novaclient,
-  python-pyparsing,
-  python-pytest,
-  python-pytest-cov,
-  python-pytest-runner,
-  python-requests,
-  python-requests-mock,
-  python-setuptools,
-  python-setuptools-scm,
-  python-sphinx,
-  python-sphinx-argparse,
-  python-sphinx-rtd-theme,
-  python-tqdm,
-  python-yaml
+  python3-all (>= 3.4),
+  python3-clustershell,
+  python3-colorama,
+  python3-flake8,
+  python3-keystoneauth1,
+  python3-keystoneclient,
+  python3-mock (>= 2.0.0),
+  python3-novaclient,
+  python3-pyparsing,
+  python3-pytest,
+  python3-pytest-cov,
+  python3-pytest-runner,
+  python3-requests,
+  python3-requests-mock,
+  python3-setuptools,
+  python3-setuptools-scm,
+  python3-sphinx,
+  python3-sphinx-argparse,
+  python3-sphinx-rtd-theme,
+  python3-tqdm,
+  python3-yaml
 Homepage: https://github.com/wikimedia/cumin
-X-Python-Version: >= 2.7
+X-Python3-Version: >= 3.4
 
 Package: cumin
 Architecture: any
-Depends: ${python:Depends}, ${misc:Depends}
+Depends: ${python3:Depends}, ${misc:Depends}
 Suggests:
-  python-keystoneauth1,
-  python-keystoneclient,
-  python-novaclient
+  python3-keystoneauth1,
+  python3-keystoneclient,
+  python3-novaclient
 Description: Automation and orchestration framework written in Python
  Cumin provides a flexible and scalable automation framework to
  execute multiple commands on multiple targets in parallel.
