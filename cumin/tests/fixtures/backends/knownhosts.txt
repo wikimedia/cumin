@@ -1,0 +1,50 @@
+# This is a comment and should be ignored, like empty lines
+
+# Hostname only
+host1.domain ecdsa-sha2-nistp256 AAAA...=
+# IPv4 only
+127.0.1.2 ecdsa-sha2-nistp256 AAAA...=
+# IPv6 only
+fe80::3 ecdsa-sha2-nistp256 AAAA...=
+# Hostname and IPv4
+host4.domain,127.0.1.7 ecdsa-sha2-nistp256 AAAA...=
+# Hostname and IPv6
+host5.domain,fe80::9 ecdsa-sha2-nistp256 AAAA...=
+# IPv4 and IPv6
+127.0.1.6,fe80::11 ecdsa-sha2-nistp256 AAAA...=
+# Hostname, IPv4 and IPv6
+host7.domain,127.0.1.13,fe80::13 ecdsa-sha2-nistp256 AAAA...=
+# CA marker
+@cert-authority host8.domain ssh-rsa AAAA...=
+# Revoked marker
+@revoked host9.domain ssh-rsa AAAA...=
+# Hashed line
+|1|HaSh=|HaSh= ecdsa-sha2-nistp256 AAAA...=
+# Not enough fields
+host10.domain ssh-rsa
+# Not enough fields with marker
+@cert-authority host11.domain ssh-rsa
+# Unknown marker
+@marker host12.domain ssh-rsa AAAA...=
+# Patterns only
+*.domain ecdsa-sha2-nistp256 AAAA...=
+host?.domain ecdsa-sha2-nistp256 AAAA...=
+# Hostname and pattern
+host13.domain,*.otherdomain ecdsa-sha2-nistp256 AAAA...=
+*.otherdomain,host14.domain ecdsa-sha2-nistp256 AAAA...=
+# IPv4 and pattern
+127.0.1.2,*.otherdomain ecdsa-sha2-nistp256 AAAA...=
+*.otherdomain,127.0.1.2 ecdsa-sha2-nistp256 AAAA...=
+# IPv6 and pattern
+fe80::3,*.otherdomain ecdsa-sha2-nistp256 AAAA...=
+*.otherdomain,fe80::3 ecdsa-sha2-nistp256 AAAA...=
+# Hostname, IPv4 and pattern
+host4.domain,*.otherdomain,127.0.1.7 ecdsa-sha2-nistp256 AAAA...=
+# Hostname, IPv6 and pattern
+host5.domain,*.otherdomain,fe80::9 ecdsa-sha2-nistp256 AAAA...=
+# IPv4, IPv6 and pattern
+127.0.1.6,*.otherdomain,fe80::11 ecdsa-sha2-nistp256 AAAA...=
+# Hostname, IPv4, IPv6 and pattern
+host7.domain,127.0.1.13,*.otherdomain,fe80::13 ecdsa-sha2-nistp256 AAAA...=
+
+invalid line

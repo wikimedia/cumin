@@ -6,22 +6,18 @@ from abc import ABCMeta, abstractmethod
 
 import pyparsing
 
-from ClusterShell.NodeSet import NodeSet
-
-from cumin import CuminError
+from cumin import CuminError, nodeset
 
 
 class InvalidQueryError(CuminError):
     """Custom exception class for invalid queries."""
 
 
-class BaseQuery(object):
+class BaseQuery(object, metaclass=ABCMeta):
     """Query abstract class.
 
     All backends query classes must inherit, directly or indirectly, from this one.
     """
-
-    __metaclass__ = ABCMeta
 
     grammar = pyparsing.NoMatch()  # This grammar will never match.
     """:py:class:`pyparsing.ParserElement`: derived classes must define their own pyparsing grammar and set this class
@@ -96,7 +92,7 @@ class BaseQueryAggregator(BaseQuery):
         :Parameters:
             according to parent :py:meth:`cumin.backends.BaseQuery.__init__`.
         """
-        super(BaseQueryAggregator, self).__init__(config)
+        super().__init__(config)
 
         self.stack = None
         self.stack_pointer = None
@@ -109,7 +105,7 @@ class BaseQueryAggregator(BaseQuery):
         """
         self.stack = self._get_stack_element()
         self.stack_pointer = self.stack
-        super(BaseQueryAggregator, self)._build(query_string)
+        super()._build(query_string)
         self.logger.trace('Query stack: %s', self.stack)
 
     def _execute(self):
@@ -118,8 +114,8 @@ class BaseQueryAggregator(BaseQuery):
         :Parameters:
             according to parent :py:meth:`cumin.backends.BaseQuery._execute`.
         """
-        hosts = NodeSet()
-        self._loop_stack(hosts, self.stack)  # The hosts nodeset is updated in place while looping the stack
+        hosts = nodeset()
+        self._loop_stack(hosts, self.stack)  # The hosts NodeSet is updated in place while looping the stack
         self.logger.debug('Found %d hosts', len(hosts))
 
         return hosts
@@ -162,7 +158,7 @@ class BaseQueryAggregator(BaseQuery):
             stack_element (dict): the stack element to iterate.
         """
         if stack_element['hosts'] is None:
-            element_hosts = NodeSet()
+            element_hosts = nodeset()
             for child in stack_element['children']:
                 self._loop_stack(element_hosts, child)
         else:
@@ -175,9 +171,9 @@ class BaseQueryAggregator(BaseQuery):
 
         Arguments:
             hosts (ClusterShell.NodeSet.NodeSet): the hosts to update with the results in ``element_hosts`` according
-                to the bool_operator. This object is updated in place by reference.
-            element_hosts (ClusterShell.NodeSet.NodeSet): the additional hosts to aggregate to the results based on
-                the ``bool_operator``.
+                to the ``bool_operator``. This object is updated in place by reference.
+            element_hosts (ClusterShell.NodeSet.NodeSet): the additional hosts to aggregate to the results based on the
+                ``bool_operator``.
             bool_operator (str, None): the boolean operator to apply while aggregating the two NodeSet. It must be
                 :py:data:`None` when adding the first hosts.
         """

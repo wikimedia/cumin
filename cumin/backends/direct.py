@@ -1,8 +1,7 @@
 """Direct backend."""
 import pyparsing as pp
 
-from ClusterShell.NodeSet import NodeSet
-
+from cumin import nodeset_fromlist
 from cumin.backends import BaseQueryAggregator, InvalidQueryError
 
 
@@ -78,7 +77,7 @@ class DirectQuery(BaseQueryAggregator):
 
         if 'hosts' in token_dict:
             element = self._get_stack_element()
-            element['hosts'] = NodeSet.fromlist(token_dict['hosts'])
+            element['hosts'] = nodeset_fromlist(token_dict['hosts'])
             if 'bool' in token_dict:
                 element['bool'] = token_dict['bool']
             self.stack_pointer['children'].append(element)

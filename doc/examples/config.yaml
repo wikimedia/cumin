@@ -31,6 +31,10 @@ openstack:
     query_params:
         project: project_name  # Parameter name: parameter value
 
+knownhosts:
+    files:  # List of SSH known hosts files to load
+        - /path/to/known_hosts
+
 # Transport-specific configuration
 clustershell:
     ssh_options:  # SSH options passed to ClusterShell [optional]

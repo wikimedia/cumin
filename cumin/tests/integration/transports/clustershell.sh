@@ -41,7 +41,7 @@ Host *
 ${SSH_ALIASES}
 EOF
 
-    _log "Created docker instances:${DOCKER_INSTANCES}"
+    _log "Created docker instances: ${DOCKER_INSTANCES}"
 }
 
 function run_tests() {

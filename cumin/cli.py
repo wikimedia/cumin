@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/python3
 """Cumin CLI entry point."""
 import argparse
 import code
@@ -13,7 +13,6 @@ from logging.handlers import RotatingFileHandler  # pylint: disable=ungrouped-im
 
 import colorama
 
-from ClusterShell.NodeSet import NodeSet
 from tqdm import tqdm
 
 import cumin
@@ -45,7 +44,7 @@ INTERACTIVE_BANNER = """===== Cumin Interactive REPL =====
 = Example usage:
 for nodes, output in worker.get_results():
     print(nodes)
-    print(output)
+    print(output.message().decode('utf-8'))
     print('-----')
 """
 """str: The message to print when entering the intractive REPL mode."""
@@ -86,17 +85,18 @@ def get_parser():
                               '-p/--success-percentage is reached. In async mode, execute on each host independently '
                               'from each other, the list of commands, aborting the execution on any given host at the '
                               'first command that fails.'))
-    parser.add_argument('-p', '--success-percentage', type=int, choices=xrange(101), metavar='PCT', default=100,
+    parser.add_argument('-p', '--success-percentage', type=int, choices=range(101), metavar='PCT', default=100,
                         help=(('Percentage threshold to consider an execution unit successful. Required in sync mode, '
                                'optional in async mode when -b/--batch-size is used. Accepted values are integers '
                                'in the range 0-100. [default: 100]')))
-    parser.add_argument('-b', '--batch-size', type=int,
+    parser.add_argument('-b', '--batch-size', type=target_batch_size, default={'value': None, 'ratio': None},
                         help=('The commands will be executed with a sliding batch of this size. The batch mode depends '
                               'on the -m/--mode option when multiple commands are specified. In sync mode the first '
                               'command is executed in batch to all hosts before proceeding with the next one. In async '
                               'mode all commands are executed on the first batch of hosts, proceeding with the next '
                               'hosts as soon as one host completes all the commands. The -p/--success-percentage is '
-                              'checked before starting the execution in each host. [default: None (# of hosts)]'))
+                              'checked before starting the execution in each host. It accept an absolute integer '
+                              '(i.e. 10) or a percentage (i.e. 50%). [default: None (# of hosts)]'))
     parser.add_argument('-s', '--batch-sleep', type=float,
                         help=('Sleep in seconds (float) to wait before starting the execution on the next host when '
                               '-b/--batch-size is used. [default: None]'))
@@ -132,6 +132,41 @@ def get_parser():
                         help='Command to be executed. If no commands are specified, --dry-run is set.')
 
     return parser
+
+
+def target_batch_size(string):
+    """Validator for the --batch-size command line argument to be used as type in ArgumentParser.
+
+    Arguments:
+        string: the input string to be validated and parsed.
+
+    Returns:
+        dict: a dictionary with the batch size absolute value as integer (`value` key) or the ratio value as float
+            (`ratio` key) to be used when instantiating a Target object.
+
+    """
+    is_percentage = False
+    orig = string
+    if string[-1] == '%':
+        is_percentage = True
+        string = string[:-1]
+
+    value = int(string)
+    if is_percentage and not (0 <= value <= 100):  # pylint: disable=superfluous-parens
+        raise argparse.ArgumentTypeError(
+            '{size} is not a valid percentage, expected in range 0%-100% or positive integer.'.format(size=orig))
+
+    if not is_percentage and value <= 0:
+        raise argparse.ArgumentTypeError(
+            '{size} is not a valid value, expected positive integer or percentage in range 0%-100%'.format(size=orig))
+
+    ret = {'value': None, 'ratio': None}
+    if is_percentage:
+        ret['ratio'] = value / 100
+    else:
+        ret['value'] = value
+
+    return ret
 
 
 def parse_args(argv):
@@ -186,7 +221,7 @@ def setup_logging(filename, debug=False, trace=False):
     """
     file_path = os.path.dirname(filename)
     if not os.path.exists(file_path):
-        os.makedirs(file_path, 0770)
+        os.makedirs(file_path, 0o770)
 
     log_formatter = logging.Formatter(fmt='%(asctime)s [%(levelname)s %(process)s %(name)s.%(funcName)s] %(message)s')
     log_handler = RotatingFileHandler(filename, maxBytes=(5 * (1024**2)), backupCount=30)
@@ -207,7 +242,7 @@ def setup_logging(filename, debug=False, trace=False):
 def sigint_handler(*args):  # pylint: disable=unused-argument
     """Signal handler for Ctrl+c / SIGINT, raises KeyboardInterruptError.
 
-    Arguments (as defined in https://docs.python.org/2/library/signal.html):
+    Arguments (as defined in https://docs.python.org/3/library/signal.html):
         signum: the signal number
         frame: the current stack frame
     """
@@ -223,7 +258,7 @@ def sigint_handler(*args):  # pylint: disable=unused-argument
     # for i in xrange(10):
     #     stderr('Ctrl+c pressed, sure to quit [y/n]?\n')
     #     try:
-    #         answer = raw_input('\n')
+    #         answer = input('\n')  # nosec
     #     except RuntimeError:
     #         # Can't re-enter readline when already waiting for input in get_hosts(). Assuming 'y' as answer
     #         stderr('Ctrl+c pressed while waiting for answer. Aborting')
@@ -270,7 +305,7 @@ def get_hosts(args, config):
         return hosts
 
     stderr('{num} hosts will be targeted:'.format(num=len(hosts)))
-    stderr('{color}{hosts}'.format(color=colorama.Fore.CYAN, hosts=NodeSet.fromlist(hosts)))
+    stderr('{color}{hosts}'.format(color=colorama.Fore.CYAN, hosts=cumin.nodeset_fromlist(hosts)))
 
     if args.dry_run:
         stderr('DRY-RUN mode enabled, aborting')
@@ -283,9 +318,9 @@ def get_hosts(args, config):
         stderr(message)
         raise cumin.CuminError(message)
 
-    for i in xrange(10):
+    for i in range(10):
         stderr('Confirm to continue [y/n]?', end=' ')
-        answer = raw_input()
+        answer = input()  # nosec
         if not answer:
             continue
 
@@ -338,7 +373,8 @@ def run(args, config):
     if not hosts:
         return 0
 
-    target = transports.Target(hosts, batch_size=args.batch_size, batch_sleep=args.batch_sleep)
+    target = transports.Target(hosts, batch_size=args.batch_size['value'], batch_size_ratio=args.batch_size['ratio'],
+                               batch_sleep=args.batch_sleep)
     worker = transport.Transport.new(config, target)
 
     ok_codes = None
@@ -349,7 +385,7 @@ def run(args, config):
                        for command in args.commands]
     worker.timeout = args.global_timeout
     worker.handler = args.mode
-    worker.success_threshold = args.success_percentage / float(100)
+    worker.success_threshold = args.success_percentage / 100
     exit_code = worker.execute()
 
     if args.interactive:

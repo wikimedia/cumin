@@ -37,6 +37,8 @@ Those are the available backends:
 * **OpenStack**: allow to select hosts querying the OpenStack APIs to select based on project, instance name and so on.
   See the :py:class:`cumin.backends.openstack.OpenStackQuery` class documentation for the details. This is an optional
   backend.
+* **KnownHosts**: allow to select hosts listed in multiple SSH known hosts files that are not hashed. See the
+  :py:class:`cumin.backends.knownhosts.KnownHostsQuery` class documentation for the details.
 * **Direct**: a fallback backend without extenal dependecies with :py:class:`ClusterShell.NodeSet.NodeSet` group
   expansion capabilities. See the :py:class:`cumin.backends.direct.DirectQuery` class documentation for the details.
 * **Custom**: is possible to plug-in custom backends developed externally from Cumin, as long as they:

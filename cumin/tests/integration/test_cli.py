@@ -1,6 +1,6 @@
 """CLI integration tests."""
 # pylint: disable=protected-access
-from __future__ import print_function
+
 
 import copy
 import os
@@ -13,7 +13,7 @@ from cumin import __version__, cli
 
 # Set environment variables
 _ENV = {'USER': 'root', 'SUDO_USER': 'user'}
-for key, value in _ENV.iteritems():
+for key, value in _ENV.items():
     os.environ[key] = value
 
 # Dictionary with expected strings to match in the execution stderr:
@@ -293,7 +293,7 @@ def get_ls_expected_lines(params):
     return expected
 
 
-@add_variants_methods(xrange(len(_VARIANTS_PARAMETERS)))
+@add_variants_methods(range(len(_VARIANTS_PARAMETERS)))
 class TestCLI(object):
     """CLI module tests."""
 
@@ -311,7 +311,7 @@ class TestCLI(object):
         """Return the query for the nodes selection.
 
         Arguments:
-            nodes: a string with the ClusterShell NodeSet nodes selection
+            nodes: a string with the NodeSet nodes selection
         """
         if nodes is None:
             return self.all_nodes
@@ -387,6 +387,6 @@ class TestCLI(object):
         sys.stderr.write(err)
         assert e.type == SystemExit
         assert e.value.code == 0
-        assert out == ''
-        assert len(err.splitlines()) == 1
-        assert __version__ in err
+        assert err == ''
+        assert len(out.splitlines()) == 1
+        assert __version__ in out

@@ -22,7 +22,6 @@ Small improvements
 
 * global: allow to log the whole output to a specific file, to allow multiple people follow the progress.
 * global: allow to randomize the list hosts before execution `T164587`_.
-* CLI: ``--batch-size`` allow to specify percentage too.
 * CLI: improve the dry-run mode to show what would have been done.
 * CLI: add a ``--color`` or a ``--no-color`` option to manage the output color.
 * CLI: read commands from a file, one per line.
@@ -51,7 +50,6 @@ New Features
   parameter. Needs a new local transport with ExecWorker to shell out in parallel.
 * backends: generalize backends to allow to return other data too, not only the host certnames.
 * backends: add a new backend to support conftool.
-* backends: add a new backed to query the known hosts file format.
 * puppetdb backend: add support for API v4.
 * CLI: when ``-i/--interactive`` is used and no command or query is specified, drop into a REPL session allowing to
   easily setup them.

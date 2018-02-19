@@ -4,6 +4,7 @@
 /.coverage
 /.coverage-integration-clustershell
 /.eggs/
+/.pytest_cache/
 /.tox/
 /.venv/
 /dist/

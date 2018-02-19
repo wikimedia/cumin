@@ -24,6 +24,8 @@ pep257:
     - D407  # Missing dashed underline after section, incompatible with Google Style Python Docstrings
 
 pylint:
+  disable:
+    - pointless-string-statement  # used as documentation for class attributes
   options:
     ignore: vulture_whitelist.py
     max-line-length: 120
@@ -33,7 +35,6 @@ pylint:
     include-naming-hint: true
     variable-rgx: (([a-z][a-z0-9_]{0,30})|(_[a-z0-9_]*))$
     variable-name-hint: (([a-z][a-z0-9_]{0,30})|(_[a-z0-9_]*))$
-
 
 pyroma:
   run: true

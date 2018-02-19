@@ -1,6 +1,42 @@
 Cumin Changelog
 ---------------
 
+`v3.0.0`_ (2018-02-19)
+^^^^^^^^^^^^^^^^^^^^^^
+
+API breaking changes
+""""""""""""""""""""
+
+* Migration to Python 3, dropping support of Python 2. Besides the usual Py2 -> Py3 conversions, the main changes are:
+
+  * Add ``nodeset()`` and ``nodeset_fromlist()`` functions in the ``cumin`` module to instantiate ClusterShell's
+    NodeSet objects with the resolver set to ``RESOLVER_NOGROUP``, due to `ClusterShell issue #368`_.
+  * Bump dependency on ClusterShell library to 1.8.
+  * Adapt callbacks in ClusterShell backend to the new ClusterShell's API signatures of version 1.8.
+  * Use ``threading.Lock()`` calls as context managers for the ``with`` statement.
+  * Use Colorama autoreset feature, simplifying its related calls.
+
+New features
+""""""""""""
+
+* Backends: add known hosts files backend:
+
+  * The ``knownhosts`` backend allow to use Cumin taking advantage of existing SSH known hosts files that are not
+    hashed. It allow to write arbitrarily complex queries with subgroups and boolean operators, but each item must be
+    either the hostname itself, or using host expansion with the powerful ClusterShell's ``NodeSet`` syntax.
+
+  * See the example configuration on how to configure this backend with the list of known hosts files to be parsed.
+
+  * The typical use case for the ``knownhosts`` backend is when the known hosts file(s) are generated and kept updated
+    by some external configuration manager or tool that is not yet supported as a backend for Cumin. It can also work
+    as a fallback backend in case the primary backend is unavailable but the known hosts file(s) are still up to date.
+
+* Batch size: allow to specify it in percentage (`T187185`_):
+
+  * Transports: allow to specify a ``batch_size_ratio`` as a float number in the Target constructor to set the
+    ``batch_size`` as a percentage of the hosts list.
+  * CLI: make the ``--batch-size`` option to accept both integers and percentage (i.e. ``50%``) values.
+
 `v2.0.0`_ (2018-01-19)
 ^^^^^^^^^^^^^^^^^^^^^^
 
@@ -388,6 +424,8 @@ Bug Fixes
 
 
 .. _`Prospector issue #230`: https://github.com/landscapeio/prospector/issues/230
+.. _`ClusterShell issue #368`: https://github.com/cea-hpc/clustershell/issues/368
+
 
 .. _`T154588`: https://phabricator.wikimedia.org/T154588
 .. _`T158746`: https://phabricator.wikimedia.org/T158746
@@ -423,6 +461,7 @@ Bug Fixes
 .. _`T178342`: https://phabricator.wikimedia.org/T178342
 .. _`T179002`: https://phabricator.wikimedia.org/T179002
 .. _`T182575`: https://phabricator.wikimedia.org/T182575
+.. _`T187185`: https://phabricator.wikimedia.org/T187185
 
 .. _`v0.0.1`: https://github.com/wikimedia/cumin/releases/tag/v0.0.1
 .. _`v0.0.2`: https://github.com/wikimedia/cumin/releases/tag/v0.0.2
@@ -433,3 +472,4 @@ Bug Fixes
 .. _`v1.2.2`: https://github.com/wikimedia/cumin/releases/tag/v1.2.2
 .. _`v1.3.0`: https://github.com/wikimedia/cumin/releases/tag/v1.3.0
 .. _`v2.0.0`: https://github.com/wikimedia/cumin/releases/tag/v2.0.0
+.. _`v3.0.0`: https://github.com/wikimedia/cumin/releases/tag/v3.0.0

@@ -1,0 +1,9 @@
+# Comments allowed at start of line
+closenet,192.0.2.53 1024 37 159...93 closenet.example.net
+cvs.example.net,192.0.2.10 ssh-rsa AAAA1234.....=
+# A hashed hostname
+|1|JfKTdBh7rNbXkVAQCRp4OQoPfmI=|USECr3SWf1JUPsms5AqfD5QfxkM= ssh-rsa AAAA1234.....=
+# A revoked key
+@revoked * ssh-rsa AAAAB5W...
+# A CA key, accepted for any host in *.mydomain.com or *.mydomain.org
+@cert-authority *.mydomain.org,*.mydomain.com ssh-rsa AAAAB5W...

@@ -1,9 +1,12 @@
 """Cumin package tests."""
 # pylint: disable=invalid-name
+import importlib
 import logging
 import os
 
 import pytest
+
+from ClusterShell.NodeSet import NodeSet
 
 import cumin
 
@@ -82,11 +85,11 @@ def test_parse_config_empty():
 
 def test_trace_logging_level_conflict():
     """If the logging level for trace is already registered, should raise CuminError."""
-    reload(logging)  # Avoid conflict given the singleton nature of this module
+    importlib.reload(logging)  # Avoid conflict given the singleton nature of this module
     logging.addLevelName(cumin.LOGGING_TRACE_LEVEL_NUMBER, 'CONFLICT')
     match = 'Unable to set custom logging for trace'
     try:  # pytest.raises doesn't catch the reload exception
-        reload(cumin)
+        importlib.reload(cumin)
     except cumin.CuminError as e:
         assert str(e).startswith(match)
     else:
@@ -96,10 +99,10 @@ def test_trace_logging_level_conflict():
 
 def test_trace_logging_level_existing_same():
     """If the custom logging level is registered on the same level, it should use it and add a trace method."""
-    reload(logging)  # Avoid conflict given the singleton nature of this module
+    importlib.reload(logging)  # Avoid conflict given the singleton nature of this module
     logging.addLevelName(cumin.LOGGING_TRACE_LEVEL_NUMBER, cumin.LOGGING_TRACE_LEVEL_NAME)
     assert not hasattr(logging.Logger, 'trace')
-    reload(cumin)
+    importlib.reload(cumin)
     assert logging.getLevelName(cumin.LOGGING_TRACE_LEVEL_NUMBER) == cumin.LOGGING_TRACE_LEVEL_NAME
     assert logging.getLevelName(cumin.LOGGING_TRACE_LEVEL_NAME) == cumin.LOGGING_TRACE_LEVEL_NUMBER
     assert hasattr(logging.Logger, 'trace')
@@ -107,10 +110,10 @@ def test_trace_logging_level_existing_same():
 
 def test_trace_logging_level_existing_different():
     """If the custom logging level is registered on a different level, it should use it and add a trace method."""
-    reload(logging)  # Avoid conflict given the singleton nature of this module
+    importlib.reload(logging)  # Avoid conflict given the singleton nature of this module
     logging.addLevelName(cumin.LOGGING_TRACE_LEVEL_NUMBER - 1, cumin.LOGGING_TRACE_LEVEL_NAME)
     assert not hasattr(logging.Logger, 'trace')
-    reload(cumin)
+    importlib.reload(cumin)
     assert logging.getLevelName(cumin.LOGGING_TRACE_LEVEL_NAME) == cumin.LOGGING_TRACE_LEVEL_NUMBER - 1
     assert logging.getLevelName(cumin.LOGGING_TRACE_LEVEL_NUMBER) != cumin.LOGGING_TRACE_LEVEL_NAME
     assert hasattr(logging.Logger, 'trace')
@@ -118,9 +121,41 @@ def test_trace_logging_level_existing_different():
 
 def test_trace_logging_method_existing():
     """If there is already a trace method registered, it should use it without problems adding the level."""
-    reload(logging)  # Avoid conflict given the singleton nature of this module
+    importlib.reload(logging)  # Avoid conflict given the singleton nature of this module
     logging.Logger.trace = cumin.trace
-    reload(cumin)
+    importlib.reload(cumin)
     assert logging.getLevelName(cumin.LOGGING_TRACE_LEVEL_NUMBER) == cumin.LOGGING_TRACE_LEVEL_NAME
     assert logging.getLevelName(cumin.LOGGING_TRACE_LEVEL_NAME) == cumin.LOGGING_TRACE_LEVEL_NUMBER
     assert hasattr(logging.Logger, 'trace')
+
+
+def test_nodeset():
+    """Calling nodeset() should return an instance of ClusterShell NodeSet with no resolver."""
+    nodeset = cumin.nodeset('node[1-2]')
+    assert isinstance(nodeset, NodeSet)
+    assert nodeset == NodeSet('node[1-2]')
+    assert nodeset._resolver is None  # pylint: disable=protected-access
+
+
+def test_nodeset_empty():
+    """Calling nodeset() without parameter should return an instance of ClusterShell NodeSet with no resolver."""
+    nodeset = cumin.nodeset()
+    assert isinstance(nodeset, NodeSet)
+    assert nodeset == NodeSet()
+    assert nodeset._resolver is None  # pylint: disable=protected-access
+
+
+def test_nodeset_fromlist():
+    """Calling nodeset_fromlist() should return an instance of ClusterShell NodeSet with no resolver."""
+    nodeset = cumin.nodeset_fromlist(['node1', 'node2'])
+    assert isinstance(nodeset, NodeSet)
+    assert nodeset == NodeSet('node[1-2]')
+    assert nodeset._resolver is None  # pylint: disable=protected-access
+
+
+def test_nodeset_fromlist_empty():
+    """Calling nodeset_fromlist() with empty list should return an instance of ClusterShell NodeSet with no resolver."""
+    nodeset = cumin.nodeset_fromlist([])
+    assert isinstance(nodeset, NodeSet)
+    assert nodeset == NodeSet()
+    assert nodeset._resolver is None  # pylint: disable=protected-access

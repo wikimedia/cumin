@@ -1,11 +1,12 @@
 """PuppetDB backend tests."""
 # pylint: disable=invalid-name
-import mock
+from unittest import mock
+
 import pytest
 
-from ClusterShell.NodeSet import NodeSet
 from requests.exceptions import HTTPError
 
+from cumin import nodeset
 from cumin.backends import BaseQuery, InvalidQueryError, puppetdb
 
 
@@ -417,35 +418,35 @@ class TestPuppetDBQueryBuildV4(object):
 def test_nodes_endpoint(query_requests):
     """Calling execute() with a query that goes to the nodes endpoint should return the list of hosts."""
     hosts = query_requests[0].execute('nodes_host[1-2]')
-    assert hosts == NodeSet('nodes_host[1-2]')
+    assert hosts == nodeset('nodes_host[1-2]')
     assert query_requests[1].call_count == 1
 
 
 def test_resources_endpoint(query_requests):
     """Calling execute() with a query that goes to the resources endpoint should return the list of hosts."""
     hosts = query_requests[0].execute('R:Class = value')
-    assert hosts == NodeSet('resources_host[1-2]')
+    assert hosts == nodeset('resources_host[1-2]')
     assert query_requests[1].call_count == 1
 
 
 def test_with_boolean_operator(query_requests):
     """Calling execute() with a query with a boolean operator should return the list of hosts."""
     hosts = query_requests[0].execute('nodes_host1 or nodes_host2')
-    assert hosts == NodeSet('nodes_host[1-2]')
+    assert hosts == nodeset('nodes_host[1-2]')
     assert query_requests[1].call_count == 1
 
 
 def test_with_subgroup(query_requests):
     """Calling execute() with a query with a subgroup return the list of hosts."""
     hosts = query_requests[0].execute('(nodes_host1 or nodes_host2)')
-    assert hosts == NodeSet('nodes_host[1-2]')
+    assert hosts == nodeset('nodes_host[1-2]')
     assert query_requests[1].call_count == 1
 
 
 def test_empty(query_requests):
     """Calling execute() with a query that return no hosts should return an empty list."""
     hosts = query_requests[0].execute('non_existent_host')
-    assert hosts == NodeSet()
+    assert hosts == nodeset()
     assert query_requests[1].call_count == 1
 
 
@@ -465,5 +466,5 @@ def test_complex_query(query_requests):
         {key: endpoint + '_host1', 'key': 'value1'}, {key: endpoint + '_host2', 'key': 'value2'}])
 
     hosts = query_requests[0].execute('(resources_host1 or resources_host2) and R:Class = MyClass')
-    assert hosts == NodeSet('resources_host[1-2]')
+    assert hosts == nodeset('resources_host[1-2]')
     assert query_requests[1].call_count == 1

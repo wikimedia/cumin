@@ -2,11 +2,11 @@
 import argparse
 
 from logging import DEBUG, INFO
+from unittest import mock
 
-import mock
 import pytest
 
-from cumin import cli, CuminError, LOGGING_TRACE_LEVEL_NUMBER, transports
+from cumin import cli, CuminError, LOGGING_TRACE_LEVEL_NUMBER, nodeset, transports
 
 
 # Environment variables
@@ -52,6 +52,32 @@ def test_parse_args_no_mode():
         cli.parse_args(_ARGV[:index] + _ARGV[index + 1:])
 
 
+def test_target_batch_size():
+    """Calling target_batch_size() should properly parse integer values."""
+    assert cli.target_batch_size('1') == {'value': 1, 'ratio': None}
+    assert cli.target_batch_size('100') == {'value': 100, 'ratio': None}
+
+
+@pytest.mark.parametrize('percentage', (('0%', 0.0), ('50%', 0.5), ('100%', 1.0)))
+def test_target_batch_size_perc(percentage):
+    """Calling target_batch_size() with a valid percentage should properly parse it."""
+    assert cli.target_batch_size(percentage[0]) == {'value': None, 'ratio': percentage[1]}
+
+
+@pytest.mark.parametrize('percentage', ('-1%', '101%'))
+def test_target_batch_size_perc_ko(percentage):
+    """Calling target_batch_size() with invalid percentage should raise argparse.ArgumentTypeError."""
+    with pytest.raises(argparse.ArgumentTypeError, match='not a valid percentage'):
+        cli.target_batch_size(percentage)
+
+
+@pytest.mark.parametrize('value', ('0', '-1'))
+def test_target_batch_size_val_ko(value):
+    """Calling target_batch_size() with invalid value should raise argparse.ArgumentTypeError."""
+    with pytest.raises(argparse.ArgumentTypeError, match='is not a valid value'):
+        cli.target_batch_size(value)
+
+
 def test_get_running_user():
     """Unsufficient permissions or unknown user should raise CuminError and a proper user should be detected."""
     env = {'USER': None, 'SUDO_USER': None}
@@ -88,10 +114,10 @@ def test_setup_logging(mocked_get_logger, file_handler, mocked_os):
 
 
 @mock.patch('cumin.cli.stderr')
-@mock.patch('cumin.cli.raw_input')
+@mock.patch('builtins.input')
 @mock.patch('cumin.cli.sys.stdout.isatty')
 @mock.patch('cumin.cli.logger')
-def test_sigint_handler(logging, isatty, mocked_raw_input, stderr):  # pylint: disable=unused-argument
+def test_sigint_handler(logging, isatty, mocked_input, stderr):  # pylint: disable=unused-argument
     """Calling the SIGINT handler should raise KeyboardInterrupt or not based on tty and answer."""
     # Signal handler called without a tty
     isatty.return_value = False
@@ -105,24 +131,24 @@ def test_sigint_handler(logging, isatty, mocked_raw_input, stderr):  # pylint: d
 
     # # Signal handler called with a tty, answered 'y'
     # isatty.return_value = True
-    # mocked_raw_input.return_value = 'y'
+    # mocked_input.return_value = 'y'
     # with pytest.raises(cli.KeyboardInterruptError):
     #     cli.sigint_handler(1, None)
     #
     # # Signal handler called with a tty, answered 'n'
     # isatty.return_value = True
-    # mocked_raw_input.return_value = 'n'
+    # mocked_input.return_value = 'n'
     # assert cli.sigint_handler(1, None) is None
     #
     # # Signal handler called with a tty, answered 'invalid_answer'
     # isatty.return_value = True
-    # mocked_raw_input.return_value = 'invalid_answer'
+    # mocked_input.return_value = 'invalid_answer'
     # with pytest.raises(cli.KeyboardInterruptError):
     #     cli.sigint_handler(1, None)
     #
     # # Signal handler called with a tty, empty answer
     # isatty.return_value = True
-    # mocked_raw_input.return_value = ''
+    # mocked_input.return_value = ''
     # with pytest.raises(cli.KeyboardInterruptError):
     #     cli.sigint_handler(1, None)
 
@@ -135,26 +161,26 @@ def test_stderr(tqdm):
 
 
 @mock.patch('cumin.cli.stderr')
-@mock.patch('cumin.cli.raw_input')
+@mock.patch('builtins.input')
 @mock.patch('cumin.cli.sys.stdout.isatty')
-def test_get_hosts_ok(isatty, mocked_raw_input, stderr):
+def test_get_hosts_ok(isatty, mocked_input, stderr):
     """Calling get_hosts() should query the backend and return the list of hosts."""
     args = cli.parse_args(['D{host1}', 'command1'])
     config = {'backend': 'direct'}
     isatty.return_value = True
 
-    mocked_raw_input.return_value = 'y'
-    assert cli.get_hosts(args, config) == cli.NodeSet('host1')
+    mocked_input.return_value = 'y'
+    assert cli.get_hosts(args, config) == nodeset('host1')
 
-    mocked_raw_input.return_value = 'n'
+    mocked_input.return_value = 'n'
     with pytest.raises(cli.KeyboardInterruptError):
         cli.get_hosts(args, config)
 
-    mocked_raw_input.return_value = 'invalid_answer'
+    mocked_input.return_value = 'invalid_answer'
     with pytest.raises(cli.KeyboardInterruptError):
         cli.get_hosts(args, config)
 
-    mocked_raw_input.return_value = ''
+    mocked_input.return_value = ''
     with pytest.raises(cli.KeyboardInterruptError):
         cli.get_hosts(args, config)
 
@@ -191,9 +217,9 @@ def test_get_hosts_no_tty_force(isatty, stderr):
     """Calling get_hosts() with or without a TTY with --force should return the list of hosts."""
     args = cli.parse_args(['--force', 'D{host1}', 'command1'])
     config = {'backend': 'direct'}
-    assert cli.get_hosts(args, config) == cli.NodeSet('host1')
+    assert cli.get_hosts(args, config) == nodeset('host1')
     isatty.return_value = True
-    assert cli.get_hosts(args, config) == cli.NodeSet('host1')
+    assert cli.get_hosts(args, config) == nodeset('host1')
     assert stderr.called
 
 

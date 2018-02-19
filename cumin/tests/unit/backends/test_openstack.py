@@ -1,10 +1,8 @@
 """OpenStack backend tests."""
 from collections import namedtuple
+from unittest import mock
 
-import mock
-
-from ClusterShell.NodeSet import NodeSet
-
+from cumin import nodeset
 from cumin.backends import BaseQuery, openstack
 
 
@@ -64,7 +62,7 @@ class TestOpenStackQuery(object):
             [Server('host1'), Server('host2')], [Server('host1'), Server('host2')]]
 
         hosts = self.query.execute('*')
-        assert hosts == NodeSet('host[1-2].project[1-2]')
+        assert hosts == nodeset('host[1-2].project[1-2]')
 
         assert keystone_identity.call_count == 3
         assert keystone_session.call_count == 3
@@ -80,7 +78,7 @@ class TestOpenStackQuery(object):
         nova_client.return_value.servers.list.return_value = [Server('host1'), Server('host2')]
 
         hosts = self.query.execute('project:project1')
-        assert hosts == NodeSet('host[1-2].project1')
+        assert hosts == nodeset('host[1-2].project1')
 
         assert keystone_identity.call_count == 1
         assert keystone_session.call_count == 1
@@ -93,7 +91,7 @@ class TestOpenStackQuery(object):
         nova_client.return_value.servers.list.return_value = [Server('host1'), Server('host2')]
 
         hosts = self.query.execute('project:project1 name:host')
-        assert hosts == NodeSet('host[1-2].project1')
+        assert hosts == nodeset('host[1-2].project1')
 
         assert keystone_identity.call_count == 1
         assert keystone_session.call_count == 1
@@ -109,7 +107,7 @@ class TestOpenStackQuery(object):
         query = openstack.OpenStackQuery(self.config)
 
         hosts = query.execute('project:project1')
-        assert hosts == NodeSet('host[1-2].project1.servers.local')
+        assert hosts == nodeset('host[1-2].project1.servers.local')
 
         assert keystone_identity.call_count == 1
         assert keystone_session.call_count == 1
@@ -122,7 +120,7 @@ class TestOpenStackQuery(object):
         query = openstack.OpenStackQuery(self.config)
 
         hosts = query.execute('project:project1')
-        assert hosts == NodeSet('host[1-2].project1.servers.local')
+        assert hosts == nodeset('host[1-2].project1.servers.local')
 
         assert keystone_identity.call_count == 1
         assert keystone_session.call_count == 1
@@ -135,7 +133,7 @@ class TestOpenStackQuery(object):
         query = openstack.OpenStackQuery(self.config)
 
         hosts = query.execute('*')
-        assert hosts == NodeSet('host[1-2].project1')
+        assert hosts == nodeset('host[1-2].project1')
 
         assert keystone_identity.call_count == 1
         assert keystone_session.call_count == 1

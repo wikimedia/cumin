@@ -6,6 +6,8 @@ from pkg_resources import DistributionNotFound, get_distribution
 
 import yaml
 
+from ClusterShell.NodeSet import NodeSet, RESOLVER_NOGROUP
+
 
 try:
     __version__ = get_distribution(__name__).version
@@ -28,8 +30,8 @@ LOGGING_TRACE_LEVEL_NAME = 'TRACE'
 # Fail if the custom logging slot is already in use with a different name or
 # Access to a private property of logging was preferred over matching the default string returned by
 # logging.getLevelName() for unused custom slots.
-if (LOGGING_TRACE_LEVEL_NUMBER in logging._levelNames and  # pylint: disable=protected-access
-        LOGGING_TRACE_LEVEL_NAME not in logging._levelNames):  # pylint: disable=protected-access
+if (LOGGING_TRACE_LEVEL_NUMBER in logging._levelToName and  # pylint: disable=protected-access
+        LOGGING_TRACE_LEVEL_NAME not in logging._nameToLevel):  # pylint: disable=protected-access
     raise CuminError("Unable to set custom logging for trace, logging level {level} is alredy set for '{name}'.".format(
         level=LOGGING_TRACE_LEVEL_NUMBER, name=logging.getLevelName(LOGGING_TRACE_LEVEL_NUMBER)))
 
@@ -46,7 +48,7 @@ def trace(self, msg, *args, **kwargs):
 
 
 # Install the trace method and it's logging level if not already present
-if LOGGING_TRACE_LEVEL_NAME not in logging._levelNames:  # pylint: disable=protected-access
+if LOGGING_TRACE_LEVEL_NAME not in logging._nameToLevel:  # pylint: disable=protected-access
     logging.addLevelName(LOGGING_TRACE_LEVEL_NUMBER, LOGGING_TRACE_LEVEL_NAME)
 if not hasattr(logging.Logger, 'trace'):
     logging.Logger.trace = trace
@@ -109,3 +111,33 @@ def parse_config(config_file):
         config = {}
 
     return config
+
+
+def nodeset(nodes=None):
+    """Instantiate a ClusterShell NodeSet with the resolver defaulting to :py:const:`RESOLVER_NOGROUP`.
+
+    This allow to avoid any conflict with Cumin grammars.
+
+    Returns:
+        ClusterShell.NodeSet.NodeSet: the instantiated NodeSet.
+
+    See Also:
+        https://github.com/cea-hpc/clustershell/issues/368
+
+    """
+    return NodeSet(nodes=nodes, resolver=RESOLVER_NOGROUP)
+
+
+def nodeset_fromlist(nodelist):
+    """Instantiate a ClusterShell NodeSet from a list with the resolver defaulting to :py:const:`RESOLVER_NOGROUP`.
+
+    This allow to avoid any conflict with Cumin grammars.
+
+    Returns:
+        ClusterShell.NodeSet.NodeSet: the instantiated NodeSet.
+
+    See Also:
+        https://github.com/cea-hpc/clustershell/issues/368
+
+    """
+    return NodeSet.fromlist(nodelist, resolver=RESOLVER_NOGROUP)

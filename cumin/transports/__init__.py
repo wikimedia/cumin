@@ -7,7 +7,7 @@ from abc import ABCMeta, abstractmethod, abstractproperty
 
 from ClusterShell.NodeSet import NodeSet
 
-from cumin import CuminError
+from cumin import CuminError, nodeset_fromlist
 
 
 class WorkerError(CuminError):
@@ -276,29 +276,85 @@ class State(object):
         """
         return self.states_representation[self._state]
 
-    def __cmp__(self, other):
-        """Comparison operator.
-
-        Allow to directly compare a :py:class:`State` object to another or to an :py:class:`int`.
+    def __eq__(self, other):
+        """Equality operator for rich comparison.
 
         :Parameters:
-            according to Python's Data model :py:meth:`object.__cmp__`.
+            according to Python's Data model :py:meth:`object.__eq__`.
 
         Returns:
-            int: a negative integer if `self` is lesser than `other`, zero if `self` is equal to `other`, a positive
-            integer if `self` is greater than `other`.
+            bool: :py:data:`True` if `self` is equal to `other`, :py:data:`False` otherwise.
 
         Raises:
             exceptions.ValueError: if the comparing object is not an instance of :py:class:`State` or a
                 :py:class:`int`.
 
         """
-        if isinstance(other, int):
-            return self._state - other
-        elif isinstance(other, State):
-            return self._state - other._state  # pylint: disable=protected-access
-        else:
-            raise ValueError("Unable to compare instance of '{other}' with State instance".format(other=type(other)))
+        return self._cmp(other) == 0
+
+    def __lt__(self, other):
+        """Less than operator for rich comparison.
+
+        :Parameters:
+            according to Python's Data model :py:meth:`object.__lt__`.
+
+        Returns:
+            bool: :py:data:`True` if `self` is lower than `other`, :py:data:`False` otherwise.
+
+        Raises:
+            exceptions.ValueError: if the comparing object is not an instance of :py:class:`State` or a
+                :py:class:`int`.
+
+        """
+        return self._cmp(other) < 0
+
+    def __le__(self, other):
+        """Less than or equal operator for rich comparison.
+
+        :Parameters:
+            according to Python's Data model :py:meth:`object.__le__`.
+
+        Returns:
+            bool: :py:data:`True` if `self` is lower or equal than `other`, :py:data:`False` otherwise.
+
+        Raises:
+            exceptions.ValueError: if the comparing object is not an instance of :py:class:`State` or a
+                :py:class:`int`.
+
+        """
+        return self._cmp(other) <= 0
+
+    def __gt__(self, other):
+        """Greater than operator for rich comparison.
+
+        :Parameters:
+            according to Python's Data model :py:meth:`object.__gt__`.
+
+        Returns:
+            bool: :py:data:`True` if `self` is greater than `other`, :py:data:`False` otherwise.
+
+        Raises:
+            exceptions.ValueError: if the comparing object is not an instance of :py:class:`State` or a
+                :py:class:`int`.
+
+        """
+        return self._cmp(other) > 0
+
+    def __ge__(self, other):
+        """Greater than or equal operator for rich comparison.
+
+        :Parameters:
+            according to Python's Data model :py:meth:`object.__ge__`.
+
+        Returns:
+            bool: :py:data:`True` if `self` is greater or equal than `other`, :py:data:`False` otherwise.
+
+        Raises:
+            exceptions.ValueError: if the comparing object is not an instance of :py:class:`State` or a
+                :py:class:`int`.
+
+        """
+        return self._cmp(other) >= 0
 
     def update(self, new):
         """Transition the state from the current state to the new one, if the transition is allowed.
@@ -321,11 +377,26 @@ class State(object):
 
         self._state = new
 
+    def _cmp(self, other):
+        """Comparison operation. Allow to directly compare a state object to another or to an integer.
+
+        Raises ValueError if the comparing object is not an instance of State or an integer.
+
+        Arguments:
+        other -- the object to compare the current instance to
+        """
+        if isinstance(other, int):
+            return self._state - other
+        elif isinstance(other, State):
+            return self._state - other._state  # pylint: disable=protected-access
+        else:
+            raise ValueError("Unable to compare instance of '{other}' with State instance".format(other=type(other)))
+
 
 class Target(object):
     """Targets management class."""
 
-    def __init__(self, hosts, batch_size=None, batch_sleep=None):
+    def __init__(self, hosts, batch_size=None, batch_size_ratio=None, batch_sleep=None):
         """Constructor, inizialize the Target with the list of hosts and additional parameters.
 
         Arguments:
@@ -333,26 +404,42 @@ class Target(object):
                 :py:class:`ClusterShell.NodeSet.NodeSet` and :py:class:`list` are accepted and converted automatically
                 to :py:class:`ClusterShell.NodeSet.NodeSet` internally.
             batch_size (int, optional): set the batch size so that no more that this number of hosts are targeted
-                at any given time. If greater than the number of hosts it will be auto-resized to the number of hosts.
-                It must be a positive integer or :py:data:`None` to unset it.
+                at any given time. It must be a positive integer. If greater than the number of hosts it will be
+                auto-resized to the number of hosts.
+            batch_size_ratio (float, optional): set the batch size with a ratio so that no more that this fraction
+                of hosts are targeted at any given time. It must be a float between 0 and 1 and will raise exception
+                if after rounding it there are 0 hosts selected.
             batch_sleep (int, optional): sleep time in seconds between the end of execution of one host in the
-                batch and the start in the next host. It must be a positive float or None to unset it.
+                batch and the start in the next host. It must be a positive float.
 
         Raises:
-            cumin.transports.WorkerError: if the `hosts` parameter is empty or invalid.
+            cumin.transports.WorkerError: if the `hosts` parameter is empty or invalid, if both the `batch_size` and
+                `batch_size_ratio` parameters are set or if the `batch_size_ratio` selects no hosts.
 
         """
         self.logger = logging.getLogger('.'.join((self.__module__, self.__class__.__name__)))
 
-        message = "must be a non-empty ClusterShell's NodeSet or list"
+        message = "must be a non-empty ClusterShell NodeSet or list"
         if not hosts:
             raise_error('hosts', message, hosts)
         elif isinstance(hosts, NodeSet):
             self.hosts = hosts
         elif isinstance(hosts, list):
-            self.hosts = NodeSet.fromlist(hosts)
+            self.hosts = nodeset_fromlist(hosts)
         else:
             raise_error('hosts', message, hosts)
+
+        if batch_size is not None and batch_size_ratio is not None:
+            raise WorkerError(("The 'batch_size' and 'batch_size_ratio' parameters are mutually exclusive but they're "
+                               "both set."))
+
+        if batch_size_ratio is not None:
+            if not isinstance(batch_size_ratio, float) or not 0.0 <= batch_size_ratio <= 1.0:
+                raise_error('batch_size_ratio', 'must be a float between 0.0 and 1.0', batch_size_ratio)
+
+            batch_size = round(len(self.hosts) * batch_size_ratio)
+            if batch_size == 0:
+                raise_error('batch_size_ratio', 'has generated a batch_size of 0 hosts', batch_size_ratio)
 
         self.batch_size = self._compute_batch_size(batch_size, self.hosts)
         self.batch_sleep = Target._compute_batch_sleep(batch_sleep)
@@ -372,8 +459,8 @@ class Target(object):
 
         Arguments:
             batch_size (int, None): a positive integer to indicate the batch_size to apply when executing the worker or
-                :py:data:`None` to get its default value. If greater than the number of hosts, the number of hosts
-                will be used as value instead.
+                :py:data:`None` to get its default value of all the hosts. If greater than the number of hosts, the
+                number of hosts will be used as value instead.
             hosts (ClusterShell.NodeSet.NodeSet): the list of hosts to use to calculate the batch size.
 
         Returns:
@@ -408,10 +495,8 @@ class Target(object):
         return batch_sleep or 0.0
 
 
-class BaseWorker(object):
+class BaseWorker(object, metaclass=ABCMeta):
     """Worker interface to be extended by concrete workers."""
-
-    __metaclass__ = ABCMeta
 
     def __init__(self, config, target):
         """Worker constructor. Setup environment variables and initialize properties.
@@ -431,7 +516,7 @@ class BaseWorker(object):
         self._timeout = None
         self._success_threshold = None
 
-        for key, value in config.get('environment', {}).iteritems():
+        for key, value in config.get('environment', {}).items():
             os.environ[key] = value
 
     @abstractmethod
