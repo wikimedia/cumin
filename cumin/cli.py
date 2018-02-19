@@ -96,7 +96,7 @@ def get_parser():
                               'mode all commands are executed on the first batch of hosts, proceeding with the next '
                               'hosts as soon as one host completes all the commands. The -p/--success-percentage is '
                               'checked before starting the execution in each host. It accept an absolute integer '
-                              '(i.e. 10) or a percentage (i.e. 50%). [default: None (# of hosts)]'))
+                              '(i.e. 10) or a percentage (i.e. 50%%). [default: None (# of hosts)]'))
     parser.add_argument('-s', '--batch-sleep', type=float,
                         help=('Sleep in seconds (float) to wait before starting the execution on the next host when '
                               '-b/--batch-size is used. [default: None]'))
