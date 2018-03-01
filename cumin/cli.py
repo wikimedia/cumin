@@ -220,7 +220,7 @@ def setup_logging(filename, debug=False, trace=False):
         debug: whether to set logging level to DEBUG [optional, default: False]
     """
     file_path = os.path.dirname(filename)
-    if not os.path.exists(file_path):
+    if file_path and not os.path.exists(file_path):
         os.makedirs(file_path, 0o770)
 
     log_formatter = logging.Formatter(fmt='%(asctime)s [%(levelname)s %(process)s %(name)s.%(funcName)s] %(message)s')
