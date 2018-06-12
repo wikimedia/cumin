@@ -23,7 +23,7 @@ at the Wikimedia Foundation are available on `Wikitech`_.
 .. |GitHub Release| image:: https://img.shields.io/github/release/wikimedia/cumin.svg
    :target: https://github.com/wikimedia/cumin/releases
 .. |PyPI Release| image:: https://img.shields.io/pypi/v/cumin.svg
-   :target: https://pypi.python.org/pypi/cumin
+   :target: https://pypi.org/project/cumin/
 .. |Build Status| image:: https://travis-ci.org/wikimedia/cumin.svg?branch=master
    :target: https://travis-ci.org/wikimedia/cumin
 .. |Coveralls Coverage| image:: https://coveralls.io/repos/github/wikimedia/cumin/badge.svg?branch=master
