@@ -5,7 +5,7 @@ from unittest import mock
 import pytest
 
 from cumin import CuminError, nodeset
-from cumin.transports import BaseWorker, Command, clustershell, State, Target, WorkerError
+from cumin.transports import BaseWorker, Command, clustershell, ProgressBars, State, Target, WorkerError
 
 
 def test_node_class_instantiation():
@@ -206,8 +206,7 @@ class ConcreteBaseEventHandler(clustershell.BaseEventHandler):
     def __init__(self, nodes, commands, **kwargs):
         """Initialize progress bars."""
         super().__init__(nodes, commands, **kwargs)
-        self.pbar_ok = mock.Mock()
-        self.pbar_ko = mock.Mock()
+        self.progress = mock.Mock(spec_set=ProgressBars)
 
     def close(self, task):
         """Required by the BaseEventHandler class."""
@@ -243,7 +242,7 @@ class TestConcreteBaseEventHandler(TestBaseEventHandler):
 
         assert not self.handler.global_timedout
         self.handler.on_timeout(self.worker.task)
-        assert self.handler.pbar_ko.update.called
+        assert self.handler.progress.update_failed.called
         assert self.handler.global_timedout
         assert tqdm.write.called
 
@@ -293,6 +292,7 @@ class TestSyncEventHandler(TestBaseEventHandler):
         """Initialize default properties and instances."""
         super().setup_method()
         self.handler = clustershell.SyncEventHandler(self.target, self.commands, success_threshold=1)
+        self.handler.progress = mock.Mock(spec_set=ProgressBars)
         self.worker.eh = self.handler
         self.colorama = colorama
         self.logger = logger
@@ -302,16 +302,14 @@ class TestSyncEventHandler(TestBaseEventHandler):
         """An instance of SyncEventHandler should be an instance of BaseEventHandler."""
         assert isinstance(self.handler, clustershell.BaseEventHandler)
 
-    @mock.patch('cumin.transports.clustershell.tqdm')
-    def test_start_command_no_schedule(self, tqdm):
+    def test_start_command_no_schedule(self):
         """Calling start_command() should reset the success counter and initialize the progress bars."""
         self.handler.start_command()
-        assert tqdm.called
+        assert self.handler.progress.init.called
         assert self.handler.counters['success'] == 0
 
     @mock.patch('cumin.transports.clustershell.Task.task_self')
-    @mock.patch('cumin.transports.clustershell.tqdm')
-    def test_start_command_schedule(self, tqdm, task_self):
+    def test_start_command_schedule(self, task_self):
         """Calling start_command() with schedule should also change the state of the first batch nodes."""
         # Reset the state of nodes to pending
         for node in self.handler.nodes.values():
@@ -320,7 +318,7 @@ class TestSyncEventHandler(TestBaseEventHandler):
             node.state.update(clustershell.State.pending)
 
         self.handler.start_command(schedule=True)
-        assert tqdm.called
+        assert self.handler.progress.init.called
         assert self.handler.counters['success'] == 0
         scheduled_nodes = sorted(node.name for node in self.handler.nodes.values() if node.state.is_scheduled)
         assert scheduled_nodes == sorted(['node1', 'node2'])
@@ -357,7 +355,7 @@ class TestSyncEventHandler(TestBaseEventHandler):
         """Calling ev_hup with a worker that has exit status zero should update the success progress bar."""
         self.handler.ev_pickup(self.worker, self.worker.current_node)
         self.handler.ev_hup(self.worker, self.worker.current_node, 100)
-        assert self.handler.pbar_ok.update.called
+        assert self.handler.progress.update_success.called
         assert not timer.called
         assert self.handler.nodes[self.worker.current_node].state.is_success
 
@@ -366,7 +364,7 @@ class TestSyncEventHandler(TestBaseEventHandler):
         """Calling ev_hup with a worker that has exit status non-zero should update the failed progress bar."""
         self.handler.ev_pickup(self.worker, self.worker.current_node)
         self.handler.ev_hup(self.worker, self.worker.current_node, 1)
-        assert self.handler.pbar_ko.update.called
+        assert self.handler.progress.update_failed.called
         assert not timer.called
         assert self.handler.nodes[self.worker.current_node].state.is_failed
 
@@ -381,10 +379,11 @@ class TestSyncEventHandler(TestBaseEventHandler):
 class TestAsyncEventHandler(TestBaseEventHandler):
     """AsyncEventHandler test class."""
 
+    @mock.patch('cumin.transports.clustershell.ProgressBars')
     @mock.patch('cumin.transports.clustershell.logging')
     @mock.patch('cumin.transports.clustershell.colorama')
     @mock.patch('cumin.transports.clustershell.tqdm')
-    def setup_method(self, _, tqdm, colorama, logger):  # pylint: disable=arguments-differ
+    def setup_method(self, _, tqdm, colorama, logger, progress):  # pylint: disable=arguments-differ,unused-argument
         """Initialize default properties and instances."""
         super().setup_method()
         self.handler = clustershell.AsyncEventHandler(self.target, self.commands)
@@ -396,7 +395,7 @@ class TestAsyncEventHandler(TestBaseEventHandler):
     def test_instantiation(self):
         """An instance of AsyncEventHandler should be an instance of BaseEventHandler and initialize progress bars."""
         assert isinstance(self.handler, clustershell.BaseEventHandler)
-        assert self.handler.pbar_ok.refresh.called
+        assert self.handler.progress.init.called
 
     def test_ev_hup_ok(self):
         """Calling ev_hup with a worker that has zero exit status should enqueue the next command."""
@@ -410,13 +409,13 @@ class TestAsyncEventHandler(TestBaseEventHandler):
         self.handler.ev_pickup(self.worker, self.worker.current_node)
         self.handler.ev_hup(self.worker, self.worker.current_node, 0)
         assert self.handler.counters['success'] == 1
-        assert self.handler.pbar_ok.update.called
+        assert self.handler.progress.update_success.called
 
     def test_ev_hup_ko(self):
         """Calling ev_hup with a worker that has non-zero exit status should not enqueue the next command."""
         self.handler.ev_pickup(self.worker, self.worker.current_node)
         self.handler.ev_hup(self.worker, self.worker.current_node, 1)
-        assert self.handler.pbar_ko.update.called
+        assert self.handler.progress.update_failed.called
 
     def test_ev_timer(self):
         """Calling ev_timer() should schedule the execution of the next node/command."""
@@ -429,5 +428,5 @@ class TestAsyncEventHandler(TestBaseEventHandler):
         self.worker.task.iter_buffers = TestClusterShellWorker.iter_buffers
         self.worker.num_timeout.return_value = 0
         self.handler.close(self.worker)
-        assert self.handler.pbar_ok.close.called
+        assert self.handler.progress.close.called
         assert tqdm.write.called

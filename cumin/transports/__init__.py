@@ -2,10 +2,14 @@
 import logging
 import os
 import shlex
+import sys
 
 from abc import ABCMeta, abstractmethod, abstractproperty
 
+import colorama
+
 from ClusterShell.NodeSet import NodeSet
+from tqdm import tqdm
 
 from cumin import CuminError, nodeset_fromlist
 
@@ -715,3 +719,72 @@ def raise_error(property_name, message, value):
     """
     raise WorkerError("{property_name} {message}, got '{value_type}': {value}".format(
         property_name=property_name, message=message, value_type=type(value), value=value))
+
+
+class ProgressBars:
+    """Progress bars for the status of successful / failed hosts.
+
+    The ProgressBars needs to be notified of the total number of hosts when the
+    operation starts, and then notified of successes and failures.
+    """
+
+    def __init__(self):
+        """Create the progress bars.
+
+        Note that the progress bars themselves are not initalized at object
+        creation. `init()` needs to be called before using the progress bars.
+        """
+        self.pbar_ok = None
+        self.pbar_ko = None
+        self.bar_format = ('{desc} |{bar}| {percentage:3.0f}% ({n_fmt}/{total_fmt}) '
+                           '[{elapsed}<{remaining}, {rate_fmt}]')
+
+    def init(self, num_hosts):
+        """Initialize the progress bars.
+
+        Arguments:
+            num_hosts (int): the total number of hosts
+        """
+        self.pbar_ok = tqdm(desc='PASS', total=num_hosts, leave=True, unit='hosts', dynamic_ncols=True,
+                            bar_format=colorama.Fore.GREEN + self.bar_format, file=sys.stderr)
+        self.pbar_ok.refresh()
+        self.pbar_ko = tqdm(desc='FAIL', total=num_hosts, leave=True, unit='hosts', dynamic_ncols=True,
+                            bar_format=colorama.Fore.RED + self.bar_format, file=sys.stderr)
+        self.pbar_ko.refresh()
+
+    def close(self):
+        """Closes the progress bars."""
+        self.pbar_ok.close()
+        self.pbar_ko.close()
+
+    def update_success(self, num_hosts=1):
+        """Updates the number of successful hosts.
+
+        Arguments:
+            num_hosts (int): increment to the number of hosts that have completed successfully
+        """
+        self.pbar_ok.update(num_hosts)
+
+    def update_failed(self, num_hosts=1):
+        """Updates the number of failed hosts.
+
+        Arguments:
+            num_hosts (int): increment to the number of hosts that have completed in error
+        """
+        self.pbar_ko.update(num_hosts)
+
+
+class NoProgress:
+    """Used as a null object to disable the display of progress bars."""
+
+    def init(self, num_hosts):
+        """Does nothing"""
+
+    def close(self):
+        """Does nothing"""
+
+    def update_success(self, num_hosts=1):
+        """Does nothing"""
+
+    def update_failed(self, num_hosts=1):
+        """Does nothing"""

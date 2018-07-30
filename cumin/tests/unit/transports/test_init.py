@@ -9,6 +9,7 @@ from ClusterShell.NodeSet import NodeSet
 import cumin  # noqa: F401 (dynamically used in TestCommand)
 
 from cumin import transports
+from cumin.transports import ProgressBars
 
 
 class ConcreteBaseWorker(transports.BaseWorker):
@@ -533,3 +534,45 @@ class TestModuleFunctions:
         """Should raise a WorkerError."""
         with pytest.raises(transports.WorkerError, match='Test message'):
             transports.raise_error('Test', 'message', 'value')
+
+
+@mock.patch('cumin.transports.tqdm')
+class TestProgressBars:
+    """A class that tests ProgressBars"""
+
+    def test_init_intialize_progress_bars_with_correct_size(self, tqdm):
+        """Progress bars are initialized at the correct size"""
+        progress = ProgressBars()
+        progress.init(10)
+
+        assert tqdm.call_count == 2
+        _, kwargs = tqdm.call_args
+        assert kwargs['total'] == 10
+
+    def test_progress_bars_are_closed(self, tqdm):  # pylint: disable=unused-argument
+        """Progress bars are closed"""
+        progress = ProgressBars()
+        progress.init(10)
+
+        progress.close()
+
+        assert progress.pbar_ok.close.called  # pylint: disable=no-member
+        assert progress.pbar_ko.close.called  # pylint: disable=no-member
+
+    def test_progress_bar_is_updated_on_success(self, tqdm):  # pylint: disable=unused-argument
+        """Progress bar is updated on success"""
+        progress = ProgressBars()
+        progress.init(10)
+
+        progress.update_success(5)
+
+        assert progress.pbar_ok.update.called_once_with(5)  # pylint: disable=no-member
+
+    def test_progress_bar_is_updated_on_failure(self, tqdm):  # pylint: disable=unused-argument
+        """Progress bar is updated on failure"""
+        progress = ProgressBars()
+        progress.init(10)
+
+        progress.update_failed(3)
+
+        assert progress.pbar_ko.update.called_once_with(3)  # pylint: disable=no-member
