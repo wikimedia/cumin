@@ -1,3 +1,9 @@
+cumin (3.0.2-1) jessie-wikimedia; urgency=medium
+
+  * v3.0.2 upstream release.
+
+ -- Riccardo Coccioli <rcoccioli@wikimedia.org>  Mon, 30 Jul 2018 12:26:33 +0200
+
 cumin (3.0.1-1) jessie-wikimedia; urgency=medium
 
   * v3.0.1 upstream release.
