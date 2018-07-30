@@ -1,6 +1,32 @@
 Cumin Changelog
 ---------------
 
+
+`v3.0.2`_ (2018-07-30)
+^^^^^^^^^^^^^^^^^^^^^^
+
+Bug Fixes
+"""""""""
+
+* Fix the ``-o/--output`` option (bytes->str conversion) (`T200622`_):
+
+  * The migration to Python3 left the ``-o/--output`` option of the CLI with some decoding issue from bytes to string.
+  * Uniforming all calls to ``bytes.decode()`` not specifying the encoding as ``utf-8`` is the default in Python 3.
+  * Add integration tests for the ``-o/--output`` option.
+
+* CLI: fix ``setup_logging()`` when called without path (`T188627`_):
+
+  * Fix the ``setup_logging()`` function when it's called with a filename without a path, in order to log directly
+    into the current directory. Thanks goes to aggro for reporting it.
+
+* Fix debugging log message conversion. The Command.timeout can also be None in case is not set, converting it to
+  string instead of integer for the debug messages.
+
+Miscellanea
+"""""""""""
+
+* Updated PyPI URLs to the new PyPI website
+
 `v3.0.1`_ (2018-02-19)
 ^^^^^^^^^^^^^^^^^^^^^^
 
@@ -470,6 +496,8 @@ Bug Fixes
 .. _`T179002`: https://phabricator.wikimedia.org/T179002
 .. _`T182575`: https://phabricator.wikimedia.org/T182575
 .. _`T187185`: https://phabricator.wikimedia.org/T187185
+.. _`T188627`: https://phabricator.wikimedia.org/T188627
+.. _`T200622`: https://phabricator.wikimedia.org/T200622
 
 .. _`v0.0.1`: https://github.com/wikimedia/cumin/releases/tag/v0.0.1
 .. _`v0.0.2`: https://github.com/wikimedia/cumin/releases/tag/v0.0.2
@@ -482,3 +510,4 @@ Bug Fixes
 .. _`v2.0.0`: https://github.com/wikimedia/cumin/releases/tag/v2.0.0
 .. _`v3.0.0`: https://github.com/wikimedia/cumin/releases/tag/v3.0.0
 .. _`v3.0.1`: https://github.com/wikimedia/cumin/releases/tag/v3.0.1
+.. _`v3.0.2`: https://github.com/wikimedia/cumin/releases/tag/v3.0.2
