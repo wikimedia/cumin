@@ -269,7 +269,7 @@ class BaseEventHandler(Event.EventHandler):
             return
 
         with self.lock:
-            tqdm.write(msg.decode('utf-8'), file=sys.stdout)
+            tqdm.write(msg.decode(), file=sys.stdout)
 
     def ev_close(self, worker, timedout):
         """Worker has finished or timed out.
@@ -369,7 +369,7 @@ class BaseEventHandler(Event.EventHandler):
                 color=colorama.Fore.CYAN, num=len(nodelist),
                 nodes=nodeset_fromlist(nodelist)), file=sys.stdout)
             tqdm.write(colorama.Fore.BLUE + output_message, file=sys.stdout)
-            tqdm.write('{output}'.format(output=output.message().decode('utf-8')), file=sys.stdout)
+            tqdm.write('{output}'.format(output=output.message().decode()), file=sys.stdout)
 
         if nodelist is None:
             message = '===== NO OUTPUT ====='

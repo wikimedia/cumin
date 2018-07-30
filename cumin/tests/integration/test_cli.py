@@ -3,6 +3,7 @@
 
 
 import copy
+import json
 import os
 import re
 import sys
@@ -110,6 +111,14 @@ _VARIANTS_PARAMETERS = (
     ['-m', 'async', '-p', '50', '--batch-size', '2'],
     ['-m', 'async', '-p', '50', '--batch-size', '2', '--batch-sleep', '1.0'],
 )
+
+# Expected output for the -o/--out txt option for one node
+_TXT_EXPECTED_SINGLE_OUTPUT = """{prefix}{node_id}: First
+{prefix}{node_id}: Second
+{prefix}{node_id}: Third"""
+
+# Expected output for the -o/--out json option for one node
+_JSON_EXPECTED_SINGLE_OUTPUT = 'First\nSecond\nThird'
 
 
 def make_method(name, commands_set):
@@ -390,3 +399,38 @@ class TestCLI(object):
         assert err == ''
         assert len(out.splitlines()) == 1
         assert __version__ in out
+
+    def test_out_txt(self, capsys):
+        """The -o/--out txt option should print the output expanded for each host, prefixed by the hostname."""
+        params = ['-o', 'txt', self.all_nodes, 'cat /tmp/out']
+        rc = cli.main(argv=self.default_params + params)
+        out, err = capsys.readouterr()
+        sys.stdout.write(out)
+        sys.stderr.write(err)
+
+        assert _EXPECTED_LINES['all_targeted'] in err, _EXPECTED_LINES['all_targeted']
+        assert _EXPECTED_LINES['successfully'] in err, _EXPECTED_LINES['successfully']
+        assert _EXPECTED_LINES['failed'] not in err, _EXPECTED_LINES['failed']
+        assert rc == 0
+
+        expected_out = '\n'.join(
+            _TXT_EXPECTED_SINGLE_OUTPUT.format(prefix=self.nodes_prefix, node_id=i) for i in range(1, 6))
+
+        assert out.split(cli.OUTPUT_SEPARATOR + '\n')[1] == expected_out + '\n'
+
+    def test_out_json(self, capsys):
+        """The -o/--out json option should print a JSON with hostnames as keys and output as values."""
+        params = ['-o', 'json', self.all_nodes, 'cat /tmp/out']
+        rc = cli.main(argv=self.default_params + params)
+        out, err = capsys.readouterr()
+        sys.stdout.write(out)
+        sys.stderr.write(err)
+
+        assert _EXPECTED_LINES['all_targeted'] in err, _EXPECTED_LINES['all_targeted']
+        assert _EXPECTED_LINES['successfully'] in err, _EXPECTED_LINES['successfully']
+        assert _EXPECTED_LINES['failed'] not in err, _EXPECTED_LINES['failed']
+        assert rc == 0
+
+        expected_out = {self.nodes_prefix + str(i): _JSON_EXPECTED_SINGLE_OUTPUT for i in range(1, 6)}
+
+        assert json.loads(out.split(cli.OUTPUT_SEPARATOR + '\n')[1]) == expected_out

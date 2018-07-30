@@ -24,6 +24,8 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 """logging.Logger: The logging instance."""
 OUTPUT_FORMATS = ('txt', 'json')
 """tuple: A tuple with the possible output formats."""
+OUTPUT_SEPARATOR = '_____FORMATTED_OUTPUT_____'
+"""str: The output separator used when -o/--out is set."""
 INTERACTIVE_BANNER = """===== Cumin Interactive REPL =====
 # Press Ctrl+d or type exit() to exit the program.
 
@@ -44,7 +46,7 @@ INTERACTIVE_BANNER = """===== Cumin Interactive REPL =====
 = Example usage:
 for nodes, output in worker.get_results():
     print(nodes)
-    print(output.message().decode('utf-8'))
+    print(output.message().decode())
     print('-----')
 """
 """str: The message to print when entering the intractive REPL mode."""
@@ -351,9 +353,9 @@ def print_output(output_format, worker):
     for nodeset, output in worker.get_results():
         for node in nodeset:
             if output_format == 'txt':
-                out[node] = '\n'.join(['{node}: {line}'.format(node=node, line=line) for line in output.lines()])
+                out[node] = '\n'.join('{node}: {line}'.format(node=node, line=line.decode()) for line in output.lines())
             elif output_format == 'json':
-                out[node] = output.message()
+                out[node] = output.message().decode()
 
     if output_format == 'txt':
         for node in sorted(out.keys()):
@@ -396,7 +398,7 @@ def run(args, config):
             tqdm.write(INTERACTIVE_BANNER)
         code.interact(banner=INTERACTIVE_BANNER, local=locals())
     elif args.output is not None:
-        tqdm.write('_____FORMATTED_OUTPUT_____')
+        tqdm.write(OUTPUT_SEPARATOR)
         print_output(args.output, worker)
 
     return exit_code
