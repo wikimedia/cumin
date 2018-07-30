@@ -270,7 +270,7 @@ class TestConcreteBaseEventHandler(TestBaseEventHandler):
         output = b'node1 output'
         self.worker.nodes = self.target.hosts
         self.handler.ev_read(self.worker, self.target.hosts[0], self.worker.SNAME_STDOUT, output)
-        assert tqdm.write.call_args[0][0] == output.decode('utf-8')
+        assert tqdm.write.call_args[0][0] == output.decode()
 
     def test_ev_close(self):
         """Calling ev_close() should increase the counters for the timed out hosts."""

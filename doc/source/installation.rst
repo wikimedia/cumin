@@ -39,7 +39,7 @@ on `GitHub`_. To install it, from the ``master`` branch run:
     python setup.py install
 
 
-.. _`Python Package Index`: https://pypi.python.org/pypi/cumin
+.. _`Python Package Index`: https://pypi.org/project/cumin/
 .. _`Wikimedia's Gerrit`: https://gerrit.wikimedia.org/r/#/admin/projects/operations/software/cumin
 .. _`GitHub`: https://github.com/wikimedia/cumin
 .. _`Release page`: https://github.com/wikimedia/cumin/releases

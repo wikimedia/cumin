@@ -104,22 +104,36 @@ def test_get_running_user():
         assert cli.get_running_user() == 'user'
 
 
-@mock.patch('cumin.cli.os')
+@mock.patch('cumin.cli.os.path.exists')
+@mock.patch('cumin.cli.os.makedirs')
 @mock.patch('cumin.cli.RotatingFileHandler')
 @mock.patch('cumin.cli.logging.getLogger')
-def test_setup_logging(mocked_get_logger, file_handler, mocked_os):
+def test_setup_logging(mocked_get_logger, mocked_file_handler, mocked_os_makedirs, mocked_os_path_exists):
     """Calling setup_logging() should properly setup the logger."""
-    mocked_os.path.exists.return_value = False
-    cli.setup_logging('/path/to/filename')
+    mocked_os_path_exists.return_value = False
+    cli.setup_logging('/path/to/filename.yaml')
     assert mock.call().setLevel(INFO) in mocked_get_logger.mock_calls
-    assert file_handler.called
+    assert mocked_file_handler.called
+    assert mocked_os_makedirs.called
+    assert mocked_os_path_exists.called
 
-    mocked_os.path.exists.return_value = True
-    cli.setup_logging('filename', debug=True)
+    mocked_file_handler.reset_mock()
+    mocked_os_makedirs.reset_mock()
+    mocked_os_path_exists.reset_mock()
+
+    mocked_os_path_exists.side_effect = FileNotFoundError
+    cli.setup_logging('filename.yaml')
+    assert mock.call().setLevel(INFO) in mocked_get_logger.mock_calls
+    assert mocked_file_handler.called
+    assert not mocked_os_makedirs.called
+    assert not mocked_os_path_exists.called
+
+    mocked_os_path_exists.return_value = True
+    cli.setup_logging('filename.yaml', debug=True)
     assert mock.call().setLevel(DEBUG) in mocked_get_logger.mock_calls
 
-    mocked_os.path.exists.return_value = True
-    cli.setup_logging('filename', trace=True)
+    mocked_os_path_exists.return_value = True
+    cli.setup_logging('filename.yaml', trace=True)
     assert mock.call().setLevel(LOGGING_TRACE_LEVEL_NUMBER) in mocked_get_logger.mock_calls
 
 
