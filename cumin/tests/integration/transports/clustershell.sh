@@ -20,7 +20,7 @@ EOF
     for index in {1..5}; do
         HOST_NAME="${CUMIN_IDENTIFIER}-${index}"
         # TODO: use a custom-generated image
-        docker run -d -p "222${index}:22" -v "/${CUMIN_TMPDIR}/id_rsa.pub:/root/.ssh/authorized_keys" --name "${HOST_NAME}" "macropin/sshd" > /dev/null
+        docker run -d -p "222${index}:22" -v "/${CUMIN_TMPDIR}/id_rsa.pub:/root/.ssh/authorized_keys" --name "${HOST_NAME}" "panubo/sshd" > /dev/null
         DOCKER_INSTANCES="${DOCKER_INSTANCES} ${HOST_NAME}"
         SSH_ALIASES="${SSH_ALIASES}
 Host ${HOST_NAME}

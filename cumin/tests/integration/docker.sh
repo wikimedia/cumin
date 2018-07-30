@@ -2,7 +2,7 @@
 
 set -e
 
-if ! which -s docker; then
+if ! which docker &> /dev/null; then
     echo "docker executable not found. Aborting!"
     exit 1
 fi
