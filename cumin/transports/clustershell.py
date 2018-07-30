@@ -524,7 +524,7 @@ class SyncEventHandler(BaseEventHandler):
 
             command = self.commands[self.current_command_index]
             self.logger.debug(
-                "command='%s', timeout=%d, first_batch=%s", command.command, command.timeout, first_batch_set)
+                "command='%s', timeout=%s, first_batch=%s", command.command, command.timeout, first_batch_set)
 
             # Schedule the command for execution in ClusterShell
             Task.task_self().flush_buffers()
@@ -629,7 +629,7 @@ class SyncEventHandler(BaseEventHandler):
         if node is not None:
             # Schedule the execution with ClusterShell of the current command to the next node found above
             command = self.nodes[node.name].commands[self.nodes[node.name].running_command_index + 1]
-            self.logger.debug("next_node=%s, timeout=%d, command='%s'", node.name, command.command, command.timeout)
+            self.logger.debug("next_node=%s, timeout=%s, command='%s'", node.name, command.command, command.timeout)
             Task.task_self().shell(command.command, handler=timer.eh, timeout=command.timeout, nodes=nodeset(node.name))
             return
 
@@ -774,7 +774,7 @@ class AsyncEventHandler(BaseEventHandler):
         if node is not None:
             # Schedule the exeuction of the first command to the next node with ClusterShell
             command = node.commands[0]
-            self.logger.debug("next_node=%s, timeout=%d, command='%s'", node.name, command.command, command.timeout)
+            self.logger.debug("next_node=%s, timeout=%s, command='%s'", node.name, command.command, command.timeout)
             Task.task_self().shell(
                 command.command, handler=timer.eh, timeout=command.timeout, nodes=nodeset(node.name))
         else:
