@@ -41,7 +41,7 @@ INTERACTIVE_BANNER = """===== Cumin Interactive REPL =====
 #                         -     nodes: is a ClusterShell.NodeSet.NodeSet instance
 #                         -     output: is a ClusterShell.MsgTree.MsgTreeElem instance
 #     h(): print this help message.
-#     help(object): Python default interactive help and documentation of the given object.
+#     help(object_name): Python default interactive help and documentation of the given object.
 
 = Example usage:
 for nodes, output in worker.get_results():
@@ -312,10 +312,12 @@ def get_hosts(args, config):
     if args.dry_run:
         stderr('DRY-RUN mode enabled, aborting')
         return []
-    elif args.force:
+
+    if args.force:
         stderr('FORCE mode enabled, continuing without confirmation')
         return hosts
-    elif not sys.stdout.isatty():  # pylint: disable=no-member
+
+    if not sys.stdout.isatty():  # pylint: disable=no-member
         message = 'Not in a TTY but neither DRY-RUN nor FORCE mode were specified.'
         stderr(message)
         raise cumin.CuminError(message)
@@ -393,7 +395,7 @@ def run(args, config):
     if args.interactive:
         # Define a help function h() that will be available in the interactive shell to print the help message.
         # The name is to not shadow the Python built-in help() that might be usefult too to inspect objects.
-        def h():  # pylint: disable=unused-variable,invalid-name
+        def h():  # pylint: disable=possibly-unused-variable,invalid-name
             """Print the help message in interactive shell."""
             tqdm.write(INTERACTIVE_BANNER)
         code.interact(banner=INTERACTIVE_BANNER, local=locals())

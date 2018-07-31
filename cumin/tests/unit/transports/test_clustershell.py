@@ -23,7 +23,7 @@ def test_worker_class(task_self):
     task_self.assert_called_once_with()
 
 
-class TestClusterShellWorker(object):
+class TestClusterShellWorker():
     """ClusterShell backend worker test class."""
 
     @mock.patch('cumin.transports.clustershell.Task.task_self')
@@ -144,7 +144,7 @@ class TestClusterShellWorker(object):
 
     def test_handler_setter_invalid(self):
         """Raise WorkerError if trying to set it to an invalid class or value"""
-        class InvalidClass(object):
+        class InvalidClass():
             """Invalid class."""
 
             pass
@@ -177,7 +177,7 @@ class TestClusterShellWorker(object):
             yield 'output {}'.format(i), ['node{}0'.format(i), 'node{}1'.format(i), 'node{}2'.format(i)]
 
 
-class TestBaseEventHandler(object):
+class TestBaseEventHandler():
     """BaseEventHandler test class."""
 
     def setup_method(self, *args):  # pylint: disable=arguments-differ

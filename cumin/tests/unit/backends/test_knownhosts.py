@@ -16,7 +16,7 @@ def test_knownhosts_query_class():
     assert isinstance(query, BaseQuery)
 
 
-class TestKnownhostsQuery(object):
+class TestKnownhostsQuery():
     """Knownhosts backend query test class."""
 
     def setup_method(self, _):

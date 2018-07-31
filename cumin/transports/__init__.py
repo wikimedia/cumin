@@ -22,7 +22,7 @@ class InvalidStateError(CuminError):
     """Exception raised when an invalid transition for a node's State was attempted."""
 
 
-class Command(object):
+class Command():
     """Class to represent a command."""
 
     def __init__(self, command, timeout=None, ok_codes=None):
@@ -179,7 +179,7 @@ class Command(object):
         self._ok_codes = value
 
 
-class State(object):
+class State():
     """State machine for the state of a host.
 
     .. attribute:: current
@@ -251,10 +251,11 @@ class State(object):
         """
         if name == 'current':
             return self._state
-        elif name.startswith('is_') and name[3:] in self.states_representation:
+
+        if name.startswith('is_') and name[3:] in self.states_representation:
             return getattr(self, name[3:]) == self._state
-        else:
-            raise AttributeError("'State' object has no attribute '{name}'".format(name=name))
+
+        raise AttributeError("'State' object has no attribute '{name}'".format(name=name))
 
     def __repr__(self):
         """Return the representation of the :py:class:`State`.
@@ -387,13 +388,14 @@ class State(object):
         """
         if isinstance(other, int):
             return self._state - other
-        elif isinstance(other, State):
+
+        if isinstance(other, State):
             return self._state - other._state  # pylint: disable=protected-access
-        else:
-            raise ValueError("Unable to compare instance of '{other}' with State instance".format(other=type(other)))
+
+        raise ValueError("Unable to compare instance of '{other}' with State instance".format(other=type(other)))
 
 
-class Target(object):
+class Target():
     """Targets management class."""
 
     def __init__(self, hosts, batch_size=None, batch_size_ratio=None, batch_sleep=None):
@@ -495,7 +497,7 @@ class Target(object):
         return batch_sleep or 0.0
 
 
-class BaseWorker(object, metaclass=ABCMeta):
+class BaseWorker(metaclass=ABCMeta):
     """Worker interface to be extended by concrete workers."""
 
     def __init__(self, config, target):

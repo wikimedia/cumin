@@ -1,7 +1,7 @@
 """Test external backend module with wrong inheritance of the query class."""
 
 
-class WrongInheritance(object):
+class WrongInheritance():
     """Test query class with wrong inheritance."""
 
 

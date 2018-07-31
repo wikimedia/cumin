@@ -39,7 +39,6 @@ extras_require = {
         'sphinx_rtd_theme>=0.1.6',
         'sphinx-argparse>=0.1.15',
         'Sphinx>=1.4.9',
-        'vulture>=0.6,<0.25',  # Required for https://github.com/landscapeio/prospector/issues/230
     ],
 }
 

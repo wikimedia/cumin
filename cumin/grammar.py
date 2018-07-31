@@ -121,10 +121,10 @@ def _import_backend(module, available_backends):
     try:
         backend = importlib.import_module(module)
     except ImportError as e:
-        if module.startswith(INTERNAL_BACKEND_PREFIX):
-            return (None, None)  # Internal backend not available, are all the dependencies installed?
-        else:
+        if not module.startswith(INTERNAL_BACKEND_PREFIX):
             raise CuminError("Unable to import backend '{module}': {e}".format(module=module, e=e))
+
+        return (None, None)  # Internal backend not available, are all the dependencies installed?
 
     name = module.split('.')[-1]
     message = "Unable to register backend '{name}' in module '{module}'".format(name=name, module=module)

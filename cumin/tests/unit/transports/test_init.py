@@ -32,7 +32,7 @@ class ConcreteBaseWorker(transports.BaseWorker):
         self._handler = value
 
 
-class Commands(object):
+class Commands():
     """Helper class to define a list of commands to test."""
 
     command_with_options = r'command --with "options" -a -n -d params with\ spaces'
@@ -63,7 +63,7 @@ class Commands(object):
 
 
 @pytest.mark.parametrize('command', Commands().commands)
-class TestCommandParametrized(object):
+class TestCommandParametrized():
     """Command class tests executed for each parametrized command."""
 
     def test_instantiation(self, command):
@@ -134,7 +134,7 @@ class TestCommandParametrized(object):
         assert command['obj'].ok_codes == command.get('ok_codes', [0])
 
 
-class TestCommand(object):
+class TestCommand():
     """Command class non parametrized tests."""
 
     def test_eq_equivalent(self):
@@ -197,7 +197,7 @@ class TestCommand(object):
                 command.ok_codes = codes
 
 
-class TestState(object):
+class TestState():
     """State class tests."""
 
     def test_instantiation_no_init(self):
@@ -308,7 +308,7 @@ class TestState(object):
         assert state.current == transports.State.pending
 
 
-class TestTarget(object):
+class TestTarget():
     """Target class tests."""
 
     def setup_method(self, _):
@@ -403,7 +403,7 @@ class TestTarget(object):
         assert isinstance(target.first_batch, NodeSet)
 
 
-class TestBaseWorker(object):
+class TestBaseWorker():
     """Concrete BaseWorker class for tests."""
 
     def test_instantiation(self):
@@ -427,7 +427,7 @@ class TestBaseWorker(object):
         assert worker.config == config
 
 
-class TestConcreteBaseWorker(object):
+class TestConcreteBaseWorker():
     """BaseWorker test class."""
 
     def setup_method(self, _):
@@ -501,7 +501,7 @@ class TestConcreteBaseWorker(object):
         assert self.worker._success_threshold == pytest.approx(0.3)
 
 
-class TestModuleFunctions(object):
+class TestModuleFunctions():
     """Transports module functions test class."""
 
     def test_validate_list(self):

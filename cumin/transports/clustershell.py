@@ -129,7 +129,7 @@ class ClusterShellWorker(BaseWorker):
                 value)
 
 
-class Node(object):
+class Node():
     """Node class to represent each target node."""
 
     def __init__(self, name, commands):

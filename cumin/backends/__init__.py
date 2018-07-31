@@ -13,7 +13,7 @@ class InvalidQueryError(CuminError):
     """Custom exception class for invalid queries."""
 
 
-class BaseQuery(object, metaclass=ABCMeta):
+class BaseQuery(metaclass=ABCMeta):
     """Query abstract class.
 
     All backends query classes must inherit, directly or indirectly, from this one.
