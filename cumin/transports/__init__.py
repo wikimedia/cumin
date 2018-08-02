@@ -22,7 +22,7 @@ class InvalidStateError(CuminError):
     """Exception raised when an invalid transition for a node's State was attempted."""
 
 
-class Command():
+class Command:
     """Class to represent a command."""
 
     def __init__(self, command, timeout=None, ok_codes=None):
@@ -179,7 +179,7 @@ class Command():
         self._ok_codes = value
 
 
-class State():
+class State:
     """State machine for the state of a host.
 
     .. attribute:: current
@@ -395,7 +395,7 @@ class State():
         raise ValueError("Unable to compare instance of '{other}' with State instance".format(other=type(other)))
 
 
-class Target():
+class Target:
     """Targets management class."""
 
     def __init__(self, hosts, batch_size=None, batch_size_ratio=None, batch_sleep=None):

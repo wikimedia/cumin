@@ -47,7 +47,7 @@ def test_key_value_tokens():
 @mock.patch('cumin.backends.openstack.keystone_client.Client')
 @mock.patch('cumin.backends.openstack.keystone_session.Session')
 @mock.patch('cumin.backends.openstack.keystone_identity.Password')
-class TestOpenStackQuery():
+class TestOpenStackQuery:
     """OpenStack backend query test class."""
 
     def setup_method(self, _):

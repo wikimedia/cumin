@@ -37,7 +37,7 @@ def test_hosts_selection():
     assert parsed[0].asDict() == hosts
 
 
-class TestPuppetDBQueryV3():
+class TestPuppetDBQueryV3:
     """PuppetDB backend query test class for API version 3."""
 
     def setup_method(self, _):
@@ -51,7 +51,7 @@ class TestPuppetDBQueryV3():
         assert self.query.url == 'https://localhost:443/v3/'
 
 
-class TestPuppetDBQueryV4():
+class TestPuppetDBQueryV4:
     """PuppetDB backend query test class for API version 4."""
 
     def setup_method(self, _):
@@ -102,7 +102,7 @@ def test_puppetdb_query_init_invalid():
 
 
 @mock.patch.object(puppetdb.PuppetDBQuery, '_api_call')
-class TestPuppetDBQueryBuildV3():
+class TestPuppetDBQueryBuildV3:
     """PuppetDB backend API v3 query build test class."""
 
     def setup_method(self, _):
@@ -155,7 +155,7 @@ class TestPuppetDBQueryBuildV3():
 
 
 @mock.patch.object(puppetdb.PuppetDBQuery, '_api_call')
-class TestPuppetDBQueryBuildV4():
+class TestPuppetDBQueryBuildV4:
     """PuppetDB backend API v4 query build test class."""
 
     def setup_method(self, _):

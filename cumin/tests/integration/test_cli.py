@@ -303,7 +303,7 @@ def get_ls_expected_lines(params):
 
 
 @add_variants_methods(range(len(_VARIANTS_PARAMETERS)))
-class TestCLI():
+class TestCLI:
     """CLI module tests."""
 
     def setup_method(self, _):
