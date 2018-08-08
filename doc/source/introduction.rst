@@ -143,7 +143,10 @@ Simple example without fine-tuning of optional parameters::
     worker.handler = 'sync'
     exit_code = worker.execute()  # Execute the command on all hosts in parallel
     for nodes, output in worker.get_results():  # Cycle over the results
-        print('{nodes}:\n{output}\n------'.format(nodes=nodes, output=output))
+        print(nodes)
+        print(output.message().decode())
+        print('-----')
+
 
 More complex example fine-tuning many of the parameters::
 
@@ -169,4 +172,6 @@ More complex example fine-tuning many of the parameters::
     worker.handler = 'async'
     exit_code = worker.execute()
     for nodes, output in worker.get_results():
-        print('{nodes}:\n{output}\n------'.format(nodes=nodes, output=output))
+        print(nodes)
+        print(output.message().decode())
+        print('-----')
