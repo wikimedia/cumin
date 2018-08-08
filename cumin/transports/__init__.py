@@ -415,7 +415,7 @@ class Target:
             batch_size_ratio (float, optional): set the batch size with a ratio so that no more that this fraction
                 of hosts are targeted at any given time. It must be a float between 0 and 1 and will raise exception
                 if after rounding it there are 0 hosts selected.
-            batch_sleep (int, optional): sleep time in seconds between the end of execution of one host in the
+            batch_sleep (float, optional): sleep time in seconds between the end of execution of one host in the
                 batch and the start in the next host. It must be a positive float.
 
         Raises:
