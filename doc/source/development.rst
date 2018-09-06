@@ -31,7 +31,7 @@ tokens not specified in each backend BNF, see directly the code in the ``grammar
 Running tests
 -------------
 
-The ``tox`` utility, a wrapper around virtualenv, is used to run the tests. To list the default environements that
+The ``tox`` utility, a wrapper around virtualenv, is used to run the tests. To list the default environments that
 will be executed when running ``tox`` without parameters, run:
 
 .. code-block:: bash
