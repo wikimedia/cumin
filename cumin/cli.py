@@ -125,10 +125,11 @@ def get_parser():
                         help=('Do not execute any command, just return the list of matching hosts and exit. '
                               '[default: False]'))
     parser.add_argument('--version', action='version', version='%(prog)s {version}'.format(version=cumin.__version__))
-    parser.add_argument('-d', '--debug', action='store_true', help='Set log level to DEBUG. [default: False]')
+    parser.add_argument('-d', '--debug', action='store_true',
+                        help=('Set log level to DEBUG. See also log_file in the configuration. [default: False]'))
     parser.add_argument('--trace', action='store_true',
-                        help=('Set log level to TRACE, a custom logging level intended for development debugging. '
-                              '[default: False]'))
+                        help=('Set log level to TRACE, a custom logging level intended for development debugging. See '
+                              'also log_file in the configuration. [default: False]'))
     parser.add_argument('hosts', metavar='HOSTS_QUERY', help='Hosts selection query')
     parser.add_argument('commands', metavar='COMMAND', nargs='*',
                         help='Command to be executed. If no commands are specified, --dry-run is set.')
