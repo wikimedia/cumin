@@ -273,7 +273,9 @@ class PuppetDBQuery(BaseQuery):
         """
         self.endpoint = self.endpoints[category]
         if operator == '~':
-            value = value.replace(r'\\', r'\\\\')  # Required by PuppetDB API
+            # PuppetDB API requires to escape every backslash
+            # See: https://puppet.com/docs/puppetdb/4.4/api/query/v4/ast.html#regexp-match
+            value = value.replace('\\', '\\\\')
 
         if category in ('C', 'O', 'P'):
             query = self._get_special_resource_query(category, key, value, operator)

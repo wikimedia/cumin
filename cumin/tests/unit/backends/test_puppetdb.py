@@ -177,9 +177,12 @@ class TestPuppetDBQueryBuildV4:
         (  # Different operator
             'F:key >= value',
             '[">=", ["fact", "key"], "value"]'),
-        (  # Regex operator
+        (  # Regex with backslash escaped
             r'F:key ~ value\\escaped',
             r'["~", ["fact", "key"], "value\\\\escaped"]'),
+        (  # Regex with dot escaped
+            r'F:key ~ value\.escaped',
+            r'["~", ["fact", "key"], "value\\.escaped"]'),
     ))
     def test_add_category_fact(self, mocked_api_call, query, expected):
         """A fact query should add the proper query token to the current_group."""
@@ -199,9 +202,12 @@ class TestPuppetDBQueryBuildV4:
         (  # Negated
             'not R:key = value',
             '["not", ["and", ["=", "type", "Key"], ["=", "title", "value"]]]'),
-        (  # Regex
+        (  # Regex backslash escaped
             r'R:key ~ value\\escaped',
             r'["and", ["=", "type", "Key"], ["~", "title", "value\\\\escaped"]]'),
+        (  # Regex dot escaped
+            r'R:key ~ value\.escaped',
+            r'["and", ["=", "type", "Key"], ["~", "title", "value\\.escaped"]]'),
         (  # Regex class
             r'R:Class ~ "Role::(One|Another)"',
             r'["and", ["=", "type", "Class"], ["~", "title", "Role::(One|Another)"]]'),
