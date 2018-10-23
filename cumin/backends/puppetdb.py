@@ -1,5 +1,3 @@
-# pylint: skip-file
-# See https://github.com/PyCQA/astroid/issues/437
 """PuppetDB backend."""
 from string import capwords
 
