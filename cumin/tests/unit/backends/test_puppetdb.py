@@ -18,8 +18,8 @@ def test_puppetdb_query_class():
 
 def _get_category_key_token(category='F', key='key1', operator='=', value='value1'):
     """Generate and return a category token string and it's expected dictionary of tokens when parsed."""
-    expected = {'category': category, 'key': key, 'operator': operator, 'value': value}
-    token = '{category}:{key} {operator} {value}'.format(**expected)
+    expected = {'category': category, 'key': key, 'operator': operator, 'quoted': value}
+    token = '{category}:{key} {operator} {quoted}'.format(**expected)
     return token, expected
 
 
@@ -135,6 +135,51 @@ class TestPuppetDBQueryBuildV3:
     ))
     def test_add_hosts(self, mocked_api_call, query, expected):
         """A host query should add the proper query token to the current_group."""
+        self.query.execute(query)
+        mocked_api_call.assert_called_with(expected)
+
+    @pytest.mark.parametrize('query, expected', (
+        (  # number
+            'R:resource = 5551723',
+            '["and", ["=", "type", "Resource"], ["=", "title", 5551723]]'),
+        (  # number (neg)
+            'R:resource = -23',
+            '["and", ["=", "type", "Resource"], ["=", "title", -23]]'),
+        (  # float
+            'R:resource = 8675.309',
+            '["and", ["=", "type", "Resource"], ["=", "title", 8675.309]]'),
+        (  # hex
+            'R:resource = 0x235A',
+            '["and", ["=", "type", "Resource"], ["=", "title", 9050]]'),
+        (  # lower hex
+            'R:resource = 0x235a',
+            '["and", ["=", "type", "Resource"], ["=", "title", 9050]]'),
+        (  # oct
+            'R:resource = 0777',
+            '["and", ["=", "type", "Resource"], ["=", "title", 511]]'),
+        (  # zero
+            'R:resource = 0',
+            '["and", ["=", "type", "Resource"], ["=", "title", 0]]'),
+        (  # bareword
+            'R:resource = true',
+            '["and", ["=", "type", "Resource"], ["=", "title", true]]'),
+        (  # quoted
+            'R:resource = "value words"',
+            '["and", ["=", "type", "Resource"], ["=", "title", "value words"]]'),
+        (  # unquoted
+            'R:resource = value',
+            '["and", ["=", "type", "Resource"], ["=", "title", "value"]]'),
+        (  # shortcut with numeric
+            'O:role_name%param > 0x235A',
+            ('["and", ["and", ["=", "type", "Class"], ["=", "title", "Role::Role_name"]], ["and", ["=", "type", "Class"'
+             '], [">", ["parameter", "param"], 9050]]]')),
+        (  # shortcut with bareword
+            'O:role_name%param = true',
+            ('["and", ["and", ["=", "type", "Class"], ["=", "title", "Role::Role_name"]], ["and", ["=", "type", "Class"'
+             '], ["=", ["parameter", "param"], true]]]')),
+    ))
+    def test_types(self, mocked_api_call, query, expected):
+        """A query should decode various types that puppetdb supports."""
         self.query.execute(query)
         mocked_api_call.assert_called_with(expected)
 
