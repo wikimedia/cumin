@@ -11,13 +11,12 @@ import sys
 
 from logging.handlers import RotatingFileHandler  # pylint: disable=ungrouped-imports
 
-import colorama
-
 from tqdm import tqdm
 
 import cumin
 
 from cumin import backends, query, transport, transports
+from cumin.color import Colored
 
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -292,8 +291,7 @@ def stderr(message, end='\n'):
         end: the character to use at the end of the message. [optional, default: \n]
 
     """
-    tqdm.write('{color}{message}{reset}'.format(
-        color=colorama.Fore.YELLOW, message=message, reset=colorama.Style.RESET_ALL), file=sys.stderr, end=end)
+    tqdm.write(Colored.yellow(message), file=sys.stderr, end=end)
 
 
 def get_hosts(args, config):
@@ -311,7 +309,7 @@ def get_hosts(args, config):
         return hosts
 
     stderr('{num} hosts will be targeted:'.format(num=len(hosts)))
-    stderr('{color}{hosts}'.format(color=colorama.Fore.CYAN, hosts=cumin.nodeset_fromlist(hosts)))
+    stderr(Colored.cyan(cumin.nodeset_fromlist(hosts)))
 
     if args.dry_run:
         stderr('DRY-RUN mode enabled, aborting')
@@ -439,7 +437,6 @@ def main(argv=None):
         argv = sys.argv[1:]
 
     signal.signal(signal.SIGINT, sigint_handler)
-    colorama.init()
 
     # Setup
     try:

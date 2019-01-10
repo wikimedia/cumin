@@ -6,12 +6,11 @@ import sys
 
 from abc import ABCMeta, abstractmethod, abstractproperty
 
-import colorama
-
 from ClusterShell.NodeSet import NodeSet
 from tqdm import tqdm
 
 from cumin import CuminError, nodeset_fromlist
+from cumin.color import Colored
 
 
 class WorkerError(CuminError):
@@ -751,10 +750,10 @@ class ProgressBars:
 
         """
         self.pbar_ok = tqdm(desc='PASS', total=num_hosts, leave=True, unit='hosts', dynamic_ncols=True,
-                            bar_format=colorama.Fore.GREEN + self.bar_format, file=sys.stderr)
+                            bar_format=Colored.green(self.bar_format), file=sys.stderr)
         self.pbar_ok.refresh()
         self.pbar_ko = tqdm(desc='FAIL', total=num_hosts, leave=True, unit='hosts', dynamic_ncols=True,
-                            bar_format=colorama.Fore.RED + self.bar_format, file=sys.stderr)
+                            bar_format=Colored.red(self.bar_format), file=sys.stderr)
         self.pbar_ko.refresh()
 
     def close(self):

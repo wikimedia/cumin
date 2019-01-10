@@ -191,13 +191,11 @@ class TestBaseEventHandler:
         self.handler = None
         self.args = args
 
-    @mock.patch('cumin.transports.clustershell.colorama')
-    def test_close(self, colorama):
+    def test_close(self):
         """Calling close should raise NotImplementedError."""
         self.handler = clustershell.BaseEventHandler(self.target, self.commands)
         with pytest.raises(NotImplementedError):
             self.handler.close(self.worker)
-        colorama.init.assert_called_once_with(autoreset=True)
 
 
 class ConcreteBaseEventHandler(clustershell.BaseEventHandler):
@@ -215,20 +213,17 @@ class ConcreteBaseEventHandler(clustershell.BaseEventHandler):
 class TestConcreteBaseEventHandler(TestBaseEventHandler):
     """ConcreteBaseEventHandler test class."""
 
-    @mock.patch('cumin.transports.clustershell.colorama')
     @mock.patch('cumin.transports.clustershell.tqdm')
-    def setup_method(self, _, tqdm, colorama):  # pylint: disable=arguments-differ
+    def setup_method(self, _, tqdm):  # pylint: disable=arguments-differ
         """Initialize default properties and instances."""
         super().setup_method()
         self.handler = ConcreteBaseEventHandler(self.target, self.commands)
         self.worker.eh = self.handler
-        self.colorama = colorama
         assert not tqdm.write.called
 
     def test_instantiation(self):
-        """An instance of ConcreteBaseEventHandler should be an instance of BaseEventHandler and initialize colorama."""
+        """An instance of ConcreteBaseEventHandler should be an instance of BaseEventHandler."""
         assert sorted(self.handler.nodes.keys()) == list(self.target.hosts)
-        self.colorama.init.assert_called_once_with(autoreset=True)
 
     @mock.patch('cumin.transports.clustershell.tqdm')
     def test_on_timeout(self, tqdm):
@@ -286,15 +281,13 @@ class TestSyncEventHandler(TestBaseEventHandler):
     """SyncEventHandler test class."""
 
     @mock.patch('cumin.transports.clustershell.logging')
-    @mock.patch('cumin.transports.clustershell.colorama')
     @mock.patch('cumin.transports.clustershell.tqdm')
-    def setup_method(self, _, tqdm, colorama, logger):  # pylint: disable=arguments-differ
+    def setup_method(self, _, tqdm, logger):  # pylint: disable=arguments-differ
         """Initialize default properties and instances."""
         super().setup_method()
         self.handler = clustershell.SyncEventHandler(self.target, self.commands, success_threshold=1)
         self.handler.progress = mock.Mock(spec_set=ProgressBars)
         self.worker.eh = self.handler
-        self.colorama = colorama
         self.logger = logger
         assert not tqdm.write.called
 
@@ -381,14 +374,12 @@ class TestAsyncEventHandler(TestBaseEventHandler):
 
     @mock.patch('cumin.transports.clustershell.ProgressBars')
     @mock.patch('cumin.transports.clustershell.logging')
-    @mock.patch('cumin.transports.clustershell.colorama')
     @mock.patch('cumin.transports.clustershell.tqdm')
-    def setup_method(self, _, tqdm, colorama, logger, progress):  # pylint: disable=arguments-differ,unused-argument
+    def setup_method(self, _, tqdm, logger, progress):  # pylint: disable=arguments-differ,unused-argument
         """Initialize default properties and instances."""
         super().setup_method()
         self.handler = clustershell.AsyncEventHandler(self.target, self.commands)
         self.worker.eh = self.handler
-        self.colorama = colorama
         self.logger = logger
         assert not tqdm.write.called
 

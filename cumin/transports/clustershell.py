@@ -5,12 +5,11 @@ import threading
 
 from collections import Counter, defaultdict
 
-import colorama
-
 from ClusterShell import Event, Task
 from tqdm import tqdm
 
 from cumin import nodeset, nodeset_fromlist
+from cumin.color import Colored
 from cumin.transports import BaseWorker, NoProgress, ProgressBars, raise_error, State, WorkerError
 
 
@@ -190,8 +189,7 @@ class BaseEventHandler(Event.EventHandler):
         for node_name in target.first_batch:
             self.nodes[node_name].state.update(State.scheduled)
 
-        # Initialize color and progress bar formats
-        colorama.init(autoreset=True)
+        # Initialize progress bar formats
         if progress_bars:
             self.progress = ProgressBars()
         else:
@@ -257,7 +255,7 @@ class BaseEventHandler(Event.EventHandler):
         if not self.deduplicate_output:
             output_message = "----- OUTPUT of '{command}' -----".format(
                 command=self._get_short_command(worker.command))
-            tqdm.write(colorama.Fore.BLUE + output_message, file=sys.stdout)
+            tqdm.write(Colored.blue(output_message), file=sys.stdout)
 
     def ev_read(self, worker, node, _, msg):
         """Worker has data to read from a specific node. Print it if running on a single host.
@@ -322,18 +320,16 @@ class BaseEventHandler(Event.EventHandler):
 
         return (log_message, str(nodes_string))
 
-    def _print_report_line(self, message, color=colorama.Fore.RED, nodes_string=''):  # pylint: disable=no-self-use
+    def _print_report_line(self, message, color_func=Colored.red, nodes_string=''):  # pylint: disable=no-self-use
         """Print a tqdm-friendly colored status line with success/failure ratio and optional list of nodes.
 
         Arguments:
             message (str): the message to print.
-            color (str, optional): the message color.
+            color_func (function, optional): the coloring function, one of :py:class`cumin.color.Colored` methods.
             nodes_string (str, optional): the string representation of the affected nodes.
 
         """
-        tqdm.write('{color}{message}{nodes_color}{nodes_string}'.format(
-            color=color, message=message, nodes_color=colorama.Fore.CYAN,
-            nodes_string=nodes_string), file=sys.stderr)
+        tqdm.write(color_func(message) + Colored.cyan(nodes_string), file=sys.stderr)
 
     def _get_short_command(self, command):
         """Return a shortened representation of a command omitting the central part, if it's too long.
@@ -358,7 +354,7 @@ class BaseEventHandler(Event.EventHandler):
 
         """
         if not self.deduplicate_output:
-            tqdm.write(colorama.Fore.BLUE + '================', file=sys.stdout)
+            tqdm.write(Colored.blue('================'), file=sys.stdout)
             return
 
         nodelist = None
@@ -368,19 +364,18 @@ class BaseEventHandler(Event.EventHandler):
             output_message = '----- OUTPUT -----'
 
         for output, nodelist in buffer_iterator.iter_buffers():
-            tqdm.write(colorama.Fore.BLUE + '===== NODE GROUP =====', file=sys.stdout)
-            tqdm.write('{color}({num}) {nodes}'.format(
-                color=colorama.Fore.CYAN, num=len(nodelist),
-                nodes=nodeset_fromlist(nodelist)), file=sys.stdout)
-            tqdm.write(colorama.Fore.BLUE + output_message, file=sys.stdout)
-            tqdm.write('{output}'.format(output=output.message().decode()), file=sys.stdout)
+            tqdm.write(Colored.blue('===== NODE GROUP ====='), file=sys.stdout)
+            tqdm.write(Colored.cyan('({num}) {nodes}'.format(num=len(nodelist), nodes=nodeset_fromlist(nodelist))),
+                       file=sys.stdout)
+            tqdm.write(Colored.blue(output_message), file=sys.stdout)
+            tqdm.write(output.message().decode(), file=sys.stdout)
 
         if nodelist is None:
             message = '===== NO OUTPUT ====='
         else:
             message = '================'
 
-        tqdm.write(colorama.Fore.BLUE + message, file=sys.stdout)
+        tqdm.write(Colored.blue(message), file=sys.stdout)
 
     def _global_timeout_nodes_report(self):
         """Print the nodes that were caught by the global timeout in a colored and tqdm-friendly way."""
@@ -460,17 +455,17 @@ class BaseEventHandler(Event.EventHandler):
         log_message, nodes_string = self._get_log_message(num, message, nodes=nodes)
 
         if num == tot:
-            color = colorama.Fore.GREEN
+            color_func = Colored.green
             level = logging.INFO
         elif success_ratio >= self.success_threshold:
-            color = colorama.Fore.YELLOW
+            color_func = Colored.yellow
             level = logging.WARNING
         else:
-            color = colorama.Fore.RED
+            color_func = Colored.red
             level = logging.CRITICAL
 
         self.logger.log(level, '%s%s', log_message, nodes_string)
-        self._print_report_line(log_message, color=color, nodes_string=nodes_string)
+        self._print_report_line(log_message, color_func=color_func, nodes_string=nodes_string)
 
 
 class SyncEventHandler(BaseEventHandler):

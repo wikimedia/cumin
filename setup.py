@@ -11,7 +11,6 @@ with open('README.rst', 'r') as readme:
 # Required dependencies
 install_requires = [
     'clustershell==1.8',
-    'colorama>=0.3.2',
     'pyparsing==2.1.10',
     'pyyaml>=3.11',
     'requests>=2.11.0',
