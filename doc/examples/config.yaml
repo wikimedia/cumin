@@ -16,6 +16,9 @@ environment:
 puppetdb:
     host: puppetdb.local
     port: 443
+    # [optional[ Allow to override the default HTTPS scheme with HTTP in case the connection to PuppetDB is secured in
+    # other ways (e.g. SSH tunnel)
+    scheme: https
     api_version: 4  # Supported versions are v3 and v4. If not specified, v4 will be used.
     urllib3_disable_warnings:  # List of Python urllib3 exceptions to ignore
         - SubjectAltNameWarning

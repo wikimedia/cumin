@@ -135,7 +135,7 @@ class PuppetDBQuery(BaseQuery):
       ``host10[10-42].*.domain or (not F:key1 = value1 and host10*) or (F:key2 > value2 and F:key3 ~ '^value[0-9]+')``
     """
 
-    base_url_template = 'https://{host}:{port}'
+    base_url_template = '{scheme}://{host}:{port}'
     """:py:class:`str`: string template in the :py:meth:`str.format` style used to generate the base URL of the
     PuppetDB server."""
 
@@ -162,6 +162,7 @@ class PuppetDBQuery(BaseQuery):
         self._endpoint = None
         puppetdb_config = self.config.get('puppetdb', {})
         base_url = self.base_url_template.format(
+            scheme=puppetdb_config.get('scheme', 'https'),
             host=puppetdb_config.get('host', 'localhost'),
             port=puppetdb_config.get('port', 443))
 
