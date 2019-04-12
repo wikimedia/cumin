@@ -221,8 +221,8 @@ class BaseEventHandler(Event.EventHandler):
             # batches) and those that were already scheduled (for example when the # of nodes is greater than
             # ClusterShell fanout)
             pending_or_scheduled = sum(
-                (node.state.is_pending or node.state.is_scheduled or
-                 (node.state.is_success and node.running_command_index < (len(node.commands) - 1))
+                (node.state.is_pending or node.state.is_scheduled
+                 or (node.state.is_success and node.running_command_index < (len(node.commands) - 1))
                  ) for node in self.nodes.values())
             if pending_or_scheduled > 0:
                 self.progress.update_failed(num_timeout + pending_or_scheduled)
@@ -424,8 +424,8 @@ class BaseEventHandler(Event.EventHandler):
             command (str, optional): the command the report is referring to.
         """
         if self.global_timedout and command is None:
-            num = sum(1 for node in self.nodes.values() if node.state.is_success and
-                      node.running_command_index == (len(self.commands) - 1))
+            num = sum(1 for node in self.nodes.values() if node.state.is_success
+                      and node.running_command_index == (len(self.commands) - 1))
         else:
             num = self.counters['success']
 

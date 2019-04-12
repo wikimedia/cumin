@@ -652,8 +652,8 @@ class BaseWorker(metaclass=ABCMeta):
     @success_threshold.setter
     def success_threshold(self, value):
         """Setter for the `success_threshold` property. The relative documentation is in the getter."""
-        if value is not None and (not isinstance(value, float) or
-                                  not (0.0 <= value <= 1.0)):  # pylint: disable=superfluous-parens
+        if value is not None and (not isinstance(value, float)
+                                  or not (0.0 <= value <= 1.0)):  # pylint: disable=superfluous-parens
             raise WorkerError("success_threshold must be a float beween 0 and 1, got '{value_type}': {value}".format(
                 value_type=type(value), value=value))
 

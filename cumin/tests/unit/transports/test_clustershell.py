@@ -5,7 +5,7 @@ from unittest import mock
 import pytest
 
 from cumin import CuminError, nodeset
-from cumin.transports import BaseWorker, Command, clustershell, ProgressBars, State, Target, WorkerError
+from cumin.transports import BaseWorker, clustershell, Command, ProgressBars, State, Target, WorkerError
 
 
 def test_node_class_instantiation():

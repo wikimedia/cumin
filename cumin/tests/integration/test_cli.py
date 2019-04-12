@@ -147,8 +147,8 @@ def make_method(name, commands_set):
             mode = 'async'
         else:
             mode = 'sync'
-            labels += (get_ls_expected_lines(params) + get_date_expected_lines(params) +
-                       get_timeout_expected_lines(params))
+            labels += (get_ls_expected_lines(params) + get_date_expected_lines(params)
+                       + get_timeout_expected_lines(params))
 
         for label in labels:
             if label in ('all_success', 'all_failure') and '-p' in params['params']:

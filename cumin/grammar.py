@@ -80,8 +80,8 @@ def grammar(backend_keys):
 
     """
     # Boolean operators
-    boolean = (pp.CaselessKeyword('and not').leaveWhitespace() | pp.CaselessKeyword('and') |
-               pp.CaselessKeyword('xor') | pp.CaselessKeyword('or'))('bool')
+    boolean = (pp.CaselessKeyword('and not').leaveWhitespace() | pp.CaselessKeyword('and')
+               | pp.CaselessKeyword('xor') | pp.CaselessKeyword('or'))('bool')
 
     # Parentheses
     lpar = pp.Literal('(')('open_subgroup')

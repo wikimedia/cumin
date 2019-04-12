@@ -22,10 +22,9 @@ import os
 import sys
 import types
 
-from pkg_resources import get_distribution
-
 import sphinx_rtd_theme
 
+from pkg_resources import get_distribution
 from sphinx import __version__ as sphinx_version
 
 # Adjust path
@@ -166,8 +165,8 @@ def filter_namedtuple_docstrings(app, what, name, obj, options, lines):
 
 def add_abstract_annotations(app, what, name, obj, options, lines):
     """Workaround to add an abstract annotation for ABC abstract classes and abstract methods."""
-    if ((what in ('method', 'attribute') and getattr(obj, '__isabstractmethod__', False)) or
-            (what == 'class' and len(getattr(obj, '__abstractmethods__', [])) > 0)):
+    if ((what in ('method', 'attribute') and getattr(obj, '__isabstractmethod__', False))
+            or (what == 'class' and len(getattr(obj, '__abstractmethods__', [])) > 0)):
         lines.insert(0, '``abstract``')
 
 
