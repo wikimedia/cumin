@@ -89,16 +89,15 @@ def test_target_batch_size_val_ko(value):
 
 
 def test_get_running_user():
-    """Unsufficient permissions or unknown user should raise CuminError and a proper user should be detected."""
-    env = {'USER': None, 'SUDO_USER': None}
-    with mock.patch('os.getenv', env.get):
-        with pytest.raises(CuminError, match='Insufficient privileges, run with sudo'):
-            cli.get_running_user()
-
+    """Unknown user should raise CuminError and a proper user should be detected."""
     env = {'USER': 'root', 'SUDO_USER': None}
     with mock.patch('os.getenv', env.get):
         with pytest.raises(CuminError, match='Unable to determine real user'):
             cli.get_running_user()
+
+    env = {'USER': 'user', 'SUDO_USER': None}
+    with mock.patch('os.getenv', env.get):
+        assert cli.get_running_user() == 'user'
 
     with mock.patch('os.getenv', _ENV.get):
         assert cli.get_running_user() == 'user'

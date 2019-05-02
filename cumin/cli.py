@@ -206,13 +206,12 @@ def parse_args(argv):
 
 
 def get_running_user():
-    """Ensure it's running as root and that the original user is detected and return it."""
-    if os.getenv('USER') != 'root':
-        raise cumin.CuminError('Insufficient privileges, run with sudo')
-    if os.getenv('SUDO_USER') in (None, 'root'):
-        raise cumin.CuminError('Unable to determine real user, logged in as root?')
-
-    return os.getenv('SUDO_USER')
+    """Ensure that the original user is detected and return it."""
+    if os.getenv('USER') == 'root':
+        if os.getenv('SUDO_USER') in (None, 'root'):
+            raise cumin.CuminError('Unable to determine real user, logged in as root?')
+        return os.getenv('SUDO_USER')
+    return os.getenv('USER')
 
 
 def setup_logging(filename, debug=False, trace=False):
