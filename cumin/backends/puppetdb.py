@@ -52,7 +52,7 @@ class ParsedString:
         """Perform capwords operation on internal value and return a new ParsedString.
 
         :Parameters:
-            according to :py:met:`string.capwords`.
+            according to :py:meth:`string.capwords`.
 
         """
         return ParsedString(capwords(self.string, sep), self.is_quoted)
