@@ -220,6 +220,8 @@ def setup_logging(filename, debug=False, trace=False):
     Arguments:
         filename: the filename of the log file
         debug: whether to set logging level to DEBUG [optional, default: False]
+        trace: whether to set logging level to TRACE [optional, default: False]
+
     """
     file_path = os.path.dirname(filename)
     if file_path and not os.path.exists(file_path):
@@ -288,6 +290,7 @@ def stderr(message, end='\n'):
     Arguments:
         message: the message to print to sys.stderr
         end: the character to use at the end of the message. [optional, default: \n]
+
     """
     tqdm.write('{color}{message}{reset}'.format(
         color=colorama.Fore.YELLOW, message=message, reset=colorama.Style.RESET_ALL), file=sys.stderr, end=end)
@@ -299,6 +302,7 @@ def get_hosts(args, config):
     Arguments:
         args: ArgumentParser instance with parsed command line arguments
         config: a dictionary with the parsed configuration file
+
     """
     hosts = query.Query(config).execute(args.hosts)
 
@@ -346,6 +350,7 @@ def print_output(output_format, worker):
     Arguments:
         output_format: the output format to use, one of: 'txt', 'json'.
         worker: the Transport worker instance to retrieve the results from.
+
     """
     if output_format not in OUTPUT_FORMATS:
         raise cumin.CuminError("Got invalid output format '{fmt}', expected one of {allowed}".format(
@@ -372,6 +377,7 @@ def run(args, config):
     Arguments:
         args: ArgumentParser instance with parsed command line arguments
         config: a dictionary with the parsed configuration file
+
     """
     hosts = get_hosts(args, config)
     if not hosts:
@@ -427,6 +433,7 @@ def main(argv=None):
     Arguments:
         argv: the list of command line arguments to use. If not specified it will be automatically taken from sys.argv
             [optional, default: None]
+
     """
     if argv is None:
         argv = sys.argv[1:]

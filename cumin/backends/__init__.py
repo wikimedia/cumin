@@ -28,6 +28,7 @@ class BaseQuery(metaclass=ABCMeta):
 
         Arguments:
             config (dict): a dictionary with the parsed configuration file.
+
         """
         self.config = config
         self.logger = logging.getLogger('.'.join((self.__module__, self.__class__.__name__)))
@@ -61,6 +62,7 @@ class BaseQuery(metaclass=ABCMeta):
 
         Arguments:
             token (pyparsing.ParseResults): a single token returned by the grammar parsing.
+
         """
 
     def _build(self, query_string):
@@ -68,6 +70,7 @@ class BaseQuery(metaclass=ABCMeta):
 
         Arguments:
             query_string (str): the query string to be parsed.
+
         """
         self.logger.trace('Parsing query: %s', query_string)
         parsed = self.grammar.parseString(query_string.strip(), parseAll=True)
@@ -156,6 +159,7 @@ class BaseQueryAggregator(BaseQuery):
             hosts (ClusterShell.NodeSet.NodeSet): the hosts to be updated with the current stack element results. This
                 object is updated in place by reference.
             stack_element (dict): the stack element to iterate.
+
         """
         if stack_element['hosts'] is None:
             element_hosts = nodeset()
@@ -176,6 +180,7 @@ class BaseQueryAggregator(BaseQuery):
                 ``bool_operator``.
             bool_operator (str, None): the boolean operator to apply while aggregating the two NodeSet. It must be
                 :py:data:`None` when adding the first hosts.
+
         """
         self.logger.trace("Aggregating: %s | %s | %s", hosts, bool_operator, element_hosts)
 

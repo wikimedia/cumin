@@ -138,6 +138,7 @@ class Node:
         Arguments:
             name (str): the hostname of the node.
             commands (list): a list of :py:class:`cumin.transports.Command` objects to be executed on the node.
+
         """
         self.name = name
         self.commands = commands
@@ -166,6 +167,7 @@ class BaseEventHandler(Event.EventHandler):
                 to consider the execution successful.
             progress_bars (bool): should progress bars be displayed
             **kwargs (optional): additional keyword arguments that might be used by derived classes.
+
         """
         super().__init__()
         self.success_threshold = success_threshold
@@ -200,6 +202,7 @@ class BaseEventHandler(Event.EventHandler):
 
         Arguments:
             task (ClusterShell.Task.Task): a ClusterShell Task instance.
+
         """
         raise NotImplementedError
 
@@ -211,6 +214,7 @@ class BaseEventHandler(Event.EventHandler):
 
         Arguments:
             task (ClusterShell.Task.Task): a ClusterShell Task instance.
+
         """
         num_timeout = task.num_timeout()
         self.logger.error('Global timeout was triggered while %d nodes were executing a command', num_timeout)
@@ -325,6 +329,7 @@ class BaseEventHandler(Event.EventHandler):
             message (str): the message to print.
             color (str, optional): the message color.
             nodes_string (str, optional): the string representation of the affected nodes.
+
         """
         tqdm.write('{color}{message}{nodes_color}{nodes_string}'.format(
             color=color, message=message, nodes_color=colorama.Fore.CYAN,
@@ -350,6 +355,7 @@ class BaseEventHandler(Event.EventHandler):
             buffer_iterator (mixed): any `ClusterShell` object that implements ``iter_buffers()`` like
                 :py:class:`ClusterShell.Task.Task` and all the `Worker` objects.
             command (str, optional): the command the output is referring to.
+
         """
         if not self.deduplicate_output:
             tqdm.write(colorama.Fore.BLUE + '================', file=sys.stdout)
@@ -399,6 +405,7 @@ class BaseEventHandler(Event.EventHandler):
         Arguments:
             filter_command_index (int, optional): print only the nodes that failed to execute the command specified by
                 this command index.
+
         """
         for state in (State.failed, State.timeout):
             failed_commands = defaultdict(list)
@@ -422,6 +429,7 @@ class BaseEventHandler(Event.EventHandler):
 
         Arguments:
             command (str, optional): the command the report is referring to.
+
         """
         if self.global_timedout and command is None:
             num = sum(1 for node in self.nodes.values() if node.state.is_success
@@ -486,6 +494,7 @@ class SyncEventHandler(BaseEventHandler):
 
         :Parameters:
             according to parent :py:meth:`BaseEventHandler.__init__`.
+
         """
         super().__init__(
             target, commands, success_threshold=success_threshold, progress_bars=progress_bars, **kwargs)
@@ -500,6 +509,7 @@ class SyncEventHandler(BaseEventHandler):
 
         Arguments:
             schedule (bool, optional): whether the next command should be sent to ClusterShell for execution or not.
+
         """
         self.counters['success'] = 0
 

@@ -28,7 +28,7 @@ class TestClusterShellWorker:
 
     @mock.patch('cumin.transports.clustershell.Task.task_self')
     def setup_method(self, _, task_self):  # pylint: disable=arguments-differ
-        """Initialize default properties and instances"""
+        """Initialize default properties and instances."""
         self.config = {
             'clustershell': {
                 'ssh_options': ['-o StrictHostKeyChecking=no', '-o BatchMode=yes'],
@@ -137,13 +137,13 @@ class TestClusterShellWorker:
         assert output == 'output 9'
 
     def test_handler_getter(self):
-        """Access to handler property should return the handler class or None"""
+        """Access to handler property should return the handler class or None."""
         assert self.worker.handler is None
         self.worker.handler = 'sync'
         assert self.worker._handler == clustershell.DEFAULT_HANDLERS['sync']
 
     def test_handler_setter_invalid(self):
-        """Raise WorkerError if trying to set it to an invalid class or value"""
+        """Raise WorkerError if trying to set it to an invalid class or value."""
         class InvalidClass:
             """Invalid class."""
 
@@ -156,17 +156,17 @@ class TestClusterShellWorker:
             self.worker.handler = InvalidClass
 
     def test_handler_setter_default_sync(self):
-        """Should set the handler to the default handler for the sync mode"""
+        """Should set the handler to the default handler for the sync mode."""
         self.worker.handler = 'sync'
         assert self.worker._handler == clustershell.DEFAULT_HANDLERS['sync']
 
     def test_handler_setter_default_async(self):
-        """Should set the handler to the default handler for the async mode"""
+        """Should set the handler to the default handler for the async mode."""
         self.worker.handler = 'async'
         assert self.worker._handler == clustershell.DEFAULT_HANDLERS['async']
 
     def test_handler_setter_custom(self):
-        """Should set the handler to the given custom class that inherit from BaseEventHandler"""
+        """Should set the handler to the given custom class that inherit from BaseEventHandler."""
         self.worker.handler = ConcreteBaseEventHandler
         assert self.worker._handler == ConcreteBaseEventHandler
 

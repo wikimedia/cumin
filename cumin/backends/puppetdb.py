@@ -35,9 +35,10 @@ class ParsedString:
     def __init__(self, string, is_quoted):
         """Constructor for ParsedString.
 
-        Args:
+        Arguments:
            string (str): The string to store in this object.
            is_quoted (bool): Whether the output should be quoted when this is converted to a string.
+
         """
         self.string = str(string)
         self.is_quoted = is_quoted
@@ -360,6 +361,7 @@ class PuppetDBQuery(BaseQuery):
         Arguments:
             hosts (ClusterShell.NodeSet.NodeSet): with the list of hosts to search.
             neg (bool, optional): whether the token must be negated.
+
         """
         if not hosts:
             return

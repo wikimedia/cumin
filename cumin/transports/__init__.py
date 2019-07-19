@@ -38,6 +38,7 @@ class Command:
             ok_codes (list, optional): a list of exit codes to be considered successful for the command.
                 The exit code zero is considered successful by default, if this option is set it override it. If set
                 to an empty list ``[]``, it means that any code is considered successful.
+
         """
         self.command = command
         self._timeout = None
@@ -388,7 +389,8 @@ class State:
         Raises ValueError if the comparing object is not an instance of State or an integer.
 
         Arguments:
-        other -- the object to compare the current instance to
+            other (mixed): the object to compare the current instance to.
+
         """
         if isinstance(other, int):
             return self._state - other
@@ -510,6 +512,7 @@ class BaseWorker(metaclass=ABCMeta):
         Arguments:
             config (dict): a dictionary with the parsed configuration file.
             target (Target): a Target instance.
+
         """
         self.config = config
         self.target = target
@@ -716,6 +719,7 @@ def raise_error(property_name, message, value):
         property_name (str): the name of the property that raised the exception.
         message (str): the message to use for the exception.
         value (mixed): the value that raised the exception.
+
     """
     raise WorkerError("{property_name} {message}, got '{value_type}': {value}".format(
         property_name=property_name, message=message, value_type=type(value), value=value))
@@ -744,6 +748,7 @@ class ProgressBars:
 
         Arguments:
             num_hosts (int): the total number of hosts
+
         """
         self.pbar_ok = tqdm(desc='PASS', total=num_hosts, leave=True, unit='hosts', dynamic_ncols=True,
                             bar_format=colorama.Fore.GREEN + self.bar_format, file=sys.stderr)
@@ -762,6 +767,7 @@ class ProgressBars:
 
         Arguments:
             num_hosts (int): increment to the number of hosts that have completed successfully
+
         """
         self.pbar_ok.update(num_hosts)
 
@@ -770,6 +776,7 @@ class ProgressBars:
 
         Arguments:
             num_hosts (int): increment to the number of hosts that have completed in error
+
         """
         self.pbar_ko.update(num_hosts)
 
@@ -778,13 +785,13 @@ class NoProgress:
     """Used as a null object to disable the display of progress bars."""
 
     def init(self, num_hosts):
-        """Does nothing"""
+        """Does nothing."""
 
     def close(self):
-        """Does nothing"""
+        """Does nothing."""
 
     def update_success(self, num_hosts=1):
-        """Does nothing"""
+        """Does nothing."""
 
     def update_failed(self, num_hosts=1):
-        """Does nothing"""
+        """Does nothing."""

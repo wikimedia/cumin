@@ -16,20 +16,20 @@ class ConcreteBaseWorker(transports.BaseWorker):
     """Concrete class for BaseWorker."""
 
     def execute(self):
-        """Required by BaseWorker"""
+        """Required by BaseWorker."""
 
     def get_results(self):
-        """Required by BaseWorker"""
+        """Required by BaseWorker."""
         yield "node", "output"
 
     @property
     def handler(self):
-        """Required by BaseWorker"""
+        """Required by BaseWorker."""
         return self._handler
 
     @handler.setter
     def handler(self, value):
-        """Required by BaseWorker"""
+        """Required by BaseWorker."""
         self._handler = value
 
 
@@ -542,10 +542,10 @@ class TestModuleFunctions:
 
 @mock.patch('cumin.transports.tqdm')
 class TestProgressBars:
-    """A class that tests ProgressBars"""
+    """A class that tests ProgressBars."""
 
     def test_init_intialize_progress_bars_with_correct_size(self, tqdm):
-        """Progress bars are initialized at the correct size"""
+        """Progress bars are initialized at the correct size."""
         progress = ProgressBars()
         progress.init(10)
 
@@ -554,7 +554,7 @@ class TestProgressBars:
         assert kwargs['total'] == 10
 
     def test_progress_bars_are_closed(self, tqdm):  # pylint: disable=unused-argument
-        """Progress bars are closed"""
+        """Progress bars are closed."""
         progress = ProgressBars()
         progress.init(10)
 
@@ -564,7 +564,7 @@ class TestProgressBars:
         assert progress.pbar_ko.close.called  # pylint: disable=no-member
 
     def test_progress_bar_is_updated_on_success(self, tqdm):  # pylint: disable=unused-argument
-        """Progress bar is updated on success"""
+        """Progress bar is updated on success."""
         progress = ProgressBars()
         progress.init(10)
 
@@ -573,7 +573,7 @@ class TestProgressBars:
         assert progress.pbar_ok.update.called_once_with(5)  # pylint: disable=no-member
 
     def test_progress_bar_is_updated_on_failure(self, tqdm):  # pylint: disable=unused-argument
-        """Progress bar is updated on failure"""
+        """Progress bar is updated on failure."""
         progress = ProgressBars()
         progress.init(10)
 

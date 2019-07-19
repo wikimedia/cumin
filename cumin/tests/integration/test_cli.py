@@ -127,7 +127,7 @@ def make_method(name, commands_set):
 
     @pytest.mark.variant_params(params)
     def test_variant(self, capsys):
-        """Test variant generated function"""
+        """Test variant generated function."""
         argv = self.default_params + params['params'] + [self.all_nodes] + params['commands']
         rc = cli.main(argv=argv)
         out, err = capsys.readouterr()
@@ -195,6 +195,7 @@ def get_rc(params):
 
     Arguments:
         params: a dictionary with all the parameters passed to the variant_function
+
     """
     return_value = 2
     if '-p' in params['params'] and '--global-timeout' not in params['params']:
@@ -208,6 +209,7 @@ def get_global_timeout_expected_lines(params):  # pylint: disable=invalid-name
 
     Arguments:
         params: a dictionary with all the parameters passed to the variant_function
+
     """
     expected = []
     if '--global-timeout' not in params['params']:
@@ -226,6 +228,7 @@ def get_timeout_expected_lines(params):
 
     Arguments:
         params: a dictionary with all the parameters passed to the variant_function
+
     """
     expected = []
     if '-t' not in params['params']:
@@ -252,6 +255,7 @@ def get_date_expected_lines(params):
 
     Arguments:
         params: a dictionary with all the parameters passed to the variant_function
+
     """
     expected = []
     if 'ls -la /tmp/non_existing' in params['commands']:
@@ -273,6 +277,7 @@ def get_ls_expected_lines(params):
 
     Arguments:
         params: a dictionary with all the parameters passed to the variant_function
+
     """
     expected = []
     if 'ls -la /tmp' in params['commands']:
@@ -321,6 +326,7 @@ class TestCLI:
 
         Arguments:
             nodes: a string with the NodeSet nodes selection
+
         """
         if nodes is None:
             return self.all_nodes
