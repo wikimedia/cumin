@@ -32,7 +32,7 @@ extras_require = {
         'bandit>=1.1.0,<1.6.0',
         'flake8>=3.2.1',
         'flake8-import-order>=0.18.1',
-        'prospector[with_everything]>=0.12.4',
+        'prospector[with_everything]>=0.12.4,<=1.1.6.2',
         'pytest-cov>=1.8.0',
         'pytest-xdist>=1.15.0',
         'pytest>=3.0.3',
