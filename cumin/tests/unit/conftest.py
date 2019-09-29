@@ -1,4 +1,6 @@
 """Pytest customization for unit tests."""
+import re
+
 import pytest
 import requests_mock
 
@@ -27,8 +29,11 @@ def query_requests(request, mocked_requests):  # pylint: disable=redefined-outer
         query = puppetdb.PuppetDBQuery(
             {'puppetdb': {'api_version': 3, 'urllib3_disable_warnings': ['SubjectAltNameWarning']}})
         for endpoint, key in query.hosts_keys.items():
-            mocked_requests.register_uri('GET', query.url + endpoint + '?query=', status_code=200, json=[
-                {key: endpoint + '_host1', 'key': 'value1'}, {key: endpoint + '_host2', 'key': 'value2'}])
+            mocked_requests.register_uri(
+                'GET',
+                re.compile(re.escape(query.url + endpoint + '?query=')),
+                status_code=200,
+                json=[{key: endpoint + '_host1', 'key': 'value1'}, {key: endpoint + '_host2', 'key': 'value2'}])
 
         # Register a requests response for a non matching query
         mocked_requests.register_uri(
