@@ -130,7 +130,7 @@ man_pages = [
 
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3/', None),
-    'requests': ('http://docs.python-requests.org/en/master/', None),
+    'requests': ('//requests.readthedocs.io/en/master/', None),
     'ClusterShell': ('http://clustershell.readthedocs.io/en/v1.8/', None),
     'keystoneauth1': ('https://docs.openstack.org/keystoneauth/latest', None),
     'novaclient': ('https://docs.openstack.org/python-novaclient/latest/', None),
