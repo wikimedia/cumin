@@ -603,7 +603,7 @@ class BaseWorker(metaclass=ABCMeta):
 
     @abstractproperty
     @handler.setter
-    def handler(self, value):
+    def handler(self, value):  # pylint: disable=property-with-parameters; https://github.com/PyCQA/pylint/issues/3600
         """Setter for the `handler` property. The relative documentation is in the getter."""
 
     @property

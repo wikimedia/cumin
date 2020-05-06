@@ -10,35 +10,35 @@ with open('README.rst', 'r') as readme:
 
 # Required dependencies
 install_requires = [
-    'clustershell==1.8',
-    'pyparsing==2.1.10',
-    'pyyaml>=3.11',
-    'requests>=2.11.0',
-    'tqdm>=4.11.2,<4.25.0',
+    'clustershell>=1.8.1,<=1.9',
+    'pyparsing>=2.2.0,<=2.3',
+    'pyyaml>=3.13',
+    'requests>=2.21.0',
+    'tqdm>=4.19.4,<=4.24.0'
 ]
 
 # Extra dependencies
 extras_require = {
     # Optional dependencies for additional features
     'with-openstack': [
-        'keystoneauth1>=2.4.1',
-        'python-keystoneclient>=2.3.1',
-        'python-novaclient>=3.3.1',
+        'keystoneauth1>=3.10.0',
+        'python-keystoneclient>=3.17.0',
+        'python-novaclient>=11.0.0',
     ],
 
     # Test dependencies
     'tests': [
-        'bandit>=1.1.0',
-        'flake8>=3.2.1',
+        'bandit>=1.5.1',
+        'flake8>=3.6.0',
         'flake8-import-order>=0.18.1',
-        'prospector[with_everything]>=0.12.4,<=1.1.6.2',
-        'pytest-cov>=1.8.0',
-        'pytest-xdist>=1.15.0',
-        'pytest>=3.0.3',
-        'requests-mock>=1.3.0',
-        'sphinx_rtd_theme>=0.1.6',
-        'sphinx-argparse>=0.1.15',
-        'Sphinx>=1.4.9',
+        'prospector[with_everything]>=1.1.7',
+        'pytest-cov>=2.6.0',
+        'pytest-xdist>=1.26.1',
+        'pytest>=3.10.1',
+        'requests-mock>=1.5.2',
+        'sphinx_rtd_theme>=0.4.3',
+        'sphinx-argparse>=0.2.2',
+        'Sphinx>=1.8.4',
     ],
 }
 
@@ -50,11 +50,11 @@ extras_require['tests'].extend(extras_require['with-openstack'])
 # Generate minimum dependencies
 extras_require['tests-min'] = [dep.replace('>=', '==') for dep in extras_require['tests']]
 if os.getenv('CUMIN_MIN_DEPS', False):
-    install_requires = [dep.replace('>=', '==') for dep in install_requires]
+    install_requires = [dep.split(',')[0].replace('>=', '==') for dep in install_requires]
 
 setup_requires = [
-    'pytest-runner>=2.7.1',
-    'setuptools_scm>=1.15.0',
+    'pytest-runner>=2.11.1',
+    'setuptools_scm>=3.2.0',
 ]
 
 setup(
