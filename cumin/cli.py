@@ -332,7 +332,7 @@ def get_hosts(args, config):
 
         if answer in 'yY':
             break
-        elif answer in 'nN':
+        if answer in 'nN':
             raise KeyboardInterruptError
 
     else:

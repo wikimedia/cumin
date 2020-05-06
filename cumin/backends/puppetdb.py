@@ -443,7 +443,7 @@ class PuppetDBQuery(BaseQuery):
             raise InvalidQueryError(("Resource key cannot contain both '%' (query a resource's parameter) and '@' "
                                      "(query a  resource's field)"))
 
-        elif '%' in key:
+        if '%' in key:
             # Querying a specific parameter of the resource
             if operator == '~' and self.api_version == 3:
                 raise InvalidQueryError('Regex operations are not supported in PuppetDB API v3 for resource parameters')
@@ -487,7 +487,7 @@ class PuppetDBQuery(BaseQuery):
         if all(char in key for char in ('%', '@')):
             raise InvalidQueryError(("Resource key cannot contain both '%' (query a resource's parameter) and '@' "
                                      "(query a  resource's field)"))
-        elif '%' in key:
+        if '%' in key:
             special = '%'
             key, param = key.split('%')
         elif '@' in key:

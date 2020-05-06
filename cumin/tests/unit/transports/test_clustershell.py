@@ -147,8 +147,6 @@ class TestClusterShellWorker:
         class InvalidClass:
             """Invalid class."""
 
-            pass
-
         with pytest.raises(WorkerError, match='handler must be one of'):
             self.worker.handler = 'invalid-handler'
 
