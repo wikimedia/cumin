@@ -29,6 +29,7 @@ class Query(BaseQueryAggregator):
 
         :Parameters:
             according to parent :py:meth:`cumin.backends.BaseQueryAggregator.__init__`.
+
         """
         super().__init__(config)
         external = self.config.get('plugins', {}).get('backends', [])

@@ -33,6 +33,11 @@ class Colored(metaclass=ColoredType):
 
     Available methods are dynamically added based on the keys of the :py:const:`ColoredType.COLORS` dictionary.
     For each color a method with the color name is available to color any object with that specific color code.
+
+    Examples::
+
+        Colored.green(object)
+
     """
 
     disabled = False

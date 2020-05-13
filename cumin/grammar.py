@@ -10,6 +10,7 @@ from cumin import backends, CuminError
 
 
 INTERNAL_BACKEND_PREFIX = 'cumin.backends'
+""":py:class:`str` with the prefix for built-in backends."""
 
 
 Backend = namedtuple('Backend', ['keyword', 'name', 'cls'])

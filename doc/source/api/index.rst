@@ -4,8 +4,6 @@ Python API
 Cumin Python API autodoc.
 
 .. automodule:: cumin
-  :no-inherited-members:
-  :special-members: __init__,__new__
 
 .. autodata:: __version__
 
@@ -13,8 +11,9 @@ Cumin Python API autodoc.
 
 .. toctree::
 
+   cumin.backends
+   cumin.color
    cumin.grammar
    cumin.query
    cumin.transport
-   cumin.backends
    cumin.transports

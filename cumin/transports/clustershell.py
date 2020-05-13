@@ -129,7 +129,19 @@ class ClusterShellWorker(BaseWorker):
 
 
 class Node:
-    """Node class to represent each target node."""
+    """Node class to represent each target node.
+
+    Additional attributes available are:
+
+    .. attribute:: state
+
+       :py:class:`cumin.transports.State`: the state of the node.
+
+    .. attribute:: running_command_index
+
+       :py:class:`int`: the index of the current running command in the list of commands.
+
+    """
 
     def __init__(self, name, commands):
         """Node class constructor with default values.

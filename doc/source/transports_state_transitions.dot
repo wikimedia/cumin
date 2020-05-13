@@ -1,0 +1,11 @@
+digraph G {
+    rankdir=TB;
+
+    pending -> scheduled;
+    scheduled -> running;
+    running -> running;
+    running -> success;
+    running -> failed;
+    running -> timeout;
+    success -> pending;
+}

@@ -188,26 +188,42 @@ class State:
 
     .. attribute:: current
 
-       :py:class:`int`: the current `state`.
+       :py:class:`int`: the current state.
 
-    .. attribute:: pending, scheduled, running, success, failed, timeout
+    .. attribute:: is_pending
 
-        :py:class:`int`: the available valid states, according to :py:attr:`valid_states`.
+       :py:class:`bool`: :py:data:`True` if the current state is `pending`, :py:data:`False` otherwise.
 
-    .. attribute:: is_pending, is_scheduled, is_running, is_success, is_failed, is_timeout
+    .. attribute:: is_scheduled
 
-       :py:class:`bool`: :py:data:`True` if this is the current `state`, :py:data:`False` otherwise.
+       :py:class:`bool`: :py:data:`True` if the current state is `scheduled`, :py:data:`False` otherwise.
+
+    .. attribute:: is_running
+
+       :py:class:`bool`: :py:data:`True` if the current state is `running`, :py:data:`False` otherwise.
+
+    .. attribute:: is_success
+
+       :py:class:`bool`: :py:data:`True` if the current state is `success`, :py:data:`False` otherwise.
+
+    .. attribute:: is_failed
+
+       :py:class:`bool`: :py:data:`True` if the current state is `failed`, :py:data:`False` otherwise.
+
+    .. attribute:: is_timeout
+
+       :py:class:`bool`: :py:data:`True` if the current state is `timeout`, :py:data:`False` otherwise.
 
     """
 
     valid_states = range(6)
-    """:py:class:`list`: valid states indexes."""
+    """:py:class:`list`: valid states integer indexes."""
 
     pending, scheduled, running, success, failed, timeout = valid_states
-    """Valid states."""
+    """Valid state property, one for each :py:data:`cumin.transports.State.valid_states`."""
 
     states_representation = ('pending', 'scheduled', 'running', 'success', 'failed', 'timeout')
-    """:py:func:`tuple`: tuple with the string representations of the valid states."""
+    """:py:func:`tuple`: Tuple with the string representations of the valid states."""
 
     allowed_state_transitions = {
         pending: (scheduled, ),
@@ -217,8 +233,16 @@ class State:
         failed: (),
         timeout: (),
     }
-    """:py:class:`dict`: dictionary with ``{valid state: tuple of valid states}`` mapping of allowed transitions for
-    any valid state."""
+    """:py:class:`dict`: Dictionary with ``{valid state: tuple of valid states}`` mapping of the allowed transitions
+    between all the possile states.
+
+    This is the diagram of the allowed transitions:
+
+    .. image:: ../../examples/transports_state_transitions.png
+       :alt: State class allowed transitions diagram
+    |
+
+    """
 
     def __init__(self, init=None):
         """State constructor. The initial state is set to `pending` it not provided.
@@ -385,10 +409,11 @@ class State:
     def _cmp(self, other):
         """Comparison operation. Allow to directly compare a state object to another or to an integer.
 
-        Raises ValueError if the comparing object is not an instance of State or an integer.
-
         Arguments:
             other (mixed): the object to compare the current instance to.
+
+        Raises:
+            ValueError: if the comparing object is not an instance of State or an integer.
 
         """
         if isinstance(other, int):
@@ -734,8 +759,10 @@ class ProgressBars:
     def __init__(self):
         """Create the progress bars.
 
-        Note that the progress bars themselves are not initalized at object
-        creation. `init()` needs to be called before using the progress bars.
+        Note:
+            the progress bars themselves are not initalized at object creation. ``init()`` needs to be called before
+            using the progress bars.
+
         """
         self.pbar_ok = None
         self.pbar_ko = None

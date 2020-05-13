@@ -2,5 +2,7 @@ Grammar
 =======
 
 .. automodule:: cumin.grammar
-   :no-private-members:
-   :no-inherited-members:
+   :exclude-members: Backend
+
+   .. autoclass:: Backend
+      :no-private-members:
