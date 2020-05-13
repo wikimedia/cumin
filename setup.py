@@ -68,6 +68,7 @@ setup(
         'Operating System :: MacOS :: MacOS X',
         'Operating System :: POSIX :: BSD',
         'Operating System :: POSIX :: Linux',
+        'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3 :: Only',
         'Topic :: Software Development :: Libraries :: Python Modules',
         'Topic :: System :: Clustering',
