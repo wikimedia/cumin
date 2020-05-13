@@ -12,6 +12,10 @@ if [[ -z "${1}" ]]; then
     exit 1
 fi
 ENV_NAME="${1}"
+SKIP_DELETION=0
+if [[ -n "${2}" && "${2}" -eq "1" ]]; then
+    SKIP_DELETION=1
+fi
 
 ENV_FILE="$(dirname "${0}")/${ENV_NAME}.sh"
 if [[ ! -f "${ENV_FILE}" ]]; then
@@ -29,6 +33,11 @@ source "${ENV_FILE}"
 # The sourced ENV_FILE must register any docker instance in this variable for cleanup
 DOCKER_INSTANCES=""
 function exit_trap() {
+    if [[ "${SKIP_DELETION}" -eq "1" ]]; then
+        _log "Skip deletion set: docker instances and temporary directory were not removed"
+        return
+    fi
+
     _log "Removing docker instances"
     docker rm -f ${DOCKER_INSTANCES} > /dev/null
 
@@ -49,6 +58,6 @@ _log "Unique identifier is ${CUMIN_IDENTIFIER}"
 trap 'exit_trap' EXIT
 
 setup
-sleep 1
+sleep 3
 run_tests
 exit "${?}"

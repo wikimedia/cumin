@@ -47,7 +47,7 @@ EOF
 }
 
 function run_tests() {
-    USER=root SUDO_USER=user cumin --force -c "${CUMIN_TMPDIR}/config.yaml" "${CUMIN_IDENTIFIER}-[1-2,5]" "touch /tmp/maybe" > /dev/null 2>&1
-    USER=root SUDO_USER=user cumin --force -c "${CUMIN_TMPDIR}/config.yaml" "${CUMIN_IDENTIFIER}-[1-5]" 'echo -e "First\nSecond\nThird" > /tmp/out' > /dev/null 2>&1
+    USER=root SUDO_USER=user cumin --force -c "${CUMIN_TMPDIR}/config.yaml" "${CUMIN_IDENTIFIER}-[1-2,5]" "touch /tmp/maybe"
+    USER=root SUDO_USER=user cumin --force -c "${CUMIN_TMPDIR}/config.yaml" "${CUMIN_IDENTIFIER}-[1-5]" 'echo -e "First\nSecond\nThird" > /tmp/out'
     py.test -n auto --strict --cov-report term-missing --cov=cumin cumin/tests/integration
 }
