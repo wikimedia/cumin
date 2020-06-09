@@ -2,17 +2,15 @@ Source: cumin
 Section: utils
 Priority: optional
 Maintainer: Riccardo Coccioli <rcoccioli@wikimedia.org>
-Standards-Version: 3.9.8
+Standards-Version: 4.5.0
 Build-Depends:
-  debhelper (>= 10),
-  dh-python (>= 2.20160609~),
-  python3-all (>= 3.4),
+  debhelper (>= 12),
+  dh-python (>= 3.20190308~),
+  python3-all (>= 3.7),
   python3-clustershell,
-  python3-colorama,
   python3-flake8,
   python3-keystoneauth1,
   python3-keystoneclient,
-  python3-mock (>= 2.0.0),
   python3-novaclient,
   python3-pyparsing,
   python3-pytest,
@@ -28,7 +26,7 @@ Build-Depends:
   python3-tqdm,
   python3-yaml
 Homepage: https://github.com/wikimedia/cumin
-X-Python3-Version: >= 3.4
+X-Python3-Version: >= 3.7
 
 Package: cumin
 Architecture: any

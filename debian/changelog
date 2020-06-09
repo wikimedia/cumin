@@ -1,3 +1,9 @@
+cumin (4.0.0~rc1-1) buster-wikimedia; urgency=medium
+
+  * v4.0.0rc1 upstream release.
+
+ -- Riccardo Coccioli <rcoccioli@wikimedia.org>  Tue, 09 Jun 2020 18:41:29 +0200
+
 cumin (3.0.2-1) jessie-wikimedia; urgency=medium
 
   * v3.0.2 upstream release.
