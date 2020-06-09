@@ -2,6 +2,112 @@ Cumin Changelog
 ---------------
 
 
+`v4.0.0rc1`_ (2020-06-09)
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Dependency breaking changes
+"""""""""""""""""""""""""""
+
+* tqdm: limit the compatible versions of tqdm allowed to a small range of versions between ``4.19.4`` and ``4.24.0``)
+  due to an upstream bug, see `tqdm issue #777`_. The ``4.23.4-1~wmf1`` version of tqdm is available as a Debian
+  package for buster in the Wikimedia APT repository in the ``component/spicerack`` component.
+
+New features
+""""""""""""
+
+* Replace colorama with custom module (`T217038`_).
+
+  * In Debian stretch there is a regression in colorama in conjunction with tqdm that leads to a slow down of the
+    progress of the script proportional to the amount of data printed to stdout/err. Colorama starts having very
+    huge stacktraces and the process is stuck at 100% CPU for an increasingly amount of time while more data is
+    printed.
+  * Given the very simple usage of colors that is made in Cumin as of now, it seems much more feasible to replace
+    the colorama library (as all that cross-OS support is not needed) and add a simple module with ANSI escape
+    sequence support.
+  * Use a type (metaclass) to be able to override ``__getattr__`` for the static methods of the classes that use it
+    and to automatically define a method for each color in a DRY way without code duplication.
+  * Define a ``Colored`` class that uses ``ColoredType`` as metaclass to inherit its type with the custom behaviour.
+  * For each color defined in ``ColoredType.COLORS`` a method of ``Colored`` is defined, e.g. ``Colored.red()``.
+  * The ``Colored`` class has a ``disabled`` property that can be set to ``True`` to globally disable coloring. This
+    could for example be integrated later into the CLI as an option to disable colors or allow to add some code to the
+    ``color.py`` module to autodetect when not in a TTY and automatically disable all colors.
+
+* Allow running cumin as a regular user (`T218440`_).
+
+* backends.puppetdb: make the PuppetDB backend process primitive types for queries (`T207037`_).
+
+  * Modify the grammar to recognize primitive PuppetDB types, communicate quotedness to the final output as
+    appropriate.
+
+* backends.puppetdb: allow to override the URL scheme in the configuration (`T218441`_).
+
+  * In some environments the PuppetDB hosts might listen only on HTTP on localhost and the Cumin host might connect
+    to it via an SSH tunnel.
+  * Allow to override the default HTTPS scheme of the PuppetDB URL in the configuration.
+
+* backends.puppetdb: fix regex matching.
+
+  * Fix regex matching in PuppetDB queries that requires that all backslashes are escaped according to the PuppetDB
+    API. See PuppetDB documentation on `regexp-match`_.
+
+* backends.openstack: add custom parameters for the client (`T201881`_).
+
+  * The instantiation of the novaclient ``Client`` might require additional parameters based on the specific
+    OpenStack installation, like for example a ``region_name``.
+  * Add a generic ``client_params`` section to the configuration to allow to set arbitrary additional parameters
+    that will be passed to the novalicent's ``Client``.
+
+* CLI: improve help message (`T204680`_).
+
+  * Specify that the ``--debug`` and ``--trace`` options affect the logs and not the output and where to find the logs.
+
+Miscellanea
+"""""""""""
+
+* Add official support to Python 3.7, deprecate support for 3.4, 3.5 and 3.6.
+* setup.py: make it compatible with Debian buster.
+
+  * Add support for Debian Buster, using its versions as minimum required version for dependencies except tqdm.
+  * For tqdm restrict the possible versions to a specific range, that is the only one that works fine with multiple
+    progress bars and colors.
+  * Remove support for Debian Stretch
+
+* transports.clustershell: extract progress bars from clustershell event handling.
+* tests: fix any newly reported issue by the various linters and static checkers.
+* tests: refactor some tests taking advantage of pytest functionalities.
+* tests: refactor tox configuration.
+* Updated documentation according to external dependency changes.
+* flake8: enforce import order and adopt ``W504``.
+
+  * Add ``flake8-import-order`` to enforce the import order using the ``edited`` style that corresponds to our
+    styleguide, see: `Python imports`_.
+  * Fix all out of order imports.
+  * For line breaks around binary operators, adopt ``W504`` (breaking before the operator) and ignore ``W503``,
+    following PEP8 suggestion, see: `PEP8 binary operator`_.
+  * Fix all line breaks around binary operators to follow ``W504``.
+
+* test: improve integration tests
+
+  * Don't hide the output of the setup commands, it's useful to both see that the output is visually correct and
+    allow to debug any error in setting up the integration tests.
+  * Allow to pass arguments to the integrations tests so that the deletion of the test instances and temporarily
+    generated files can be accessed for debugging.
+
+* doc: fix and improve documentation.
+
+  * Adapt Sphinx settings according to the newer version used.
+  * Fix links to the documentation of external libraries.
+  * Add and include the diagram image for the available transitions for the ``cumin.transports.State`` class.
+  * Improve docstrings for a better generated documentation result.
+  * Remove unnecessary Sphinx helper functions, now correctly handled by Sphinx natively.
+
+* doc: split HTML and manpage generation.
+
+  * Add a ``man`` tox environment to build only the manpage.
+  * Add a dedicated ``man-min`` environment to build the manpage with the minimum version of Sphinx, that is the one
+    of Debian Buster and that will be used to generate the manpage when building the Debian package.
+  * Let the sphinx tox environment just build the HTML documentation.
+
 `v3.0.2`_ (2018-07-30)
 ^^^^^^^^^^^^^^^^^^^^^^
 
@@ -459,7 +565,10 @@ Bug Fixes
 
 .. _`Prospector issue #230`: https://github.com/landscapeio/prospector/issues/230
 .. _`ClusterShell issue #368`: https://github.com/cea-hpc/clustershell/issues/368
-
+.. _`tqdm issue #777`: https://github.com/tqdm/tqdm/issues/777
+.. _`regexp-match`: https://puppet.com/docs/puppetdb/4.4/api/query/v4/ast.html#regexp-match
+.. _`Python imports`: https://www.mediawiki.org/wiki/Manual:Coding_conventions/Python#Imports
+.. _`PEP8 binary operator`: https://www.python.org/dev/peps/pep-0008/#should-a-line-break-before-or-after-a-binary-operator
 
 .. _`T154588`: https://phabricator.wikimedia.org/T154588
 .. _`T158746`: https://phabricator.wikimedia.org/T158746
@@ -498,6 +607,12 @@ Bug Fixes
 .. _`T187185`: https://phabricator.wikimedia.org/T187185
 .. _`T188627`: https://phabricator.wikimedia.org/T188627
 .. _`T200622`: https://phabricator.wikimedia.org/T200622
+.. _`T201881`: https://phabricator.wikimedia.org/T201881
+.. _`T204680`: https://phabricator.wikimedia.org/T204680
+.. _`T207037`: https://phabricator.wikimedia.org/T207037
+.. _`T217038`: https://phabricator.wikimedia.org/T217038
+.. _`T218440`: https://phabricator.wikimedia.org/T218440
+.. _`T218441`: https://phabricator.wikimedia.org/T218441
 
 .. _`v0.0.1`: https://github.com/wikimedia/cumin/releases/tag/v0.0.1
 .. _`v0.0.2`: https://github.com/wikimedia/cumin/releases/tag/v0.0.2
@@ -511,3 +626,4 @@ Bug Fixes
 .. _`v3.0.0`: https://github.com/wikimedia/cumin/releases/tag/v3.0.0
 .. _`v3.0.1`: https://github.com/wikimedia/cumin/releases/tag/v3.0.1
 .. _`v3.0.2`: https://github.com/wikimedia/cumin/releases/tag/v3.0.2
+.. _`v4.0.0rc1`: https://github.com/wikimedia/cumin/releases/tag/v4.0.0rc1
