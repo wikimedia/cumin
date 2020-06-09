@@ -10,7 +10,7 @@ def test_direct_query_class():
     assert isinstance(query, BaseQuery)
 
 
-class TestDirectQuery(object):
+class TestDirectQuery:
     """Direct backend query test class."""
 
     def setup_method(self, _):

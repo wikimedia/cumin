@@ -73,11 +73,13 @@ def _get_nova_client(config, project):
         novaclient.client.Client: the novaclient Client instance, already authenticated.
 
     """
+    params = config.get('client_params', {})
     return nova_client.Client(
         config.get('nova_api_version', '2'),
         session=_get_keystone_session(config, project),
         endpoint_type='public',
-        timeout=config.get('timeout', 10))
+        timeout=config.get('timeout', 10),
+        **params)
 
 
 class OpenStackQuery(BaseQuery):

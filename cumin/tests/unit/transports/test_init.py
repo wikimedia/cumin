@@ -9,30 +9,31 @@ from ClusterShell.NodeSet import NodeSet
 import cumin  # noqa: F401 (dynamically used in TestCommand)
 
 from cumin import transports
+from cumin.transports import ProgressBars
 
 
 class ConcreteBaseWorker(transports.BaseWorker):
     """Concrete class for BaseWorker."""
 
     def execute(self):
-        """Required by BaseWorker"""
+        """Required by BaseWorker."""
 
     def get_results(self):
-        """Required by BaseWorker"""
+        """Required by BaseWorker."""
         yield "node", "output"
 
     @property
     def handler(self):
-        """Required by BaseWorker"""
+        """Required by BaseWorker."""
         return self._handler
 
     @handler.setter
     def handler(self, value):
-        """Required by BaseWorker"""
+        """Required by BaseWorker."""
         self._handler = value
 
 
-class Commands(object):
+class Commands:
     """Helper class to define a list of commands to test."""
 
     command_with_options = r'command --with "options" -a -n -d params with\ spaces'
@@ -63,7 +64,7 @@ class Commands(object):
 
 
 @pytest.mark.parametrize('command', Commands().commands)
-class TestCommandParametrized(object):
+class TestCommandParametrized:
     """Command class tests executed for each parametrized command."""
 
     def test_instantiation(self, command):
@@ -76,7 +77,11 @@ class TestCommandParametrized(object):
     def test_repr(self, command):
         """A repr of a Command should allow to instantiate an instance with the same properties."""
         # Bandit and pylint would require to use ast.literal_eval, but it will not work with objects
-        command_instance = eval(repr(command['obj']))  # nosec pylint: disable=eval-used
+        command_repr = repr(command['obj'])
+        if r'\ ' in command_repr:
+            return  # Skip tests with bash-escaped spaces are they will trigger DeprecationWarning
+
+        command_instance = eval(command_repr)  # nosec pylint: disable=eval-used
         assert isinstance(command_instance, transports.Command)
         assert repr(command_instance) == repr(command['obj'])
         assert command_instance.command == command['obj'].command
@@ -134,7 +139,7 @@ class TestCommandParametrized(object):
         assert command['obj'].ok_codes == command.get('ok_codes', [0])
 
 
-class TestCommand(object):
+class TestCommand:
     """Command class non parametrized tests."""
 
     def test_eq_equivalent(self):
@@ -197,7 +202,7 @@ class TestCommand(object):
                 command.ok_codes = codes
 
 
-class TestState(object):
+class TestState:
     """State class tests."""
 
     def test_instantiation_no_init(self):
@@ -308,7 +313,7 @@ class TestState(object):
         assert state.current == transports.State.pending
 
 
-class TestTarget(object):
+class TestTarget:
     """Target class tests."""
 
     def setup_method(self, _):
@@ -403,7 +408,7 @@ class TestTarget(object):
         assert isinstance(target.first_batch, NodeSet)
 
 
-class TestBaseWorker(object):
+class TestBaseWorker:
     """Concrete BaseWorker class for tests."""
 
     def test_instantiation(self):
@@ -427,7 +432,7 @@ class TestBaseWorker(object):
         assert worker.config == config
 
 
-class TestConcreteBaseWorker(object):
+class TestConcreteBaseWorker:
     """BaseWorker test class."""
 
     def setup_method(self, _):
@@ -501,7 +506,7 @@ class TestConcreteBaseWorker(object):
         assert self.worker._success_threshold == pytest.approx(0.3)
 
 
-class TestModuleFunctions(object):
+class TestModuleFunctions:
     """Transports module functions test class."""
 
     def test_validate_list(self):
@@ -533,3 +538,45 @@ class TestModuleFunctions(object):
         """Should raise a WorkerError."""
         with pytest.raises(transports.WorkerError, match='Test message'):
             transports.raise_error('Test', 'message', 'value')
+
+
+@mock.patch('cumin.transports.tqdm')
+class TestProgressBars:
+    """A class that tests ProgressBars."""
+
+    def test_init_intialize_progress_bars_with_correct_size(self, tqdm):
+        """Progress bars are initialized at the correct size."""
+        progress = ProgressBars()
+        progress.init(10)
+
+        assert tqdm.call_count == 2
+        _, kwargs = tqdm.call_args
+        assert kwargs['total'] == 10
+
+    def test_progress_bars_are_closed(self, tqdm):  # pylint: disable=unused-argument
+        """Progress bars are closed."""
+        progress = ProgressBars()
+        progress.init(10)
+
+        progress.close()
+
+        assert progress.pbar_ok.close.called  # pylint: disable=no-member
+        assert progress.pbar_ko.close.called  # pylint: disable=no-member
+
+    def test_progress_bar_is_updated_on_success(self, tqdm):  # pylint: disable=unused-argument
+        """Progress bar is updated on success."""
+        progress = ProgressBars()
+        progress.init(10)
+
+        progress.update_success(5)
+
+        assert progress.pbar_ok.update.called_once_with(5)  # pylint: disable=no-member
+
+    def test_progress_bar_is_updated_on_failure(self, tqdm):  # pylint: disable=unused-argument
+        """Progress bar is updated on failure."""
+        progress = ProgressBars()
+        progress.init(10)
+
+        progress.update_failed(3)
+
+        assert progress.pbar_ko.update.called_once_with(3)  # pylint: disable=no-member

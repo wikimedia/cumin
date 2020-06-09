@@ -2,8 +2,10 @@
 
 set -e
 
+SSH_KEY_ALGO='ed25519'
+
 function setup() {
-    ssh-keygen -t ed25519 -N "" -f "${CUMIN_TMPDIR}/id_rsa" -C "cumin-integration-tests" > /dev/null
+    ssh-keygen -t ${SSH_KEY_ALGO} -N "" -f "${CUMIN_TMPDIR}/id_${SSH_KEY_ALGO}" -C "cumin-integration-tests" > /dev/null
     cat <<EOF > "${CUMIN_TMPDIR}/config.yaml"
 default_backend: direct
 transport: clustershell
@@ -20,7 +22,7 @@ EOF
     for index in {1..5}; do
         HOST_NAME="${CUMIN_IDENTIFIER}-${index}"
         # TODO: use a custom-generated image
-        docker run -d -p "222${index}:22" -v "/${CUMIN_TMPDIR}/id_rsa.pub:/root/.ssh/authorized_keys" --name "${HOST_NAME}" "macropin/sshd" > /dev/null
+        docker run -d -p "222${index}:22" -v "/${CUMIN_TMPDIR}/id_${SSH_KEY_ALGO}.pub:/root/.ssh/authorized_keys" --name "${HOST_NAME}" "panubo/sshd" > /dev/null
         DOCKER_INSTANCES="${DOCKER_INSTANCES} ${HOST_NAME}"
         SSH_ALIASES="${SSH_ALIASES}
 Host ${HOST_NAME}
@@ -32,7 +34,7 @@ Host ${HOST_NAME}
     cat <<EOF > "${CUMIN_TMPDIR}/ssh_config"
 Host *
     User root
-    IdentityFile ${CUMIN_TMPDIR}/id_rsa
+    IdentityFile ${CUMIN_TMPDIR}/id_${SSH_KEY_ALGO}
     IdentitiesOnly yes
     LogLevel QUIET
     StrictHostKeyChecking no
@@ -45,7 +47,7 @@ EOF
 }
 
 function run_tests() {
-    USER=root SUDO_USER=user cumin --force -c "${CUMIN_TMPDIR}/config.yaml" "${CUMIN_IDENTIFIER}-[1-2,5]" "touch /tmp/maybe" > /dev/null 2>&1
-    USER=root SUDO_USER=user cumin --force -c "${CUMIN_TMPDIR}/config.yaml" "${CUMIN_IDENTIFIER}-[1-5]" 'echo -e "First\nSecond\nThird" > /tmp/out' > /dev/null 2>&1
+    USER=root SUDO_USER=user cumin --force -c "${CUMIN_TMPDIR}/config.yaml" "${CUMIN_IDENTIFIER}-[1-2,5]" "touch /tmp/maybe"
+    USER=root SUDO_USER=user cumin --force -c "${CUMIN_TMPDIR}/config.yaml" "${CUMIN_IDENTIFIER}-[1-5]" 'echo -e "First\nSecond\nThird" > /tmp/out'
     py.test -n auto --strict --cov-report term-missing --cov=cumin cumin/tests/integration
 }

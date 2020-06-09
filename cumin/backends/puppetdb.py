@@ -1,6 +1,6 @@
-# pylint: skip-file
-# See https://github.com/PyCQA/astroid/issues/437
 """PuppetDB backend."""
+
+from re import IGNORECASE
 from string import capwords
 
 import pyparsing as pp
@@ -29,7 +29,45 @@ The ``~`` one is used for regex matching.
 """
 
 
-def grammar():
+class ParsedString:
+    """Simple string wrapper which can communicate if a string should be enquoted downstream."""
+
+    def __init__(self, string, is_quoted):
+        """Constructor for ParsedString.
+
+        Arguments:
+           string (str): The string to store in this object.
+           is_quoted (bool): Whether the output should be quoted when this is converted to a string.
+
+        """
+        self.string = str(string)
+        self.is_quoted = is_quoted
+
+    def __str__(self):
+        """Return a string version of this value, enquoted or not based on the is_quoted property."""
+        if self.is_quoted:
+            return '"{}"'.format(self.string)
+        return self.string
+
+    def capwords(self, sep):
+        """Perform capwords operation on internal value and return a new ParsedString.
+
+        :Parameters:
+            according to :py:meth:`string.capwords`.
+
+        """
+        return ParsedString(capwords(self.string, sep), self.is_quoted)
+
+    def replace(self, old, new, count=-1):
+        """Perform replace operation on internal value and return a new ParsedString.
+
+        :Parameters:
+            according to :py:meth:`str.replace`.
+        """
+        return ParsedString(self.string.replace(old, new, count), self.is_quoted)
+
+
+def grammar():  # pylint: disable=too-many-locals
     """Define the query grammar.
 
     Backus-Naur form (BNF) of the grammar::
@@ -38,6 +76,7 @@ def grammar():
                <item> ::= [<neg>] <query-token> | [<neg>] "(" <grammar> ")"
         <query-token> ::= <token> | <hosts>
               <token> ::= <category>:<key> [<operator> <value>]
+              <value> ::= <numeric> | <bareword> | <quoted_string> | <unquoted_string>
 
     Given that the pyparsing library defines the grammar in a BNF-like style, for the details of the tokens not
     specified above check directly the source code.
@@ -69,7 +108,19 @@ def grammar():
     selector = pp.Combine(category + ':' + key)  # i.e. F:key
     # All printables characters except the parentheses that are part of this or the global grammar
     all_but_par = ''.join([c for c in pp.printables if c not in ('(', ')', '{', '}')])
-    value = (quoted_string | pp.Word(all_but_par))('value')
+
+    # PuppetDB accepts JSON Atoms
+    bareword = pp.oneOf(('true', 'false'))
+
+    # octal numbers are bare numerics that lead with 0.
+    octal = pp.Word("0", "01234567", min=2).addParseAction(lambda toks: int(toks[0], 8))
+    # hex integers are in the format 0x[0-9A-F]+
+    hexadecimal = pp.Regex(r'0x[0-9A-F]+', flags=IGNORECASE).addParseAction(lambda toks: int(toks[0], 16))
+    number = pp.pyparsing_common.number
+
+    # label indicates post-processing needed (value = nonquoted, quoted=quoted)
+    value = (hexadecimal ^ octal ^ number ^ bareword)('value') ^ (quoted_string ^ pp.Word(all_but_par))('quoted')
+
     token = selector + pp.Optional(operator + value)
 
     # Final grammar, see the docstring for its BNF based on the tokens defined above
@@ -98,6 +149,17 @@ class PuppetDBQuery(BaseQuery):
         :py:class:`ClusterShell.NodeSet.NodeSet`.
       * ``Category matching``: an identifier composed by a category, a colon and a key, followed by a comparison
         operator and a value, as in ``F:key = value``.
+
+    * Values may be of various types supported by PuppetDB (numerics, boolean, and strings) for example:
+
+      * Booleans: ``true``, ``false``
+      * Strings: ``'a string'``, and unquoted single words that aren't ``true`` or ``false`` and do not start with an
+        integer.
+      * Numeric values: ``15``, ``23.5``, ``0``, ``0xfa`` *Note: hexadecimal and octal numbers are supported by cumin
+        but converted into normal integers. Some fields in PuppetDB may have hex or octal stored as strings, and should
+        be quoted such as* ``'0xfa'``.
+
+      *Note: PuppetDB may or may not support a particular value type for a particular resource.*
 
     Some query examples:
 
@@ -133,11 +195,12 @@ class PuppetDBQuery(BaseQuery):
       * Mixed facts/resources queries are not supported, but the same result can be achieved using the main grammar
         with multiple subqueries for the PuppetDB backend.
 
+    * All hosts with physicalcorecount fact greater than 2: ``F:physicalcorecount > 2``
     * A complex selection for facts:
       ``host10[10-42].*.domain or (not F:key1 = value1 and host10*) or (F:key2 > value2 and F:key3 ~ '^value[0-9]+')``
     """
 
-    base_url_template = 'https://{host}:{port}'
+    base_url_template = '{scheme}://{host}:{port}'
     """:py:class:`str`: string template in the :py:meth:`str.format` style used to generate the base URL of the
     PuppetDB server."""
 
@@ -164,6 +227,7 @@ class PuppetDBQuery(BaseQuery):
         self._endpoint = None
         puppetdb_config = self.config.get('puppetdb', {})
         base_url = self.base_url_template.format(
+            scheme=puppetdb_config.get('scheme', 'https'),
             host=puppetdb_config.get('host', 'localhost'),
             port=puppetdb_config.get('port', 443))
 
@@ -273,14 +337,15 @@ class PuppetDBQuery(BaseQuery):
         """
         self.endpoint = self.endpoints[category]
         if operator == '~':
-            value = value.replace(r'\\', r'\\\\')  # Required by PuppetDB API
-
+            # PuppetDB API requires to escape every backslash
+            # See: https://puppet.com/docs/puppetdb/4.4/api/query/v4/ast.html#regexp-match
+            value = value.replace('\\', '\\\\')
         if category in ('C', 'O', 'P'):
             query = self._get_special_resource_query(category, key, value, operator)
         elif category == 'R':
             query = self._get_resource_query(key, value, operator)
         elif category == 'F':
-            query = '["{op}", ["fact", "{key}"], "{val}"]'.format(op=operator, key=key, val=value)
+            query = '["{op}", ["fact", "{key}"], {val}]'.format(op=operator, key=key, val=value)
         else:  # pragma: no cover - this should never happen
             raise InvalidQueryError(
                 "Got invalid category '{category}', one of F|O|P|R expected".format(category=category))
@@ -296,6 +361,7 @@ class PuppetDBQuery(BaseQuery):
         Arguments:
             hosts (ClusterShell.NodeSet.NodeSet): with the list of hosts to search.
             neg (bool, optional): whether the token must be negated.
+
         """
         if not hosts:
             return
@@ -330,6 +396,12 @@ class PuppetDBQuery(BaseQuery):
             return
 
         token_dict = token.asDict()
+        # post-process types
+        if 'quoted' in token_dict:
+            token_dict['value'] = ParsedString(token_dict['quoted'], True)
+            del token_dict['quoted']
+        elif 'value' in token_dict:
+            token_dict['value'] = ParsedString(token_dict['value'], False)
 
         # Based on the token type build the corresponding query object
         if 'open_subgroup' in token_dict:
@@ -371,17 +443,17 @@ class PuppetDBQuery(BaseQuery):
             raise InvalidQueryError(("Resource key cannot contain both '%' (query a resource's parameter) and '@' "
                                      "(query a  resource's field)"))
 
-        elif '%' in key:
+        if '%' in key:
             # Querying a specific parameter of the resource
             if operator == '~' and self.api_version == 3:
                 raise InvalidQueryError('Regex operations are not supported in PuppetDB API v3 for resource parameters')
             key, param = key.split('%', 1)
-            query_part = ', ["{op}", ["parameter", "{param}"], "{value}"]'.format(op=operator, param=param, value=value)
+            query_part = ', ["{op}", ["parameter", "{param}"], {value}]'.format(op=operator, param=param, value=value)
 
         elif '@' in key:
             # Querying a specific field of the resource
             key, field = key.split('@', 1)
-            query_part = ', ["{op}", "{field}", "{value}"]'.format(op=operator, field=field, value=value)
+            query_part = ', ["{op}", "{field}", {value}]'.format(op=operator, field=field, value=value)
 
         elif value is None:
             # Querying a specific resource type
@@ -390,9 +462,8 @@ class PuppetDBQuery(BaseQuery):
         else:
             # Querying a specific resource title
             if key.lower() == 'class' and operator != '~':
-                value = capwords(value, '::')  # Auto ucfirst the class title
-            query_part = ', ["{op}", "title", "{value}"]'.format(op=operator, value=value)
-
+                value = value.capwords('::')  # Auto ucfirst the class title
+            query_part = ', ["{op}", "title", {value}]'.format(op=operator, value=value)
         query = '["and", ["=", "type", "{type}"]{query_part}]'.format(type=capwords(key, '::'), query_part=query_part)
 
         return query
@@ -416,7 +487,7 @@ class PuppetDBQuery(BaseQuery):
         if all(char in key for char in ('%', '@')):
             raise InvalidQueryError(("Resource key cannot contain both '%' (query a resource's parameter) and '@' "
                                      "(query a  resource's field)"))
-        elif '%' in key:
+        if '%' in key:
             special = '%'
             key, param = key.split('%')
         elif '@' in key:
@@ -429,9 +500,9 @@ class PuppetDBQuery(BaseQuery):
                                          "is accepted only when using %param or @field.").format(category=category))
 
         if self.category_prefixes[category]:
-            title = '{prefix}::{key}'.format(prefix=self.category_prefixes[category], key=key)
+            title = ParsedString('{prefix}::{key}'.format(prefix=self.category_prefixes[category], key=key), True)
         else:
-            title = key
+            title = ParsedString(key, True)
 
         query = self._get_resource_query('Class', title, '=')
 

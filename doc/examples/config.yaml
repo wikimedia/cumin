@@ -16,6 +16,9 @@ environment:
 puppetdb:
     host: puppetdb.local
     port: 443
+    # [optional[ Allow to override the default HTTPS scheme with HTTP in case the connection to PuppetDB is secured in
+    # other ways (e.g. SSH tunnel)
+    scheme: https
     api_version: 4  # Supported versions are v3 and v4. If not specified, v4 will be used.
     urllib3_disable_warnings:  # List of Python urllib3 exceptions to ignore
         - SubjectAltNameWarning
@@ -27,6 +30,9 @@ openstack:
     domain_suffix: openstack.local  # OpenStack managed domain, to be added to all hostnames
     nova_api_version: 2.12
     timeout: 2  # Used for both Keystone and Nova API calls
+    # Additional parameters to set when instantiating the novaclient Client
+    client_params:
+        region_name: region1
     # Default query parameters. The ones set by default anyway are: status: ACTIVE and vm_state: ACTIVE [optional]
     query_params:
         project: project_name  # Parameter name: parameter value

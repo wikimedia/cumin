@@ -2,11 +2,10 @@
 import logging
 import os
 
-from pkg_resources import DistributionNotFound, get_distribution
-
 import yaml
 
 from ClusterShell.NodeSet import NodeSet, RESOLVER_NOGROUP
+from pkg_resources import DistributionNotFound, get_distribution
 
 
 try:
@@ -30,8 +29,8 @@ LOGGING_TRACE_LEVEL_NAME = 'TRACE'
 # Fail if the custom logging slot is already in use with a different name or
 # Access to a private property of logging was preferred over matching the default string returned by
 # logging.getLevelName() for unused custom slots.
-if (LOGGING_TRACE_LEVEL_NUMBER in logging._levelToName and  # pylint: disable=protected-access
-        LOGGING_TRACE_LEVEL_NAME not in logging._nameToLevel):  # pylint: disable=protected-access
+if (LOGGING_TRACE_LEVEL_NUMBER in logging._levelToName  # pylint: disable=protected-access
+        and LOGGING_TRACE_LEVEL_NAME not in logging._nameToLevel):  # pylint: disable=protected-access
     raise CuminError("Unable to set custom logging for trace, logging level {level} is alredy set for '{name}'.".format(
         level=LOGGING_TRACE_LEVEL_NUMBER, name=logging.getLevelName(LOGGING_TRACE_LEVEL_NUMBER)))
 

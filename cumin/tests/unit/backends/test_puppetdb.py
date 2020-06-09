@@ -18,8 +18,8 @@ def test_puppetdb_query_class():
 
 def _get_category_key_token(category='F', key='key1', operator='=', value='value1'):
     """Generate and return a category token string and it's expected dictionary of tokens when parsed."""
-    expected = {'category': category, 'key': key, 'operator': operator, 'value': value}
-    token = '{category}:{key} {operator} {value}'.format(**expected)
+    expected = {'category': category, 'key': key, 'operator': operator, 'quoted': value}
+    token = '{category}:{key} {operator} {quoted}'.format(**expected)
     return token, expected
 
 
@@ -37,7 +37,7 @@ def test_hosts_selection():
     assert parsed[0].asDict() == hosts
 
 
-class TestPuppetDBQueryV3(object):
+class TestPuppetDBQueryV3:
     """PuppetDB backend query test class for API version 3."""
 
     def setup_method(self, _):
@@ -51,7 +51,7 @@ class TestPuppetDBQueryV3(object):
         assert self.query.url == 'https://localhost:443/v3/'
 
 
-class TestPuppetDBQueryV4(object):
+class TestPuppetDBQueryV4:
     """PuppetDB backend query test class for API version 4."""
 
     def setup_method(self, _):
@@ -102,7 +102,7 @@ def test_puppetdb_query_init_invalid():
 
 
 @mock.patch.object(puppetdb.PuppetDBQuery, '_api_call')
-class TestPuppetDBQueryBuildV3(object):
+class TestPuppetDBQueryBuildV3:
     """PuppetDB backend API v3 query build test class."""
 
     def setup_method(self, _):
@@ -116,289 +116,290 @@ class TestPuppetDBQueryBuildV3(object):
             self.query.execute('R:resource%param ~ value.*')
             assert not mocked_api_call.called
 
-    def test_add_hosts(self, mocked_api_call):
+    @pytest.mark.parametrize('query, expected', (
+        (  # No hosts
+            'host1!host1',
+            ''),
+        (  # Single host
+            'host',
+            '["or", ["=", "name", "host"]]'),
+        (  # Multiple hosts
+            'host[1-2]',
+            '["or", ["=", "name", "host1"], ["=", "name", "host2"]]'),
+        (  # Negated query
+            'not host[1-2]',
+            '["not", ["or", ["=", "name", "host1"], ["=", "name", "host2"]]]'),
+        (  # Globbing hosts
+            'host1*.domain',
+            r'["or", ["~", "name", "^host1.*\\.domain$"]]'),
+    ))
+    def test_add_hosts(self, mocked_api_call, query, expected):
         """A host query should add the proper query token to the current_group."""
-        # No hosts
-        self.query.execute('host1!host1')
-        mocked_api_call.assert_called_with('')
-        # Single host
-        self.query.execute('host')
-        mocked_api_call.assert_called_with('["or", ["=", "name", "host"]]')
-        # Multiple hosts
-        self.query.execute('host[1-2]')
-        mocked_api_call.assert_called_with('["or", ["=", "name", "host1"], ["=", "name", "host2"]]')
-        # Negated query
-        self.query.execute('not host[1-2]')
-        mocked_api_call.assert_called_with('["not", ["or", ["=", "name", "host1"], ["=", "name", "host2"]]]')
-        # Globbing hosts
-        self.query.execute('host1*.domain')
-        mocked_api_call.assert_called_with(r'["or", ["~", "name", "^host1.*\\.domain$"]]')
+        self.query.execute(query)
+        mocked_api_call.assert_called_with(expected)
 
-    def test_and(self, mocked_api_call):
-        """A query with 'and' should set the boolean property to the current group to 'and'."""
-        self.query.execute('host1 and host2')
-        assert self.query.current_group['bool'] == 'and'
-        mocked_api_call.assert_called_with('["and", ["or", ["=", "name", "host1"]], ["or", ["=", "name", "host2"]]]')
+    @pytest.mark.parametrize('query, expected', (
+        (  # number
+            'R:resource = 5551723',
+            '["and", ["=", "type", "Resource"], ["=", "title", 5551723]]'),
+        (  # number (neg)
+            'R:resource = -23',
+            '["and", ["=", "type", "Resource"], ["=", "title", -23]]'),
+        (  # float
+            'R:resource = 8675.309',
+            '["and", ["=", "type", "Resource"], ["=", "title", 8675.309]]'),
+        (  # hex
+            'R:resource = 0x235A',
+            '["and", ["=", "type", "Resource"], ["=", "title", 9050]]'),
+        (  # lower hex
+            'R:resource = 0x235a',
+            '["and", ["=", "type", "Resource"], ["=", "title", 9050]]'),
+        (  # oct
+            'R:resource = 0777',
+            '["and", ["=", "type", "Resource"], ["=", "title", 511]]'),
+        (  # zero
+            'R:resource = 0',
+            '["and", ["=", "type", "Resource"], ["=", "title", 0]]'),
+        (  # bareword
+            'R:resource = true',
+            '["and", ["=", "type", "Resource"], ["=", "title", true]]'),
+        (  # quoted
+            'R:resource = "value words"',
+            '["and", ["=", "type", "Resource"], ["=", "title", "value words"]]'),
+        (  # unquoted
+            'R:resource = value',
+            '["and", ["=", "type", "Resource"], ["=", "title", "value"]]'),
+        (  # shortcut with numeric
+            'O:role_name%param > 0x235A',
+            ('["and", ["and", ["=", "type", "Class"], ["=", "title", "Role::Role_name"]], ["and", ["=", "type", "Class"'
+             '], [">", ["parameter", "param"], 9050]]]')),
+        (  # shortcut with bareword
+            'O:role_name%param = true',
+            ('["and", ["and", ["=", "type", "Class"], ["=", "title", "Role::Role_name"]], ["and", ["=", "type", "Class"'
+             '], ["=", ["parameter", "param"], true]]]')),
+    ))
+    def test_types(self, mocked_api_call, query, expected):
+        """A query should decode various types that puppetdb supports."""
+        self.query.execute(query)
+        mocked_api_call.assert_called_with(expected)
 
-    def test_or(self, mocked_api_call):
-        """A query with 'or' should set the boolean property to the current group to 'or'."""
-        self.query.execute('host1 or host2')
-        assert self.query.current_group['bool'] == 'or'
-        mocked_api_call.assert_called_with('["or", ["or", ["=", "name", "host1"]], ["or", ["=", "name", "host2"]]]')
-
-    def test_and_and(self, mocked_api_call):
-        """A query with 'and' and 'and' should set the boolean property to the current group to 'and'."""
-        self.query.execute('host1 and host2 and host3')
-        assert self.query.current_group['bool'] == 'and'
-        mocked_api_call.assert_called_with(
-            '["and", ["or", ["=", "name", "host1"]], ["or", ["=", "name", "host2"]], ["or", ["=", "name", "host3"]]]')
+    @pytest.mark.parametrize('query, operator, expected', (
+        (  # AND
+            'host1 and host2',
+            'and',
+            '["and", ["or", ["=", "name", "host1"]], ["or", ["=", "name", "host2"]]]'),
+        (  # OR
+            'host1 or host2',
+            'or',
+            '["or", ["or", ["=", "name", "host1"]], ["or", ["=", "name", "host2"]]]'),
+        (  # Multiple AND
+            'host1 and host2 and host3',
+            'and',
+            '["and", ["or", ["=", "name", "host1"]], ["or", ["=", "name", "host2"]], ["or", ["=", "name", "host3"]]]'),
+    ))
+    def test_operator(self, mocked_api_call, query, operator, expected):
+        """A query with boolean operators should set the boolean property to the current group."""
+        self.query.execute(query)
+        assert self.query.current_group['bool'] == operator
+        mocked_api_call.assert_called_with(expected)
 
 
 @mock.patch.object(puppetdb.PuppetDBQuery, '_api_call')
-class TestPuppetDBQueryBuildV4(object):
+class TestPuppetDBQueryBuildV4:
     """PuppetDB backend API v4 query build test class."""
 
     def setup_method(self, _):
         """Set an instace of PuppetDBQuery for each test."""
         self.query = puppetdb.PuppetDBQuery({})  # pylint: disable=attribute-defined-outside-init
 
-    def test_add_category_fact(self, mocked_api_call):
+    @pytest.mark.parametrize('query, expected', (
+        (  # Base fact
+            'F:key=value',
+            '["=", ["fact", "key"], "value"]'),
+        (  # Negated
+            'not F:key = value',
+            '["not", ["=", ["fact", "key"], "value"]]'),
+        (  # Different operator
+            'F:key >= value',
+            '[">=", ["fact", "key"], "value"]'),
+        (  # Regex with backslash escaped
+            r'F:key ~ value\\escaped',
+            r'["~", ["fact", "key"], "value\\\\escaped"]'),
+        (  # Regex with dot escaped
+            r'F:key ~ value\.escaped',
+            r'["~", ["fact", "key"], "value\\.escaped"]'),
+    ))
+    def test_add_category_fact(self, mocked_api_call, query, expected):
         """A fact query should add the proper query token to the current_group."""
-        # Base fact query
-        self.query.execute('F:key=value')
-        mocked_api_call.assert_called_with('["=", ["fact", "key"], "value"]')
-        # Negated query
-        self.query.execute('not F:key = value')
-        mocked_api_call.assert_called_with('["not", ["=", ["fact", "key"], "value"]]')
-        # Different operator
-        self.query.execute('F:key >= value')
-        mocked_api_call.assert_called_with('[">=", ["fact", "key"], "value"]')
-        # Regex operator
-        self.query.execute(r'F:key ~ value\\escaped')
-        mocked_api_call.assert_called_with(r'["~", ["fact", "key"], "value\\\\escaped"]')
+        self.query.execute(query)
+        mocked_api_call.assert_called_with(expected)
 
-    def test_add_category_resource_base(self, mocked_api_call):
-        """A base resource query should add the proper query token to the current_group."""
-        self.query.execute('R:key = value')
-        mocked_api_call.assert_called_with('["and", ["=", "type", "Key"], ["=", "title", "value"]]')
+    @pytest.mark.parametrize('query, expected', (
+        (  # Base resource equality
+            'R:key = value',
+            '["and", ["=", "type", "Key"], ["=", "title", "value"]]'),
+        (  # Class title
+            'R:class = classtitle',
+            '["and", ["=", "type", "Class"], ["=", "title", "Classtitle"]]'),
+        (  # Class path
+            'R:class = resource::path::to::class',
+            '["and", ["=", "type", "Class"], ["=", "title", "Resource::Path::To::Class"]]'),
+        (  # Negated
+            'not R:key = value',
+            '["not", ["and", ["=", "type", "Key"], ["=", "title", "value"]]]'),
+        (  # Regex backslash escaped
+            r'R:key ~ value\\escaped',
+            r'["and", ["=", "type", "Key"], ["~", "title", "value\\\\escaped"]]'),
+        (  # Regex dot escaped
+            r'R:key ~ value\.escaped',
+            r'["and", ["=", "type", "Key"], ["~", "title", "value\\.escaped"]]'),
+        (  # Regex class
+            r'R:Class ~ "Role::(One|Another)"',
+            r'["and", ["=", "type", "Class"], ["~", "title", "Role::(One|Another)"]]'),
+        (  # Resource parameter
+            'R:resource%param = value',
+            '["and", ["=", "type", "Resource"], ["=", ["parameter", "param"], "value"]]'),
+        (  # Resource parameter regex
+            'R:resource%param ~ value.*',
+            '["and", ["=", "type", "Resource"], ["~", ["parameter", "param"], "value.*"]]'),
+        (  # Resource field
+            'R:resource@field = value',
+            '["and", ["=", "type", "Resource"], ["=", "field", "value"]]'),
+        (  # Resource type
+            'R:Resource',
+            '["and", ["=", "type", "Resource"]]'),
+        (  # Class shortcut
+            'C:class_name',
+            '["and", ["=", "type", "Class"], ["=", "title", "Class_name"]]'),
+        (  # Class shortcut with path
+            'C:module::class::name',
+            '["and", ["=", "type", "Class"], ["=", "title", "Module::Class::Name"]]'),
+        (  # Class shortcut with parameter
+            'C:class_name%param = value',
+            ('["and", ["and", ["=", "type", "Class"], ["=", "title", "Class_name"]], '
+             '["and", ["=", "type", "Class"], ["=", ["parameter", "param"], "value"]]]')),
+        (  # Class shortcut with field
+            'C:class_name@field = value',
+            ('["and", ["and", ["=", "type", "Class"], ["=", "title", "Class_name"]], '
+             '["and", ["=", "type", "Class"], ["=", "field", "value"]]]')),
+        (  # Profile shortcut
+            'P:profile_name',
+            '["and", ["=", "type", "Class"], ["=", "title", "Profile::Profile_name"]]'),
+        (  # Profile shortcut path
+            'P:module::name',
+            '["and", ["=", "type", "Class"], ["=", "title", "Profile::Module::Name"]]'),
+        (  # Profile shortcut with parameter
+            'P:profile_name%param = value',
+            ('["and", ["and", ["=", "type", "Class"], ["=", "title", "Profile::Profile_name"]], '
+             '["and", ["=", "type", "Class"], ["=", ["parameter", "param"], "value"]]]')),
+        (  # Profile shortcut with field
+            'P:profile_name@field = value',
+            ('["and", ["and", ["=", "type", "Class"], ["=", "title", "Profile::Profile_name"]], '
+             '["and", ["=", "type", "Class"], ["=", "field", "value"]]]')),
+        (  # Role shortcut
+            'O:role_name',
+            '["and", ["=", "type", "Class"], ["=", "title", "Role::Role_name"]]'),
+        (  # Role shortcut path
+            'O:module::name',
+            '["and", ["=", "type", "Class"], ["=", "title", "Role::Module::Name"]]'),
+        (  # Role shortcut with parameter
+            'O:role_name%param = value',
+            ('["and", ["and", ["=", "type", "Class"], ["=", "title", "Role::Role_name"]], '
+             '["and", ["=", "type", "Class"], ["=", ["parameter", "param"], "value"]]]')),
+        (  # Role shortcut with field
+            'O:role_name@field = value',
+            ('["and", ["and", ["=", "type", "Class"], ["=", "title", "Role::Role_name"]], '
+             '["and", ["=", "type", "Class"], ["=", "field", "value"]]]')),
+    ))
+    def test_add_category_resource(self, mocked_api_call, query, expected):
+        """A resource query should add the proper query token to the current_group."""
+        self.query.execute(query)
+        mocked_api_call.assert_called_with(expected)
 
-    def test_add_category_resource_class(self, mocked_api_call):
-        """A class resource query should add the proper query token to the current_group."""
-        self.query.execute('R:class = classtitle')
-        mocked_api_call.assert_called_with('["and", ["=", "type", "Class"], ["=", "title", "Classtitle"]]')
-
-    def test_add_category_resource_class_path(self, mocked_api_call):
-        """Executing a query with a class resource query should add the proper query token to the current_group."""
-        self.query.execute('R:class = resource::path::to::class')
-        mocked_api_call.assert_called_with(
-            '["and", ["=", "type", "Class"], ["=", "title", "Resource::Path::To::Class"]]')
-
-    def test_add_category_resource_neg(self, mocked_api_call):
-        """A negated resource query should add the proper query token to the current_group."""
-        self.query.execute('not R:key = value')
-        mocked_api_call.assert_called_with('["not", ["and", ["=", "type", "Key"], ["=", "title", "value"]]]')
-
-    def test_add_category_resource_regex(self, mocked_api_call):
-        """A regex resource query should add the proper query token to the current_group."""
-        self.query.execute(r'R:key ~ value\\escaped')
-        mocked_api_call.assert_called_with(r'["and", ["=", "type", "Key"], ["~", "title", "value\\\\escaped"]]')
-
-    def test_add_category_resource_class_regex(self, mocked_api_call):
-        """A regex Class resource query should add the proper query token to the current_group."""
-        self.query.execute(r'R:Class ~ "Role::(One|Another)"')
-        mocked_api_call.assert_called_with(r'["and", ["=", "type", "Class"], ["~", "title", "Role::(One|Another)"]]')
-
-    def test_add_category_resource_parameter(self, mocked_api_call):
-        """A resource's parameter query should add the proper query token to the object."""
-        self.query.execute('R:resource%param = value')
-        mocked_api_call.assert_called_with(
-            '["and", ["=", "type", "Resource"], ["=", ["parameter", "param"], "value"]]')
-
-    def test_add_category_resource_parameter_regex(self, mocked_api_call):
-        """A resource's parameter query with a regex should add the propery query token to the object."""
-        self.query.execute('R:resource%param ~ value.*')
-        mocked_api_call.assert_called_with(
-            '["and", ["=", "type", "Resource"], ["~", ["parameter", "param"], "value.*"]]')
-
-    def test_add_category_resource_field(self, mocked_api_call):
-        """A resource's field query should add the proper query token to the current_group."""
-        self.query.execute('R:resource@field = value')
-        mocked_api_call.assert_called_with('["and", ["=", "type", "Resource"], ["=", "field", "value"]]')
-
-    def test_add_category_resource(self, mocked_api_call):
-        """A resource type should add the proper query token to the current_group."""
-        self.query.execute('R:Resource')
-        mocked_api_call.assert_called_with('["and", ["=", "type", "Resource"]]')
-
-    def test_add_category_resource_parameter_field(self, mocked_api_call):
+    @pytest.mark.parametrize('query, message', (
+        (  # Parameter and field
+            'R:resource%param@field',
+            'Resource key cannot contain both'),
+        (  # Field and parameter
+            'R:resource@field%param',
+            'Resource key cannot contain both'),
+        (  # Class shortcut with value
+            'C:class_name = value',
+            'The matching of a value is accepted only when using'),
+        (  # Class shortcut with parameter and field
+            'C:class_name%param@field',
+            'Resource key cannot contain both'),
+        (  # Class shortcut with field and parameter
+            'C:class_name@field%param',
+            'Resource key cannot contain both'),
+        (  # Profile shortcut value
+            'P:profile_name = value',
+            'The matching of a value is accepted only when using'),
+        (  # Profile shortcut with parameter and field
+            'P:profile_name%param@field',
+            'Resource key cannot contain both'),
+        (  # Profile shortcut with field and parameter
+            'P:profile_name@field%param',
+            'Resource key cannot contain both'),
+        (  # Role shortcut with value
+            'O:role_name = value',
+            'The matching of a value is accepted only when using'),
+        (  # Role shortcut with parameter and field
+            'O:role_name%param@field',
+            'Resource key cannot contain both'),
+        (  # Role shortcut with field and parameter
+            'O:role_name@field%param',
+            'Resource key cannot contain both'),
+    ))
+    def test_add_category_resource_raise(self, mocked_api_call, query, message):
         """A query with both a resource's parameter and field should raise InvalidQueryError."""
-        with pytest.raises(InvalidQueryError, match='Resource key cannot contain both'):
-            self.query.execute('R:resource%param@field')
+        with pytest.raises(InvalidQueryError, match=message):
+            self.query.execute(query)
             assert not mocked_api_call.called
 
-    def test_add_category_resource_field_parameter(self, mocked_api_call):
-        """A query with both a resource's parameter and field should raise InvalidQueryError."""
-        with pytest.raises(InvalidQueryError, match='Resource key cannot contain both'):
-            self.query.execute('R:resource@field%param')
-            assert not mocked_api_call.called
-
-    def test_add_category_class(self, mocked_api_call):
-        """A class resource query should add the proper query token to the current_group."""
-        self.query.execute('C:class_name')
-        mocked_api_call.assert_called_with('["and", ["=", "type", "Class"], ["=", "title", "Class_name"]]')
-
-    def test_add_category_class_path(self, mocked_api_call):
-        """A class resource path query should add the proper query token to the current_group."""
-        self.query.execute('C:module::class::name')
-        mocked_api_call.assert_called_with('["and", ["=", "type", "Class"], ["=", "title", "Module::Class::Name"]]')
-
-    def test_add_category_class_value(self, mocked_api_call):
-        """A class query with a value should raise InvalidQueryError."""
-        with pytest.raises(InvalidQueryError, match='The matching of a value is accepted only when using'):
-            self.query.execute('C:class_name = value')
-            assert not mocked_api_call.called
-
-    def test_add_category_class_parameter(self, mocked_api_call):
-        """A class resource query with parameter should add the proper query token to the current_group."""
-        self.query.execute('C:class_name%param = value')
-        mocked_api_call.assert_called_with((
-            '["and", ["and", ["=", "type", "Class"], ["=", "title", "Class_name"]], '
-            '["and", ["=", "type", "Class"], ["=", ["parameter", "param"], "value"]]]'))
-
-    def test_add_category_class_field(self, mocked_api_call):
-        """A class resource query with field should add the proper query token to the current_group."""
-        self.query.execute('C:class_name@field = value')
-        mocked_api_call.assert_called_with((
-            '["and", ["and", ["=", "type", "Class"], ["=", "title", "Class_name"]], '
-            '["and", ["=", "type", "Class"], ["=", "field", "value"]]]'))
-
-    def test_add_category_class_parameter_field(self, mocked_api_call):
-        """A query with both a class's parameter and field should raise InvalidQueryError."""
-        with pytest.raises(InvalidQueryError, match='Resource key cannot contain both'):
-            self.query.execute('C:class_name%param@field')
-            assert not mocked_api_call.called
-
-    def test_add_category_class_field_parameter(self, mocked_api_call):
-        """A query with both a class's field and parameter should raise InvalidQueryError."""
-        with pytest.raises(InvalidQueryError, match='Resource key cannot contain both'):
-            self.query.execute('C:class_name@field%param')
-            assert not mocked_api_call.called
-
-    def test_add_category_profile(self, mocked_api_call):
-        """A profile resource query should add the proper query token to the current_group."""
-        self.query.execute('P:profile_name')
-        mocked_api_call.assert_called_with('["and", ["=", "type", "Class"], ["=", "title", "Profile::Profile_name"]]')
-
-    def test_add_category_profile_module(self, mocked_api_call):
-        """A profile resource module query should add the proper query token to the current_group."""
-        self.query.execute('P:module::name')
-        mocked_api_call.assert_called_with('["and", ["=", "type", "Class"], ["=", "title", "Profile::Module::Name"]]')
-
-    def test_add_category_profile_value(self, mocked_api_call):
-        """A profile query with a value should raise InvalidQueryError."""
-        with pytest.raises(InvalidQueryError, match='The matching of a value is accepted only when using'):
-            self.query.execute('P:profile_name = value')
-            assert not mocked_api_call.called
-
-    def test_add_category_profile_parameter(self, mocked_api_call):
-        """A profile resource query with parameter should add the proper query token to the current_group."""
-        self.query.execute('P:profile_name%param = value')
-        mocked_api_call.assert_called_with((
-            '["and", ["and", ["=", "type", "Class"], ["=", "title", "Profile::Profile_name"]], '
-            '["and", ["=", "type", "Class"], ["=", ["parameter", "param"], "value"]]]'))
-
-    def test_add_category_profile_field(self, mocked_api_call):
-        """A profile resource query with field should add the proper query token to the current_group."""
-        self.query.execute('P:profile_name@field = value')
-        mocked_api_call.assert_called_with((
-            '["and", ["and", ["=", "type", "Class"], ["=", "title", "Profile::Profile_name"]], '
-            '["and", ["=", "type", "Class"], ["=", "field", "value"]]]'))
-
-    def test_add_category_profile_parameter_field(self, mocked_api_call):
-        """A query with both a profile's parameter and field should raise InvalidQueryError."""
-        with pytest.raises(InvalidQueryError, match='Resource key cannot contain both'):
-            self.query.execute('P:profile_name%param@field')
-            assert not mocked_api_call.called
-
-    def test_add_category_profile_field_parameter(self, mocked_api_call):
-        """A query with both a profile's field and parameter should raise InvalidQueryError."""
-        with pytest.raises(InvalidQueryError, match='Resource key cannot contain both'):
-            self.query.execute('P:profile_name@field%param')
-            assert not mocked_api_call.called
-
-    def test_add_category_role(self, mocked_api_call):
-        """A role resource query should add the proper query token to the current_group."""
-        self.query.execute('O:role_name')
-        mocked_api_call.assert_called_with('["and", ["=", "type", "Class"], ["=", "title", "Role::Role_name"]]')
-
-    def test_add_category_role_module(self, mocked_api_call):
-        """A role resource module query should add the proper query token to the current_group."""
-        self.query.execute('O:module::name')
-        mocked_api_call.assert_called_with('["and", ["=", "type", "Class"], ["=", "title", "Role::Module::Name"]]')
-
-    def test_add_category_role_value(self, mocked_api_call):
-        """A role query with a value should raise InvalidQueryError."""
-        with pytest.raises(InvalidQueryError, match='The matching of a value is accepted only when using'):
-            self.query.execute('O:role_name = value')
-            assert not mocked_api_call.called
-
-    def test_add_category_role_parameter(self, mocked_api_call):
-        """A role resource query with parameter should add the proper query token to the current_group."""
-        self.query.execute('O:role_name%param = value')
-        mocked_api_call.assert_called_with((
-            '["and", ["and", ["=", "type", "Class"], ["=", "title", "Role::Role_name"]], '
-            '["and", ["=", "type", "Class"], ["=", ["parameter", "param"], "value"]]]'))
-
-    def test_add_category_role_field(self, mocked_api_call):
-        """A role resource query with field should add the proper query token to the current_group."""
-        self.query.execute('O:role_name@field = value')
-        mocked_api_call.assert_called_with((
-            '["and", ["and", ["=", "type", "Class"], ["=", "title", "Role::Role_name"]], '
-            '["and", ["=", "type", "Class"], ["=", "field", "value"]]]'))
-
-    def test_add_category_role_parameter_field(self, mocked_api_call):
-        """A query with both a role's parameter and field should raise InvalidQueryError."""
-        with pytest.raises(InvalidQueryError, match='Resource key cannot contain both'):
-            self.query.execute('O:role_name%param@field')
-            assert not mocked_api_call.called
-
-    def test_add_category_role_field_parameter(self, mocked_api_call):
-        """A query with both a role's field and parameter should raise InvalidQueryError."""
-        with pytest.raises(InvalidQueryError, match='Resource key cannot contain both'):
-            self.query.execute('O:role_name@field%param')
-            assert not mocked_api_call.called
-
-    def test_add_hosts(self, mocked_api_call):
+    @pytest.mark.parametrize('query, expected', (
+        (  # No hosts
+            'host1!host1',
+            ''),
+        (  # Single host
+            'host',
+            '["or", ["=", "certname", "host"]]'),
+        (  # Multiple hosts
+            'host[1-2]',
+            '["or", ["=", "certname", "host1"], ["=", "certname", "host2"]]'),
+        (  # Negated query
+            'not host[1-2]',
+            '["not", ["or", ["=", "certname", "host1"], ["=", "certname", "host2"]]]'),
+        (  # Globbing hosts
+            'host1*.domain',
+            r'["or", ["~", "certname", "^host1.*\\.domain$"]]'),
+    ))
+    def test_add_hosts(self, mocked_api_call, query, expected):
         """A host query should add the proper query token to the current_group."""
-        # No hosts
-        self.query.execute('host1!host1')
-        mocked_api_call.assert_called_with('')
-        # Single host
-        self.query.execute('host')
-        mocked_api_call.assert_called_with('["or", ["=", "certname", "host"]]')
-        # Multiple hosts
-        self.query.execute('host[1-2]')
-        mocked_api_call.assert_called_with('["or", ["=", "certname", "host1"], ["=", "certname", "host2"]]')
-        # Negated query
-        self.query.execute('not host[1-2]')
-        mocked_api_call.assert_called_with('["not", ["or", ["=", "certname", "host1"], ["=", "certname", "host2"]]]')
-        # Globbing hosts
-        self.query.execute('host1*.domain')
-        mocked_api_call.assert_called_with(r'["or", ["~", "certname", "^host1.*\\.domain$"]]')
+        self.query.execute(query)
+        mocked_api_call.assert_called_with(expected)
 
-    def test_and(self, mocked_api_call):
-        """A query with 'and' should set the boolean property to the current group to 'and'."""
-        self.query.execute('host1 and host2')
-        assert self.query.current_group['bool'] == 'and'
-        mocked_api_call.assert_called_with(
-            '["and", ["or", ["=", "certname", "host1"]], ["or", ["=", "certname", "host2"]]]')
-
-    def test_or(self, mocked_api_call):
-        """A query with 'or' should set the boolean property to the current group to 'or'."""
-        self.query.execute('host1 or host2')
-        assert self.query.current_group['bool'] == 'or'
-        mocked_api_call.assert_called_with(
-            '["or", ["or", ["=", "certname", "host1"]], ["or", ["=", "certname", "host2"]]]')
+    @pytest.mark.parametrize('query, operator, expected', (
+        (  # AND
+            'host1 and host2',
+            'and',
+            '["and", ["or", ["=", "certname", "host1"]], ["or", ["=", "certname", "host2"]]]'),
+        (  # OR
+            'host1 or host2',
+            'or',
+            '["or", ["or", ["=", "certname", "host1"]], ["or", ["=", "certname", "host2"]]]'),
+        (  # Multiple AND
+            'host1 and host2 and host3',
+            'and',
+            (
+                '["and", ["or", ["=", "certname", "host1"]], ["or", ["=", "certname", "host2"]], '
+                '["or", ["=", "certname", "host3"]]]')),
+    ))
+    def test_operator(self, mocked_api_call, query, operator, expected):
+        """A query with boolean operators should set the boolean property to the current group."""
+        self.query.execute(query)
+        assert self.query.current_group['bool'] == operator
+        mocked_api_call.assert_called_with(expected)
 
     def test_and_or(self, mocked_api_call):
         """A query with 'and' and 'or' in the same group should raise InvalidQueryError."""
@@ -406,47 +407,18 @@ class TestPuppetDBQueryBuildV4(object):
             self.query.execute('host1 and host2 or host3')
             assert not mocked_api_call.called
 
-    def test_and_and(self, mocked_api_call):
-        """A query with 'and' and 'and' should set the boolean property to the current group to 'and'."""
-        self.query.execute('host1 and host2 and host3')
-        assert self.query.current_group['bool'] == 'and'
-        mocked_api_call.assert_called_with(
-            ('["and", ["or", ["=", "certname", "host1"]], ["or", ["=", "certname", "host2"]], '
-             '["or", ["=", "certname", "host3"]]]'))
 
-
-def test_nodes_endpoint(query_requests):
+@pytest.mark.parametrize('query, expected', (
+    ('nodes_host[1-2]', 'nodes_host[1-2]'),  # Nodes
+    ('R:Class = value', 'resources_host[1-2]'),  # Resources
+    ('nodes_host1 or nodes_host2', 'nodes_host[1-2]'),  # Nodes with AND
+    ('(nodes_host1 or nodes_host2)', 'nodes_host[1-2]'),  # Nodes with subgroup
+    ('non_existent_host', None),  # No match
+))
+def test_endpoints(query_requests, query, expected):
     """Calling execute() with a query that goes to the nodes endpoint should return the list of hosts."""
-    hosts = query_requests[0].execute('nodes_host[1-2]')
-    assert hosts == nodeset('nodes_host[1-2]')
-    assert query_requests[1].call_count == 1
-
-
-def test_resources_endpoint(query_requests):
-    """Calling execute() with a query that goes to the resources endpoint should return the list of hosts."""
-    hosts = query_requests[0].execute('R:Class = value')
-    assert hosts == nodeset('resources_host[1-2]')
-    assert query_requests[1].call_count == 1
-
-
-def test_with_boolean_operator(query_requests):
-    """Calling execute() with a query with a boolean operator should return the list of hosts."""
-    hosts = query_requests[0].execute('nodes_host1 or nodes_host2')
-    assert hosts == nodeset('nodes_host[1-2]')
-    assert query_requests[1].call_count == 1
-
-
-def test_with_subgroup(query_requests):
-    """Calling execute() with a query with a subgroup return the list of hosts."""
-    hosts = query_requests[0].execute('(nodes_host1 or nodes_host2)')
-    assert hosts == nodeset('nodes_host[1-2]')
-    assert query_requests[1].call_count == 1
-
-
-def test_empty(query_requests):
-    """Calling execute() with a query that return no hosts should return an empty list."""
-    hosts = query_requests[0].execute('non_existent_host')
-    assert hosts == nodeset()
+    hosts = query_requests[0].execute(query)
+    assert hosts == nodeset(expected)
     assert query_requests[1].call_count == 1
 
 

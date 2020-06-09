@@ -2,7 +2,6 @@ Backends
 ========
 
 .. automodule:: cumin.backends
-   :special-members: __init__
 
 .. rubric:: Available backends
 

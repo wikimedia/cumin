@@ -11,13 +11,12 @@ import sys
 
 from logging.handlers import RotatingFileHandler  # pylint: disable=ungrouped-imports
 
-import colorama
-
 from tqdm import tqdm
 
 import cumin
 
 from cumin import backends, query, transport, transports
+from cumin.color import Colored
 
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -41,7 +40,7 @@ INTERACTIVE_BANNER = """===== Cumin Interactive REPL =====
 #                         -     nodes: is a ClusterShell.NodeSet.NodeSet instance
 #                         -     output: is a ClusterShell.MsgTree.MsgTreeElem instance
 #     h(): print this help message.
-#     help(object): Python default interactive help and documentation of the given object.
+#     help(object_name): Python default interactive help and documentation of the given object.
 
 = Example usage:
 for nodes, output in worker.get_results():
@@ -125,10 +124,11 @@ def get_parser():
                         help=('Do not execute any command, just return the list of matching hosts and exit. '
                               '[default: False]'))
     parser.add_argument('--version', action='version', version='%(prog)s {version}'.format(version=cumin.__version__))
-    parser.add_argument('-d', '--debug', action='store_true', help='Set log level to DEBUG. [default: False]')
+    parser.add_argument('-d', '--debug', action='store_true',
+                        help=('Set log level to DEBUG. See also log_file in the configuration. [default: False]'))
     parser.add_argument('--trace', action='store_true',
-                        help=('Set log level to TRACE, a custom logging level intended for development debugging. '
-                              '[default: False]'))
+                        help=('Set log level to TRACE, a custom logging level intended for development debugging. See '
+                              'also log_file in the configuration. [default: False]'))
     parser.add_argument('hosts', metavar='HOSTS_QUERY', help='Hosts selection query')
     parser.add_argument('commands', metavar='COMMAND', nargs='*',
                         help='Command to be executed. If no commands are specified, --dry-run is set.')
@@ -205,13 +205,12 @@ def parse_args(argv):
 
 
 def get_running_user():
-    """Ensure it's running as root and that the original user is detected and return it."""
-    if os.getenv('USER') != 'root':
-        raise cumin.CuminError('Insufficient privileges, run with sudo')
-    if os.getenv('SUDO_USER') in (None, 'root'):
-        raise cumin.CuminError('Unable to determine real user, logged in as root?')
-
-    return os.getenv('SUDO_USER')
+    """Ensure that the original user is detected and return it."""
+    if os.getenv('USER') == 'root':
+        if os.getenv('SUDO_USER') in (None, 'root'):
+            raise cumin.CuminError('Unable to determine real user, logged in as root?')
+        return os.getenv('SUDO_USER')
+    return os.getenv('USER')
 
 
 def setup_logging(filename, debug=False, trace=False):
@@ -220,6 +219,8 @@ def setup_logging(filename, debug=False, trace=False):
     Arguments:
         filename: the filename of the log file
         debug: whether to set logging level to DEBUG [optional, default: False]
+        trace: whether to set logging level to TRACE [optional, default: False]
+
     """
     file_path = os.path.dirname(filename)
     if file_path and not os.path.exists(file_path):
@@ -288,9 +289,9 @@ def stderr(message, end='\n'):
     Arguments:
         message: the message to print to sys.stderr
         end: the character to use at the end of the message. [optional, default: \n]
+
     """
-    tqdm.write('{color}{message}{reset}'.format(
-        color=colorama.Fore.YELLOW, message=message, reset=colorama.Style.RESET_ALL), file=sys.stderr, end=end)
+    tqdm.write(Colored.yellow(message), file=sys.stderr, end=end)
 
 
 def get_hosts(args, config):
@@ -299,6 +300,7 @@ def get_hosts(args, config):
     Arguments:
         args: ArgumentParser instance with parsed command line arguments
         config: a dictionary with the parsed configuration file
+
     """
     hosts = query.Query(config).execute(args.hosts)
 
@@ -307,15 +309,17 @@ def get_hosts(args, config):
         return hosts
 
     stderr('{num} hosts will be targeted:'.format(num=len(hosts)))
-    stderr('{color}{hosts}'.format(color=colorama.Fore.CYAN, hosts=cumin.nodeset_fromlist(hosts)))
+    stderr(Colored.cyan(cumin.nodeset_fromlist(hosts)))
 
     if args.dry_run:
         stderr('DRY-RUN mode enabled, aborting')
         return []
-    elif args.force:
+
+    if args.force:
         stderr('FORCE mode enabled, continuing without confirmation')
         return hosts
-    elif not sys.stdout.isatty():  # pylint: disable=no-member
+
+    if not sys.stdout.isatty():  # pylint: disable=no-member
         message = 'Not in a TTY but neither DRY-RUN nor FORCE mode were specified.'
         stderr(message)
         raise cumin.CuminError(message)
@@ -328,7 +332,7 @@ def get_hosts(args, config):
 
         if answer in 'yY':
             break
-        elif answer in 'nN':
+        if answer in 'nN':
             raise KeyboardInterruptError
 
     else:
@@ -344,6 +348,7 @@ def print_output(output_format, worker):
     Arguments:
         output_format: the output format to use, one of: 'txt', 'json'.
         worker: the Transport worker instance to retrieve the results from.
+
     """
     if output_format not in OUTPUT_FORMATS:
         raise cumin.CuminError("Got invalid output format '{fmt}', expected one of {allowed}".format(
@@ -370,6 +375,7 @@ def run(args, config):
     Arguments:
         args: ArgumentParser instance with parsed command line arguments
         config: a dictionary with the parsed configuration file
+
     """
     hosts = get_hosts(args, config)
     if not hosts:
@@ -393,7 +399,7 @@ def run(args, config):
     if args.interactive:
         # Define a help function h() that will be available in the interactive shell to print the help message.
         # The name is to not shadow the Python built-in help() that might be usefult too to inspect objects.
-        def h():  # pylint: disable=unused-variable,invalid-name
+        def h():  # pylint: disable=possibly-unused-variable,invalid-name
             """Print the help message in interactive shell."""
             tqdm.write(INTERACTIVE_BANNER)
         code.interact(banner=INTERACTIVE_BANNER, local=locals())
@@ -425,12 +431,12 @@ def main(argv=None):
     Arguments:
         argv: the list of command line arguments to use. If not specified it will be automatically taken from sys.argv
             [optional, default: None]
+
     """
     if argv is None:
         argv = sys.argv[1:]
 
     signal.signal(signal.SIGINT, sigint_handler)
-    colorama.init()
 
     # Setup
     try:

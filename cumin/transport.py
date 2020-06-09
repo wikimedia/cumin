@@ -5,7 +5,7 @@ import importlib
 from cumin import CuminError
 
 
-class Transport(object):
+class Transport:
     """Transport factory class.
 
     The transport layer is the one used to convey the commands to be executed into the selected hosts. The transport

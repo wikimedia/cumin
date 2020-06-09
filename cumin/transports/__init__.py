@@ -2,12 +2,15 @@
 import logging
 import os
 import shlex
+import sys
 
 from abc import ABCMeta, abstractmethod, abstractproperty
 
 from ClusterShell.NodeSet import NodeSet
+from tqdm import tqdm
 
 from cumin import CuminError, nodeset_fromlist
+from cumin.color import Colored
 
 
 class WorkerError(CuminError):
@@ -22,7 +25,7 @@ class InvalidStateError(CuminError):
     """Exception raised when an invalid transition for a node's State was attempted."""
 
 
-class Command(object):
+class Command:
     """Class to represent a command."""
 
     def __init__(self, command, timeout=None, ok_codes=None):
@@ -34,6 +37,7 @@ class Command(object):
             ok_codes (list, optional): a list of exit codes to be considered successful for the command.
                 The exit code zero is considered successful by default, if this option is set it override it. If set
                 to an empty list ``[]``, it means that any code is considered successful.
+
         """
         self.command = command
         self._timeout = None
@@ -179,31 +183,47 @@ class Command(object):
         self._ok_codes = value
 
 
-class State(object):
+class State:
     """State machine for the state of a host.
 
     .. attribute:: current
 
-       :py:class:`int`: the current `state`.
+       :py:class:`int`: the current state.
 
-    .. attribute:: pending, scheduled, running, success, failed, timeout
+    .. attribute:: is_pending
 
-        :py:class:`int`: the available valid states, according to :py:attr:`valid_states`.
+       :py:class:`bool`: :py:data:`True` if the current state is `pending`, :py:data:`False` otherwise.
 
-    .. attribute:: is_pending, is_scheduled, is_running, is_success, is_failed, is_timeout
+    .. attribute:: is_scheduled
 
-       :py:class:`bool`: :py:data:`True` if this is the current `state`, :py:data:`False` otherwise.
+       :py:class:`bool`: :py:data:`True` if the current state is `scheduled`, :py:data:`False` otherwise.
+
+    .. attribute:: is_running
+
+       :py:class:`bool`: :py:data:`True` if the current state is `running`, :py:data:`False` otherwise.
+
+    .. attribute:: is_success
+
+       :py:class:`bool`: :py:data:`True` if the current state is `success`, :py:data:`False` otherwise.
+
+    .. attribute:: is_failed
+
+       :py:class:`bool`: :py:data:`True` if the current state is `failed`, :py:data:`False` otherwise.
+
+    .. attribute:: is_timeout
+
+       :py:class:`bool`: :py:data:`True` if the current state is `timeout`, :py:data:`False` otherwise.
 
     """
 
     valid_states = range(6)
-    """:py:class:`list`: valid states indexes."""
+    """:py:class:`list`: valid states integer indexes."""
 
     pending, scheduled, running, success, failed, timeout = valid_states
-    """Valid states."""
+    """Valid state property, one for each :py:data:`cumin.transports.State.valid_states`."""
 
     states_representation = ('pending', 'scheduled', 'running', 'success', 'failed', 'timeout')
-    """:py:func:`tuple`: tuple with the string representations of the valid states."""
+    """:py:func:`tuple`: Tuple with the string representations of the valid states."""
 
     allowed_state_transitions = {
         pending: (scheduled, ),
@@ -213,8 +233,16 @@ class State(object):
         failed: (),
         timeout: (),
     }
-    """:py:class:`dict`: dictionary with ``{valid state: tuple of valid states}`` mapping of allowed transitions for
-    any valid state."""
+    """:py:class:`dict`: Dictionary with ``{valid state: tuple of valid states}`` mapping of the allowed transitions
+    between all the possile states.
+
+    This is the diagram of the allowed transitions:
+
+    .. image:: ../../examples/transports_state_transitions.png
+       :alt: State class allowed transitions diagram
+    |
+
+    """
 
     def __init__(self, init=None):
         """State constructor. The initial state is set to `pending` it not provided.
@@ -251,10 +279,11 @@ class State(object):
         """
         if name == 'current':
             return self._state
-        elif name.startswith('is_') and name[3:] in self.states_representation:
+
+        if name.startswith('is_') and name[3:] in self.states_representation:
             return getattr(self, name[3:]) == self._state
-        else:
-            raise AttributeError("'State' object has no attribute '{name}'".format(name=name))
+
+        raise AttributeError("'State' object has no attribute '{name}'".format(name=name))
 
     def __repr__(self):
         """Return the representation of the :py:class:`State`.
@@ -380,20 +409,23 @@ class State(object):
     def _cmp(self, other):
         """Comparison operation. Allow to directly compare a state object to another or to an integer.
 
-        Raises ValueError if the comparing object is not an instance of State or an integer.
-
         Arguments:
-        other -- the object to compare the current instance to
+            other (mixed): the object to compare the current instance to.
+
+        Raises:
+            ValueError: if the comparing object is not an instance of State or an integer.
+
         """
         if isinstance(other, int):
             return self._state - other
-        elif isinstance(other, State):
+
+        if isinstance(other, State):
             return self._state - other._state  # pylint: disable=protected-access
-        else:
-            raise ValueError("Unable to compare instance of '{other}' with State instance".format(other=type(other)))
+
+        raise ValueError("Unable to compare instance of '{other}' with State instance".format(other=type(other)))
 
 
-class Target(object):
+class Target:
     """Targets management class."""
 
     def __init__(self, hosts, batch_size=None, batch_size_ratio=None, batch_sleep=None):
@@ -409,7 +441,7 @@ class Target(object):
             batch_size_ratio (float, optional): set the batch size with a ratio so that no more that this fraction
                 of hosts are targeted at any given time. It must be a float between 0 and 1 and will raise exception
                 if after rounding it there are 0 hosts selected.
-            batch_sleep (int, optional): sleep time in seconds between the end of execution of one host in the
+            batch_sleep (float, optional): sleep time in seconds between the end of execution of one host in the
                 batch and the start in the next host. It must be a positive float.
 
         Raises:
@@ -495,7 +527,7 @@ class Target(object):
         return batch_sleep or 0.0
 
 
-class BaseWorker(object, metaclass=ABCMeta):
+class BaseWorker(metaclass=ABCMeta):
     """Worker interface to be extended by concrete workers."""
 
     def __init__(self, config, target):
@@ -504,6 +536,7 @@ class BaseWorker(object, metaclass=ABCMeta):
         Arguments:
             config (dict): a dictionary with the parsed configuration file.
             target (Target): a Target instance.
+
         """
         self.config = config
         self.target = target
@@ -595,7 +628,7 @@ class BaseWorker(object, metaclass=ABCMeta):
 
     @abstractproperty
     @handler.setter
-    def handler(self, value):
+    def handler(self, value):  # pylint: disable=property-with-parameters; https://github.com/PyCQA/pylint/issues/3600
         """Setter for the `handler` property. The relative documentation is in the getter."""
 
     @property
@@ -646,8 +679,8 @@ class BaseWorker(object, metaclass=ABCMeta):
     @success_threshold.setter
     def success_threshold(self, value):
         """Setter for the `success_threshold` property. The relative documentation is in the getter."""
-        if value is not None and (not isinstance(value, float) or
-                                  not (0.0 <= value <= 1.0)):  # pylint: disable=superfluous-parens
+        if value is not None and (not isinstance(value, float)
+                                  or not (0.0 <= value <= 1.0)):  # pylint: disable=superfluous-parens
             raise WorkerError("success_threshold must be a float beween 0 and 1, got '{value_type}': {value}".format(
                 value_type=type(value), value=value))
 
@@ -710,6 +743,81 @@ def raise_error(property_name, message, value):
         property_name (str): the name of the property that raised the exception.
         message (str): the message to use for the exception.
         value (mixed): the value that raised the exception.
+
     """
     raise WorkerError("{property_name} {message}, got '{value_type}': {value}".format(
         property_name=property_name, message=message, value_type=type(value), value=value))
+
+
+class ProgressBars:
+    """Progress bars for the status of successful / failed hosts.
+
+    The ProgressBars needs to be notified of the total number of hosts when the
+    operation starts, and then notified of successes and failures.
+    """
+
+    def __init__(self):
+        """Create the progress bars.
+
+        Note:
+            the progress bars themselves are not initalized at object creation. ``init()`` needs to be called before
+            using the progress bars.
+
+        """
+        self.pbar_ok = None
+        self.pbar_ko = None
+        self.bar_format = ('{desc} |{bar}| {percentage:3.0f}% ({n_fmt}/{total_fmt}) '
+                           '[{elapsed}<{remaining}, {rate_fmt}]')
+
+    def init(self, num_hosts):
+        """Initialize the progress bars.
+
+        Arguments:
+            num_hosts (int): the total number of hosts
+
+        """
+        self.pbar_ok = tqdm(desc='PASS', total=num_hosts, leave=True, unit='hosts', dynamic_ncols=True,
+                            bar_format=Colored.green(self.bar_format), file=sys.stderr)
+        self.pbar_ok.refresh()
+        self.pbar_ko = tqdm(desc='FAIL', total=num_hosts, leave=True, unit='hosts', dynamic_ncols=True,
+                            bar_format=Colored.red(self.bar_format), file=sys.stderr)
+        self.pbar_ko.refresh()
+
+    def close(self):
+        """Closes the progress bars."""
+        self.pbar_ok.close()
+        self.pbar_ko.close()
+
+    def update_success(self, num_hosts=1):
+        """Updates the number of successful hosts.
+
+        Arguments:
+            num_hosts (int): increment to the number of hosts that have completed successfully
+
+        """
+        self.pbar_ok.update(num_hosts)
+
+    def update_failed(self, num_hosts=1):
+        """Updates the number of failed hosts.
+
+        Arguments:
+            num_hosts (int): increment to the number of hosts that have completed in error
+
+        """
+        self.pbar_ko.update(num_hosts)
+
+
+class NoProgress:
+    """Used as a null object to disable the display of progress bars."""
+
+    def init(self, num_hosts):
+        """Does nothing."""
+
+    def close(self):
+        """Does nothing."""
+
+    def update_success(self, num_hosts=1):
+        """Does nothing."""
+
+    def update_failed(self, num_hosts=1):
+        """Does nothing."""
