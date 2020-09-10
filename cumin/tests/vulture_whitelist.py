@@ -25,5 +25,5 @@ whitelist_tests_integration_conftest = Whitelist()
 whitelist_tests_integration_conftest.pytest_cmdline_preparse
 whitelist_tests_integration_conftest.pytest_runtest_makereport
 
-whitelist_tests_integration_test_cli_TestCLI = Whitelist()
+whitelist_tests_integration_test_cli_TestCLI = Whitelist()  # noqa: N816
 whitelist_tests_integration_test_cli_TestCLI.setup_method
