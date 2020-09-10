@@ -108,6 +108,7 @@ def get_parser():
                         help='Specify a different output format. [default: None]')
     parser.add_argument('-i', '--interactive', action='store_true',
                         help='Drop into a Python shell with the results. [default: False]')
+    parser.add_argument('-n', '--no-colors', action='store_true', help='Disable colored output. [default: False]')
     parser.add_argument('--force', action='store_true',
                         help=('USE WITH CAUTION! Force the execution without confirmation of the affected hosts. '
                               '[default: False]'))
@@ -183,6 +184,8 @@ def parse_args(argv):
     """
     parser = get_parser()
     parsed_args = parser.parse_args(argv)
+    if parsed_args.no_colors:
+        Colored.disabled = True
 
     # Validation and default values
     num_commands = len(parsed_args.commands)

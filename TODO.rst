@@ -23,7 +23,6 @@ Small improvements
 * global: allow to log the whole output to a specific file, to allow multiple people follow the progress.
 * global: allow to randomize the list hosts before execution `T164587`_.
 * CLI: improve the dry-run mode to show what would have been done.
-* CLI: add a ``--color`` or a ``--no-color`` option to manage the output color.
 * CLI: read commands from a file, one per line.
 * CLI: add ``--limit`` to randomly select N hosts within a broader selection.
 * puppetdb backend: improve globbing support, check if fnmatch could be used without conflicting with ClusterShell

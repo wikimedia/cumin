@@ -7,6 +7,7 @@ from unittest import mock
 import pytest
 
 from cumin import cli, CuminError, LOGGING_TRACE_LEVEL_NUMBER, nodeset, transports
+from cumin.color import Colored
 
 
 # Environment variables
@@ -60,6 +61,14 @@ def test_parse_args_no_mode():
     index = _ARGV.index('-m')
     with pytest.raises(SystemExit):
         cli.parse_args(_ARGV[:index] + _ARGV[index + 1:])
+
+
+def test_parse_args_no_colors():
+    """If -n/--no-colors is specified, the colors should be globally disabled."""
+    assert not Colored.disabled
+    cli.parse_args(_ARGV[:2] + ['-n'] + _ARGV[3:])
+    assert Colored.disabled
+    Colored.disabled = False  # Reset it
 
 
 def test_target_batch_size():
