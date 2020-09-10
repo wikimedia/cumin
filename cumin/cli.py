@@ -312,11 +312,14 @@ def get_hosts(args, config):
         return hosts
 
     stderr('{num} hosts will be targeted:'.format(num=len(hosts)))
-    stderr(Colored.cyan(cumin.nodeset_fromlist(hosts)))
+    # The list is sent to stdout or stderr based on the dry_run mode
 
     if args.dry_run:
+        tqdm.write(Colored.cyan(cumin.nodeset_fromlist(hosts)))
         stderr('DRY-RUN mode enabled, aborting')
         return []
+
+    stderr(Colored.cyan(cumin.nodeset_fromlist(hosts)))
 
     if args.force:
         stderr('FORCE mode enabled, continuing without confirmation')
