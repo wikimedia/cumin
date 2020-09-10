@@ -31,7 +31,8 @@ extras_require = {
         'bandit>=1.5.1',
         'flake8>=3.6.0',
         'flake8-import-order>=0.18.1',
-        'prospector[with_everything]>=1.1.7',
+        # Temporary upper constraint until https://github.com/PyCQA/prospector/issues/389 is fixed
+        'prospector[with_everything]>=1.1.7,<=1.2.0',
         'pytest-cov>=2.6.0',
         'pytest-xdist>=1.26.1',
         'pytest>=3.10.1',

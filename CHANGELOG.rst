@@ -2,6 +2,11 @@ Cumin Changelog
 ---------------
 
 
+`v4.0.0`_ (2020-09-10)
+^^^^^^^^^^^^^^^^^^^^^^
+
+* No changes from the RC1 release.
+
 `v4.0.0rc1`_ (2020-06-09)
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -627,3 +632,4 @@ Bug Fixes
 .. _`v3.0.1`: https://github.com/wikimedia/cumin/releases/tag/v3.0.1
 .. _`v3.0.2`: https://github.com/wikimedia/cumin/releases/tag/v3.0.2
 .. _`v4.0.0rc1`: https://github.com/wikimedia/cumin/releases/tag/v4.0.0rc1
+.. _`v4.0.0`: https://github.com/wikimedia/cumin/releases/tag/v4.0.0
