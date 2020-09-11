@@ -4,13 +4,14 @@ import sys
 import threading
 
 from collections import Counter, defaultdict
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from ClusterShell import Event, Task
 from tqdm import tqdm
 
 from cumin import nodeset, nodeset_fromlist
 from cumin.color import Colored
-from cumin.transports import BaseWorker, NoProgress, ProgressBars, raise_error, State, WorkerError
+from cumin.transports import BaseWorker, Command, NoProgress, ProgressBars, raise_error, State, Target, WorkerError
 
 
 class ClusterShellWorker(BaseWorker):
@@ -157,6 +158,209 @@ class Node:
         self.running_command_index = -1  # Pointer to the current running command in self.commands
 
 
+class Reporter:
+    """Reports the progress of command execution."""
+
+    short_command_length = 35
+    """:py:class:`int`: the length to which a command should be shortened in various outputs."""
+
+    def __init__(self) -> None:
+        """Initializes a Reporter."""
+        self.logger = logging.getLogger('.'.join((self.__module__, self.__class__.__name__)))
+
+    def print_report_line(self, message: str,  # pylint: disable=no-self-use
+                          color_func: Callable[[str], str] = Colored.red,
+                          nodes_string: str = '') -> None:
+        """Print a tqdm-friendly colored status line with success/failure ratio and optional list of nodes.
+
+        Arguments:
+            message (str): the message to print.
+            color_func (function, optional): the coloring function, one of :py:class`cumin.color.Colored` methods.
+            nodes_string (str, optional): the string representation of the affected nodes.
+
+        """
+        tqdm.write(color_func(message) + Colored.cyan(nodes_string), file=sys.stderr)
+
+    def _get_log_message(self, num: int, num_hosts: int, message: str,  # pylint: disable=no-self-use
+                         nodes: Optional[List[str]] = None) -> Tuple[str, str]:
+        """Get a pre-formatted message suitable for logging or printing.
+
+        Arguments:
+            num (int): the number of affected nodes.
+            num_hosts (int): the total number of nodes.
+            message (str): the message to print.
+            nodes (list, optional): the list of nodes affected.
+
+        Returns:
+            tuple: a tuple of ``(logging message, NodeSet of the affected nodes)``.
+
+        """
+        if nodes is None:
+            nodes_string = ''
+            message_end = ''
+        else:
+            nodes_string = str(nodeset_fromlist(nodes))
+            message_end = ': '
+
+        tot = num_hosts
+        log_message = '{perc:.1%} ({num}/{tot}) {message}{message_end}'.format(
+            perc=(num / tot), num=num, tot=tot, message=message, message_end=message_end)
+
+        return log_message, nodes_string
+
+    def get_short_command(self, command: Command) -> str:
+        """Return a shortened representation of a command omitting the central part, if it's too long.
+
+        Arguments:
+            command (Command): the command to be shortened.
+
+        Returns:
+            str: the short command.
+
+        """
+        cmd = command.command
+        sublen = (self.short_command_length - 3) // 2  # The -3 is for the ellipsis
+        return (cmd[:sublen] + '...' + cmd[-sublen:]) if len(cmd) > self.short_command_length else cmd
+
+    def completed(self) -> None:  # pylint: disable=no-self-use
+        """To be called on completion of processing, when no command specific output is required."""
+        tqdm.write(Colored.blue('================'), file=sys.stdout)
+
+    # FIXME: buffer_iterator should have a more specific type annotation
+    def commands_output_report(self, buffer_iterator: Any, command: Optional[Command] = None) -> None:
+        """Print the commands output in a colored and tqdm-friendly way.
+
+        Arguments:
+            buffer_iterator (mixed): any `ClusterShell` object that implements ``iter_buffers()`` like
+                :py:class:`ClusterShell.Task.Task` and all the `Worker` objects.
+            command (Command, optional): the command the output is referring to.
+
+        """
+        nodelist = None
+        if command is not None:
+            output_message = "----- OUTPUT of '{command}' -----".format(command=self.get_short_command(command))
+        else:
+            output_message = '----- OUTPUT -----'
+
+        for output, nodelist in buffer_iterator.iter_buffers():
+            tqdm.write(Colored.blue('===== NODE GROUP ====='), file=sys.stdout)
+            tqdm.write(Colored.cyan('({num}) {nodes}'.format(num=len(nodelist), nodes=nodeset_fromlist(nodelist))),
+                       file=sys.stdout)
+            tqdm.write(Colored.blue(output_message), file=sys.stdout)
+            tqdm.write(output.message().decode(), file=sys.stdout)
+
+        if nodelist is None:
+            message = '===== NO OUTPUT ====='
+        else:
+            message = '================'
+
+        tqdm.write(Colored.blue(message), file=sys.stdout)
+
+    def report_single_command_output(self, command: Command) -> None:
+        """Reports a single command execution."""
+        output_message = "----- OUTPUT of '{command}' -----".format(
+            command=self.get_short_command(command))
+        tqdm.write(Colored.blue(output_message), file=sys.stdout)
+
+    # FIXME: worker, node and msg should have more specific type annotations.
+    def report_single_message(self, worker: Any, node: Any,  # pylint: disable=no-self-use,unused-argument
+                              msg: Any) -> None:
+        """Report a single message as received from the execution of a command on a node."""
+        tqdm.write(msg.decode(), file=sys.stdout)
+
+    def global_timeout_nodes_report(self, nodes: Dict[str, Node], num_hosts: int) -> None:
+        """Print the nodes that were caught by the global timeout in a colored and tqdm-friendly way."""
+        timeout = [node.name for node in nodes.values() if node.state.is_timeout]
+        timeout_desc = 'of nodes were executing a command when the global timeout occurred'
+        timeout_message, timeout_nodes = self._get_log_message(len(timeout), num_hosts=num_hosts,
+                                                               message=timeout_desc, nodes=timeout)
+        self.logger.error('%s%s', timeout_message, timeout_nodes)
+        self.print_report_line(timeout_message, nodes_string=timeout_nodes)
+
+        not_run = [node.name for node in nodes.values() if node.state.is_pending or node.state.is_scheduled]
+        not_run_desc = 'of nodes were pending execution when the global timeout occurred'
+        not_run_message, not_run_nodes = self._get_log_message(len(not_run), num_hosts=num_hosts,
+                                                               message=not_run_desc, nodes=not_run)
+        self.logger.error('%s%s', not_run_message, not_run_nodes)
+        self.print_report_line(not_run_message, nodes_string=not_run_nodes)
+
+    def failed_commands_report(self, nodes: Dict[str, Node], num_hosts: int, commands: List[Command],
+                               filter_command_index: int = -1) -> None:  # pylint: disable=no-self-use
+        """Print the nodes that failed to execute commands in a colored and tqdm-friendly way.
+
+        Arguments:
+            nodes (list): the list of Nodes on which commands were executed
+            num_hosts (int): the total number of nodes.
+            commands (list): the list of Commands that were executed
+            filter_command_index (int, optional): print only the nodes that failed to execute the command specified by
+                this command index.
+
+        """
+        for state in (State.failed, State.timeout):
+            failed_commands = defaultdict(list)
+            for node in [node for node in nodes.values() if node.state == state]:
+                failed_commands[node.running_command_index].append(node.name)
+
+            for index, failed_nodes in failed_commands.items():
+                command = commands[index]
+
+                if filter_command_index >= 0 and command is not None and index != filter_command_index:
+                    continue
+
+                short_command = self.get_short_command(command) if command is not None else ''
+                message = "of nodes {state} to execute command '{command}'".format(
+                    state=State.states_representation[state], command=short_command)
+                log_message, nodes_string = self._get_log_message(len(failed_nodes), num_hosts=num_hosts,
+                                                                  message=message, nodes=failed_nodes)
+                self.logger.error('%s%s', log_message, nodes_string)
+                self.print_report_line(log_message, nodes_string=nodes_string)
+
+    # FIXME: refactor this to reduce number of arguments and pass a more structured execution context
+    def report_nodes_success(self, command: Optional[Command],  # pylint: disable=too-many-arguments,too-many-locals
+                             num_successfull_nodes: int, success_ratio: float, tot: int,
+                             num_hosts: int, success_threshold: float, nodes: Dict[str, Node]) -> None:
+        """Print how many nodes successfully executed all commands in a colored and tqdm-friendly way.
+
+        Arguments:
+            command (Command): the command that was executed
+            num_successfull_nodes (int): the number of nodes on which the execution was successful
+            success_ratio (float): the ratio of successful nodes
+            tot (int): total number of successful executions
+            num_hosts (int): the total number of nodes.
+            success_threshold (float): the threshold of successful nodes above which the command execution is deemed
+                successful
+            nodes (list): the nodes on which the command was executed
+
+        """
+        if success_ratio < success_threshold:
+            comp = '<'
+            post = '. Aborting.'
+        else:
+            comp = '>='
+            post = '.'
+        message_string = ' of nodes successfully executed all commands'
+        if command is not None:
+            message_string = " for command: '{command}'".format(command=self.get_short_command(command))
+        nodes_to_log = None
+        if num_successfull_nodes not in (0, tot):
+            nodes_to_log = [node.name for node in nodes.values() if node.state.is_success]
+        message = "success ratio ({comp} {perc:.1%} threshold){message_string}{post}".format(
+            comp=comp, perc=success_threshold, message_string=message_string, post=post)
+        log_message, nodes_string = self._get_log_message(num_successfull_nodes, num_hosts=num_hosts,
+                                                          message=message, nodes=nodes_to_log)
+        if num_successfull_nodes == tot:
+            color_func = Colored.green
+            level = logging.INFO
+        elif success_ratio >= success_threshold:
+            color_func = Colored.yellow
+            level = logging.WARNING
+        else:
+            color_func = Colored.red
+            level = logging.CRITICAL
+        self.logger.log(level, '%s%s', log_message, nodes_string)
+        self.print_report_line(log_message, color_func=color_func, nodes_string=nodes_string)
+
+
 class BaseEventHandler(Event.EventHandler):
     """ClusterShell event handler base class.
 
@@ -165,10 +369,9 @@ class BaseEventHandler(Event.EventHandler):
     functionalities.
     """
 
-    short_command_length = 35
-    """:py:class:`int`: the length to which a command should be shortened in various outputs."""
-
-    def __init__(self, target, commands, success_threshold=1.0, progress_bars=True, **kwargs):
+    # FIXME: not sure what the type of **kwargs should be
+    def __init__(self, target: Target, commands: List[Command], success_threshold: float = 1.0,
+                 progress_bars: bool = True, **kwargs: Any) -> None:
         """Event handler ClusterShell extension constructor.
 
         Arguments:
@@ -190,7 +393,7 @@ class BaseEventHandler(Event.EventHandler):
         self.return_value = None
         self.commands = commands
         self.kwargs = kwargs  # Allow to store custom parameters from subclasses without changing the signature
-        self.counters = Counter()
+        self.counters: Dict[str, int] = Counter()
         self.counters['total'] = len(target.hosts)
         self.deduplicate_output = self.counters['total'] > 1
         self.global_timedout = False
@@ -201,11 +404,8 @@ class BaseEventHandler(Event.EventHandler):
         for node_name in target.first_batch:
             self.nodes[node_name].state.update(State.scheduled)
 
-        # Initialize progress bar formats
-        if progress_bars:
-            self.progress = ProgressBars()
-        else:
-            self.progress = NoProgress()
+        self.progress = ProgressBars() if progress_bars else NoProgress()
+        self.reporter = Reporter()
 
     def close(self, task):
         """Additional method called at the end of the whole execution, useful for reporting and final actions.
@@ -241,7 +441,8 @@ class BaseEventHandler(Event.EventHandler):
             if pending_or_scheduled > 0:
                 self.progress.update_failed(num_timeout + pending_or_scheduled)
 
-        self._global_timeout_nodes_report()
+        if self.global_timedout:
+            self.reporter.global_timeout_nodes_report(self.nodes, self.counters['total'])
 
     def ev_pickup(self, worker, node):
         """Command execution started on a node, remove the command from the node's queue.
@@ -265,9 +466,7 @@ class BaseEventHandler(Event.EventHandler):
             curr_node.running_command_index += 1  # Move the pointer of the current command
 
         if not self.deduplicate_output:
-            output_message = "----- OUTPUT of '{command}' -----".format(
-                command=self._get_short_command(worker.command))
-            tqdm.write(Colored.blue(output_message), file=sys.stdout)
+            self.reporter.report_single_command_output(worker.command)
 
     def ev_read(self, worker, node, _, msg):
         """Worker has data to read from a specific node. Print it if running on a single host.
@@ -281,7 +480,7 @@ class BaseEventHandler(Event.EventHandler):
             return
 
         with self.lock:
-            tqdm.write(msg.decode(), file=sys.stdout)
+            self.reporter.report_single_message(worker, node, msg)
 
     def ev_close(self, worker, timedout):
         """Worker has finished or timed out.
@@ -307,132 +506,8 @@ class BaseEventHandler(Event.EventHandler):
         # Schedule a timer to run the current command on the next node or start the next command
         worker.task.timer(self.target.batch_sleep, worker.eh)
 
-    def _get_log_message(self, num, message, nodes=None):
-        """Get a pre-formatted message suitable for logging or printing.
-
-        Arguments:
-            num (int): the number of affecte nodes.
-            message (str): the message to print.
-            nodes (list, optional): the list of nodes affected.
-
-        Returns:
-            tuple: a tuple of ``(logging message, NodeSet of the affected nodes)``.
-
-        """
-        if nodes is None:
-            nodes_string = ''
-            message_end = ''
-        else:
-            nodes_string = nodeset_fromlist(nodes)
-            message_end = ': '
-
-        tot = self.counters['total']
-        log_message = '{perc:.1%} ({num}/{tot}) {message}{message_end}'.format(
-            perc=(num / tot), num=num, tot=tot, message=message, message_end=message_end)
-
-        return (log_message, str(nodes_string))
-
-    def _print_report_line(self, message, color_func=Colored.red, nodes_string=''):  # pylint: disable=no-self-use
-        """Print a tqdm-friendly colored status line with success/failure ratio and optional list of nodes.
-
-        Arguments:
-            message (str): the message to print.
-            color_func (function, optional): the coloring function, one of :py:class`cumin.color.Colored` methods.
-            nodes_string (str, optional): the string representation of the affected nodes.
-
-        """
-        tqdm.write(color_func(message) + Colored.cyan(nodes_string), file=sys.stderr)
-
-    def _get_short_command(self, command):
-        """Return a shortened representation of a command omitting the central part, if it's too long.
-
-        Arguments:
-            command (str): the command to be shortened.
-
-        Returns:
-            str: the short command.
-
-        """
-        sublen = (self.short_command_length - 3) // 2  # The -3 is for the ellipsis
-        return (command[:sublen] + '...' + command[-sublen:]) if len(command) > self.short_command_length else command
-
-    def _commands_output_report(self, buffer_iterator, command=None):
-        """Print the commands output in a colored and tqdm-friendly way.
-
-        Arguments:
-            buffer_iterator (mixed): any `ClusterShell` object that implements ``iter_buffers()`` like
-                :py:class:`ClusterShell.Task.Task` and all the `Worker` objects.
-            command (str, optional): the command the output is referring to.
-
-        """
-        if not self.deduplicate_output:
-            tqdm.write(Colored.blue('================'), file=sys.stdout)
-            return
-
-        nodelist = None
-        if command is not None:
-            output_message = "----- OUTPUT of '{command}' -----".format(command=self._get_short_command(command))
-        else:
-            output_message = '----- OUTPUT -----'
-
-        for output, nodelist in buffer_iterator.iter_buffers():
-            tqdm.write(Colored.blue('===== NODE GROUP ====='), file=sys.stdout)
-            tqdm.write(Colored.cyan('({num}) {nodes}'.format(num=len(nodelist), nodes=nodeset_fromlist(nodelist))),
-                       file=sys.stdout)
-            tqdm.write(Colored.blue(output_message), file=sys.stdout)
-            tqdm.write(output.message().decode(), file=sys.stdout)
-
-        if nodelist is None:
-            message = '===== NO OUTPUT ====='
-        else:
-            message = '================'
-
-        tqdm.write(Colored.blue(message), file=sys.stdout)
-
-    def _global_timeout_nodes_report(self):
-        """Print the nodes that were caught by the global timeout in a colored and tqdm-friendly way."""
-        if not self.global_timedout:
-            return
-
-        timeout = [node.name for node in self.nodes.values() if node.state.is_timeout]
-        timeout_desc = 'of nodes were executing a command when the global timeout occurred'
-        timeout_message, timeout_nodes = self._get_log_message(len(timeout), timeout_desc, nodes=timeout)
-        self.logger.error('%s%s', timeout_message, timeout_nodes)
-        self._print_report_line(timeout_message, nodes_string=timeout_nodes)
-
-        not_run = [node.name for node in self.nodes.values() if node.state.is_pending or node.state.is_scheduled]
-        not_run_desc = 'of nodes were pending execution when the global timeout occurred'
-        not_run_message, not_run_nodes = self._get_log_message(len(not_run), not_run_desc, nodes=not_run)
-        self.logger.error('%s%s', not_run_message, not_run_nodes)
-        self._print_report_line(not_run_message, nodes_string=not_run_nodes)
-
-    def _failed_commands_report(self, filter_command_index=-1):
-        """Print the nodes that failed to execute commands in a colored and tqdm-friendly way.
-
-        Arguments:
-            filter_command_index (int, optional): print only the nodes that failed to execute the command specified by
-                this command index.
-
-        """
-        for state in (State.failed, State.timeout):
-            failed_commands = defaultdict(list)
-            for node in [node for node in self.nodes.values() if node.state == state]:
-                failed_commands[node.running_command_index].append(node.name)
-
-            for index, nodes in failed_commands.items():
-                command = self.commands[index].command
-
-                if filter_command_index >= 0 and command is not None and index != filter_command_index:
-                    continue
-
-                message = "of nodes {state} to execute command '{command}'".format(
-                    state=State.states_representation[state], command=self._get_short_command(command))
-                log_message, nodes_string = self._get_log_message(len(nodes), message, nodes=nodes)
-                self.logger.error('%s%s', log_message, nodes_string)
-                self._print_report_line(log_message, nodes_string=nodes_string)
-
-    def _success_nodes_report(self, command=None):
-        """Print how many nodes succesfully executed all commands in a colored and tqdm-friendly way.
+    def _success_nodes_report(self, command: Optional[Command] = None) -> None:
+        """Print how many nodes successfully executed all commands in a colored and tqdm-friendly way.
 
         Arguments:
             command (str, optional): the command the report is referring to.
@@ -447,37 +522,8 @@ class BaseEventHandler(Event.EventHandler):
         tot = self.counters['total']
         success_ratio = num / tot
 
-        if success_ratio < self.success_threshold:
-            comp = '<'
-            post = '. Aborting.'
-        else:
-            comp = '>='
-            post = '.'
-
-        message_string = ' of nodes successfully executed all commands'
-        if command is not None:
-            message_string = " for command: '{command}'".format(command=self._get_short_command(command))
-
-        nodes = None
-        if num not in (0, tot):
-            nodes = [node.name for node in self.nodes.values() if node.state.is_success]
-
-        message = "success ratio ({comp} {perc:.1%} threshold){message_string}{post}".format(
-            comp=comp, perc=self.success_threshold, message_string=message_string, post=post)
-        log_message, nodes_string = self._get_log_message(num, message, nodes=nodes)
-
-        if num == tot:
-            color_func = Colored.green
-            level = logging.INFO
-        elif success_ratio >= self.success_threshold:
-            color_func = Colored.yellow
-            level = logging.WARNING
-        else:
-            color_func = Colored.red
-            level = logging.CRITICAL
-
-        self.logger.log(level, '%s%s', log_message, nodes_string)
-        self._print_report_line(log_message, color_func=color_func, nodes_string=nodes_string)
+        self.reporter.report_nodes_success(command, num, success_ratio, tot, self.counters['total'],
+                                           self.success_threshold, self.nodes)
 
 
 class SyncEventHandler(BaseEventHandler):
@@ -549,12 +595,18 @@ class SyncEventHandler(BaseEventHandler):
             bool: :py:data:`True` if the next command should be scheduled, :py:data:`False` otherwise.
 
         """
-        self._commands_output_report(Task.task_self(), command=self.commands[self.current_command_index].command)
+        if self.deduplicate_output:
+            self.reporter.commands_output_report(
+                Task.task_self(),
+                command=self.commands[self.current_command_index])
+        else:
+            self.reporter.completed()
 
         self.progress.close()
 
-        self._failed_commands_report(filter_command_index=self.current_command_index)
-        self._success_nodes_report(command=self.commands[self.current_command_index].command)
+        self.reporter.failed_commands_report(nodes=self.nodes, num_hosts=self.counters['total'], commands=self.commands,
+                                             filter_command_index=self.current_command_index)
+        self._success_nodes_report(command=self.commands[self.current_command_index])
 
         success_ratio = self.counters['success'] / self.counters['total']
 
@@ -776,7 +828,7 @@ class AsyncEventHandler(BaseEventHandler):
                         break
 
         if node is not None:
-            # Schedule the exeuction of the first command to the next node with ClusterShell
+            # Schedule the execution of the first command to the next node with ClusterShell
             command = node.commands[0]
             self.logger.debug("next_node=%s, timeout=%s, command='%s'", node.name, command.command, command.timeout)
             Task.task_self().shell(
@@ -790,11 +842,14 @@ class AsyncEventHandler(BaseEventHandler):
         :Parameters:
             according to parent :py:meth:`cumin.transports.BaseEventHandler.close`.
         """
-        self._commands_output_report(task)
+        if self.deduplicate_output:
+            self.reporter.commands_output_report(task)
+        else:
+            self.reporter.completed()
 
         self.progress.close()
 
-        self._failed_commands_report()
+        self.reporter.failed_commands_report(nodes=self.nodes, num_hosts=self.counters['total'], commands=self.commands)
         self._success_nodes_report()
 
         num = self.counters['success']
