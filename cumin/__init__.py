@@ -50,7 +50,7 @@ def trace(self, msg, *args, **kwargs):
 if LOGGING_TRACE_LEVEL_NAME not in logging._nameToLevel:  # pylint: disable=protected-access
     logging.addLevelName(LOGGING_TRACE_LEVEL_NUMBER, LOGGING_TRACE_LEVEL_NAME)
 if not hasattr(logging.Logger, 'trace'):
-    logging.Logger.trace = trace
+    logging.Logger.trace = trace  # type: ignore
 ##############################################################################
 
 

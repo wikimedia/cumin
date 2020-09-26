@@ -610,7 +610,8 @@ class BaseWorker(metaclass=ABCMeta):
 
         self._commands = commands
 
-    @property
+    # mypy doesn't support decorated properties: https://github.com/python/mypy/issues/1362
+    @property  # type: ignore
     @abstractmethod
     def handler(self):
         """Get and set the `handler` for the current execution.
@@ -626,7 +627,7 @@ class BaseWorker(metaclass=ABCMeta):
             * an event handler class object (not instance)
         """
 
-    @handler.setter
+    @handler.setter  # type: ignore
     @abstractmethod
     def handler(self, value):  # pylint: disable=property-with-parameters; https://github.com/PyCQA/pylint/issues/3600
         """Setter for the `handler` property. The relative documentation is in the getter."""
