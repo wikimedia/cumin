@@ -4,7 +4,7 @@ import os
 import shlex
 import sys
 
-from abc import ABCMeta, abstractmethod, abstractproperty
+from abc import ABCMeta, abstractmethod
 
 from ClusterShell.NodeSet import NodeSet
 from tqdm import tqdm
@@ -610,8 +610,8 @@ class BaseWorker(metaclass=ABCMeta):
 
         self._commands = commands
 
-    @abstractproperty
     @property
+    @abstractmethod
     def handler(self):
         """Get and set the `handler` for the current execution.
 
@@ -626,8 +626,8 @@ class BaseWorker(metaclass=ABCMeta):
             * an event handler class object (not instance)
         """
 
-    @abstractproperty
     @handler.setter
+    @abstractmethod
     def handler(self, value):  # pylint: disable=property-with-parameters; https://github.com/PyCQA/pylint/issues/3600
         """Setter for the `handler` property. The relative documentation is in the getter."""
 
