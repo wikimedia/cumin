@@ -11,7 +11,8 @@ from tqdm import tqdm
 
 from cumin import nodeset, nodeset_fromlist
 from cumin.color import Colored
-from cumin.transports import BaseWorker, Command, NoProgress, ProgressBars, raise_error, State, Target, WorkerError
+from cumin.transports import (BaseExecutionProgress, BaseWorker, Command, NoProgress, raise_error, State,
+                              Target, TqdmProgressBars, WorkerError)
 
 
 class ClusterShellWorker(BaseWorker):
@@ -405,8 +406,7 @@ class BaseEventHandler(Event.EventHandler):
         for node_name in target.first_batch:
             self.nodes[node_name].state.update(State.scheduled)
 
-        # TODO: introduce a super type to ProgressBars / NoProgress
-        self.progress: Union[ProgressBars, NoProgress] = ProgressBars() if progress_bars else NoProgress()
+        self.progress: BaseExecutionProgress = TqdmProgressBars() if progress_bars else NoProgress()
         self.reporter = Reporter()
 
     def close(self, task):

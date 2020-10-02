@@ -9,7 +9,7 @@ from ClusterShell.NodeSet import NodeSet
 import cumin  # noqa: F401 (dynamically used in TestCommand)
 
 from cumin import transports
-from cumin.transports import ProgressBars
+from cumin.transports import TqdmProgressBars
 
 
 class ConcreteBaseWorker(transports.BaseWorker):
@@ -546,37 +546,37 @@ class TestProgressBars:
 
     def test_init_intialize_progress_bars_with_correct_size(self, tqdm):
         """Progress bars are initialized at the correct size."""
-        progress = ProgressBars()
+        progress = TqdmProgressBars()
         progress.init(10)
 
         assert tqdm.call_count == 2
         _, kwargs = tqdm.call_args
         assert kwargs['total'] == 10
 
-    def test_progress_bars_are_closed(self, tqdm):  # pylint: disable=unused-argument
+    def test_progress_bars_are_closed(self, tqdm):
         """Progress bars are closed."""
-        progress = ProgressBars()
+        progress = TqdmProgressBars()
         progress.init(10)
 
         progress.close()
 
-        assert progress.pbar_ok.close.called  # pylint: disable=no-member
-        assert progress.pbar_ko.close.called  # pylint: disable=no-member
+        assert tqdm.mock_calls[-2] == mock.call().close()
+        assert tqdm.mock_calls[-1] == mock.call().close()
 
-    def test_progress_bar_is_updated_on_success(self, tqdm):  # pylint: disable=unused-argument
+    def test_progress_bar_is_updated_on_success(self, tqdm):
         """Progress bar is updated on success."""
-        progress = ProgressBars()
+        progress = TqdmProgressBars()
         progress.init(10)
 
         progress.update_success(5)
 
-        assert progress.pbar_ok.update.called_once_with(5)  # pylint: disable=no-member
+        assert mock.call().update(5) in tqdm.mock_calls
 
-    def test_progress_bar_is_updated_on_failure(self, tqdm):  # pylint: disable=unused-argument
+    def test_progress_bar_is_updated_on_failure(self, tqdm):
         """Progress bar is updated on failure."""
-        progress = ProgressBars()
+        progress = TqdmProgressBars()
         progress.init(10)
 
         progress.update_failed(3)
 
-        assert progress.pbar_ko.update.called_once_with(3)  # pylint: disable=no-member
+        assert tqdm.mock_calls[-1] == mock.call().update(3)

@@ -5,7 +5,7 @@ from unittest import mock
 import pytest
 
 from cumin import CuminError, nodeset
-from cumin.transports import BaseWorker, clustershell, Command, ProgressBars, State, Target, WorkerError
+from cumin.transports import BaseWorker, clustershell, Command, State, Target, TqdmProgressBars, WorkerError
 
 
 def test_node_class_instantiation():
@@ -202,7 +202,7 @@ class ConcreteBaseEventHandler(clustershell.BaseEventHandler):
     def __init__(self, nodes, commands, **kwargs):
         """Initialize progress bars."""
         super().__init__(nodes, commands, **kwargs)
-        self.progress = mock.Mock(spec_set=ProgressBars)
+        self.progress = mock.Mock(spec_set=TqdmProgressBars)
 
     def close(self, task):
         """Required by the BaseEventHandler class."""
@@ -284,7 +284,7 @@ class TestSyncEventHandler(TestBaseEventHandler):
         """Initialize default properties and instances."""
         super().setup_method()
         self.handler = clustershell.SyncEventHandler(self.target, self.commands, success_threshold=1)
-        self.handler.progress = mock.Mock(spec_set=ProgressBars)
+        self.handler.progress = mock.Mock(spec_set=TqdmProgressBars)
         self.worker.eh = self.handler
         self.logger = logger
         assert not tqdm.write.called
@@ -370,7 +370,7 @@ class TestSyncEventHandler(TestBaseEventHandler):
 class TestAsyncEventHandler(TestBaseEventHandler):
     """AsyncEventHandler test class."""
 
-    @mock.patch('cumin.transports.clustershell.ProgressBars')
+    @mock.patch('cumin.transports.clustershell.TqdmProgressBars')
     @mock.patch('cumin.transports.clustershell.logging')
     @mock.patch('cumin.transports.clustershell.tqdm')
     def setup_method(self, _, tqdm, logger, progress):  # pylint: disable=arguments-differ,unused-argument

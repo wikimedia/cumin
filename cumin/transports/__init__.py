@@ -5,6 +5,7 @@ import shlex
 import sys
 
 from abc import ABCMeta, abstractmethod
+from typing import Callable, Optional
 
 from ClusterShell.NodeSet import NodeSet
 from tqdm import tqdm
@@ -750,14 +751,50 @@ def raise_error(property_name, message, value):
         property_name=property_name, message=message, value_type=type(value), value=value))
 
 
-class ProgressBars:
-    """Progress bars for the status of successful / failed hosts.
+class BaseExecutionProgress(metaclass=ABCMeta):
+    """Listener interface to consume notification of the status of successful / failed hosts.
 
-    The ProgressBars needs to be notified of the total number of hosts when the
+    The listener needs to be notified of the total number of hosts when the
     operation starts, and then notified of successes and failures.
+
     """
 
-    def __init__(self):
+    @abstractmethod
+    def init(self, num_hosts: int) -> None:
+        """Initialize the progress bars.
+
+        Arguments:
+            num_hosts (int): the total number of hosts
+
+        """
+
+    @abstractmethod
+    def close(self) -> None:
+        """Closes the progress bars."""
+
+    @abstractmethod
+    def update_success(self, num_hosts: int = 1) -> None:
+        """Updates the number of successful hosts.
+
+        Arguments:
+            num_hosts (int): increment to the number of hosts that have completed successfully
+
+        """
+
+    @abstractmethod
+    def update_failed(self, num_hosts: int = 1) -> None:
+        """Updates the number of failed hosts.
+
+        Arguments:
+            num_hosts (int): increment to the number of hosts that have completed in error
+
+        """
+
+
+class TqdmProgressBars(BaseExecutionProgress):
+    """Progress bars based on TQDM."""
+
+    def __init__(self) -> None:
         """Create the progress bars.
 
         Note:
@@ -765,60 +802,74 @@ class ProgressBars:
             using the progress bars.
 
         """
-        self.pbar_ok = None
-        self.pbar_ko = None
-        self.bar_format = ('{desc} |{bar}| {percentage:3.0f}% ({n_fmt}/{total_fmt}) '
-                           '[{elapsed}<{remaining}, {rate_fmt}]')
+        self._pbar_success: Optional[tqdm] = None
+        self._pbar_failed: Optional[tqdm] = None
+        self._bar_format = ('{desc} |{bar}| {percentage:3.0f}% ({n_fmt}/{total_fmt}) '
+                            '[{elapsed}<{remaining}, {rate_fmt}]')
 
-    def init(self, num_hosts):
+    def init(self, num_hosts: int) -> None:
         """Initialize the progress bars.
 
         Arguments:
             num_hosts (int): the total number of hosts
 
         """
-        self.pbar_ok = tqdm(desc='PASS', total=num_hosts, leave=True, unit='hosts', dynamic_ncols=True,
-                            bar_format=Colored.green(self.bar_format), file=sys.stderr)
-        self.pbar_ok.refresh()
-        self.pbar_ko = tqdm(desc='FAIL', total=num_hosts, leave=True, unit='hosts', dynamic_ncols=True,
-                            bar_format=Colored.red(self.bar_format), file=sys.stderr)
-        self.pbar_ko.refresh()
+        self._pbar_success = self._tqdm(num_hosts, 'PASS', Colored.green)
+        self._pbar_failed = self._tqdm(num_hosts, 'FAIL', Colored.red)
 
-    def close(self):
+    def _tqdm(self, num_hosts: int, desc: str, color: Callable[[str], str]) -> tqdm:
+        pbar = tqdm(desc=desc, total=num_hosts, leave=True, unit='hosts', dynamic_ncols=True,
+                    bar_format=color(self._bar_format), file=sys.stderr)
+        pbar.refresh()
+        return pbar
+
+    def close(self) -> None:
         """Closes the progress bars."""
-        self.pbar_ok.close()
-        self.pbar_ko.close()
+        self._success.close()
+        self._failed.close()
 
-    def update_success(self, num_hosts=1):
+    def update_success(self, num_hosts: int = 1) -> None:
         """Updates the number of successful hosts.
 
         Arguments:
             num_hosts (int): increment to the number of hosts that have completed successfully
 
         """
-        self.pbar_ok.update(num_hosts)
+        self._success.update(num_hosts)
 
-    def update_failed(self, num_hosts=1):
+    def update_failed(self, num_hosts: int = 1) -> None:
         """Updates the number of failed hosts.
 
         Arguments:
             num_hosts (int): increment to the number of hosts that have completed in error
 
         """
-        self.pbar_ko.update(num_hosts)
+        self._failed.update(num_hosts)
+
+    @property
+    def _success(self) -> tqdm:
+        if self._pbar_success is None:
+            raise ValueError('init() should be called before any other operation')
+        return self._pbar_success
+
+    @property
+    def _failed(self) -> tqdm:
+        if self._pbar_failed is None:
+            raise ValueError('init() should be called before any other operation')
+        return self._pbar_failed
 
 
-class NoProgress:
-    """Used as a null object to disable the display of progress bars."""
+class NoProgress(BaseExecutionProgress):
+    """Used as a null object to disable the display of execution progress."""
 
-    def init(self, num_hosts):
+    def init(self, num_hosts: int) -> None:
         """Does nothing."""
 
-    def close(self):
+    def close(self) -> None:
         """Does nothing."""
 
-    def update_success(self, num_hosts=1):
+    def update_success(self, num_hosts: int = 1) -> None:
         """Does nothing."""
 
-    def update_failed(self, num_hosts=1):
+    def update_failed(self, num_hosts: int = 1) -> None:
         """Does nothing."""
