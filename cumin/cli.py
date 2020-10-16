@@ -17,6 +17,7 @@ import cumin
 
 from cumin import backends, query, transport, transports
 from cumin.color import Colored
+from cumin.transports.clustershell import TqdmQuietReporter
 
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -400,6 +401,8 @@ def run(args, config):
                        for command in args.commands]
     worker.timeout = args.global_timeout
     worker.handler = args.mode
+    if args.output is not None:  # TODO: set the reporter to tqdm when releasing v5.0.0
+        worker.reporter = TqdmQuietReporter
     worker.success_threshold = args.success_percentage / 100
     exit_code = worker.execute()
 
@@ -411,7 +414,7 @@ def run(args, config):
             tqdm.write(INTERACTIVE_BANNER)
         code.interact(banner=INTERACTIVE_BANNER, local=locals())
     elif args.output is not None:
-        tqdm.write(OUTPUT_SEPARATOR)
+        tqdm.write(OUTPUT_SEPARATOR)  # TODO: to be removed when releasing v5.0.0
         print_output(args.output, worker)
 
     return exit_code

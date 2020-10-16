@@ -153,6 +153,7 @@ More complex example fine-tuning many of the parameters::
     import cumin
 
     from cumin import query, transport, transports
+    from cumin.transports.clustershell import NullReporter
 
 
     config = cumin.Config(config='/path/to/custom/cumin/config.yaml')
@@ -170,6 +171,9 @@ More complex example fine-tuning many of the parameters::
         ]
     # On each host perform the above commands in a sequence, only if the previous command was successful.
     worker.handler = 'async'
+    # Change the worker's default reporter from the current default that outputs to stdout all commands stdout/err
+    # outputs to the empty reporter that does nothing.
+    worker.reporter = NullReporter
     exit_code = worker.execute()
     for nodes, output in worker.get_results():
         print(nodes)

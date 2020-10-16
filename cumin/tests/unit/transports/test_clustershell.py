@@ -6,6 +6,7 @@ import pytest
 
 from cumin import CuminError, nodeset
 from cumin.transports import BaseWorker, clustershell, Command, State, Target, TqdmProgressBars, WorkerError
+from cumin.transports.clustershell import Node, NullReporter, TqdmReporter
 
 
 def test_node_class_instantiation():
@@ -21,6 +22,29 @@ def test_worker_class(task_self):
     worker = clustershell.worker_class({}, Target(nodeset('node1')))
     assert isinstance(worker, BaseWorker)
     task_self.assert_called_once_with()
+
+
+def test_null_reporter_does_nothing(capsys):
+    """Tests that the NullReporter does nothing (and does not raise any error)."""
+    reporter = NullReporter()  # pylint: disable=abstract-class-instantiated
+
+    message = "a message"
+    command = "a command"
+    commands = [Command("first command"), Command("second command")]
+    node1 = Node("node1", commands)
+    node2 = Node("node2", commands)
+    nodes = [node1, node2]
+
+    reporter.command_completed()
+    reporter.command_output(iter(["node1", "node2"]), command)
+    reporter.command_header(command)
+    reporter.message_element(message)
+    reporter.global_timeout_nodes(nodes, 2)
+    reporter.failed_nodes(nodes, 2, commands)
+    reporter.success_nodes(command, 2, 1.0, 2, 2, 1.0, nodes)
+    out, err = capsys.readouterr()
+    assert out == ''
+    assert err == ''
 
 
 class TestClusterShellWorker:
@@ -65,6 +89,14 @@ class TestClusterShellWorker:
         assert kwargs['nodes'] == self.target.first_batch
         assert kwargs['handler'] == self.worker._handler_instance
         assert clustershell.DEFAULT_HANDLERS['sync'].called
+
+    def test_execute_different_reporter(self):
+        """Calling execute() after changing the reporter should use the new reporter."""
+        self.worker.handler = 'sync'
+        assert self.worker.reporter is TqdmReporter  # Current default
+        self.worker.reporter = NullReporter
+        self.worker.execute()
+        assert self.worker.reporter is NullReporter  # TODO: improve assertions to check additional things
 
     def test_execute_default_async_handler(self):
         """Calling execute() in async mode without event handler should use the default async event handler."""
@@ -168,6 +200,20 @@ class TestClusterShellWorker:
         self.worker.handler = ConcreteBaseEventHandler
         assert self.worker._handler == ConcreteBaseEventHandler
 
+    def test_reporter_getter(self):
+        """Access to the reporter getter should return the current value."""
+        assert self.worker.reporter is TqdmReporter  # Current default
+        self.worker.reporter = NullReporter
+        assert self.worker.reporter is NullReporter
+
+    def test_reporter_setter_invalid(self):
+        """Raise WorkerError if trying to set the reporter to an invalid value."""
+        class InvalidReporter:
+            """Reporter that does not inherit from BaseReporter."""
+
+        with pytest.raises(WorkerError, match='reporter must be a subclass of'):
+            self.worker.reporter = InvalidReporter
+
     @staticmethod
     def iter_buffers():
         """A generator to simulate the buffer iteration of ClusterShell objects."""
@@ -191,7 +237,7 @@ class TestBaseEventHandler:
 
     def test_close(self):
         """Calling close should raise NotImplementedError."""
-        self.handler = clustershell.BaseEventHandler(self.target, self.commands)
+        self.handler = clustershell.BaseEventHandler(self.target, self.commands, TqdmReporter())
         with pytest.raises(NotImplementedError):
             self.handler.close(self.worker)
 
@@ -199,9 +245,9 @@ class TestBaseEventHandler:
 class ConcreteBaseEventHandler(clustershell.BaseEventHandler):
     """Concrete implementation of a BaseEventHandler."""
 
-    def __init__(self, nodes, commands, **kwargs):
+    def __init__(self, nodes, commands, reporter, **kwargs):
         """Initialize progress bars."""
-        super().__init__(nodes, commands, **kwargs)
+        super().__init__(nodes, commands, reporter, **kwargs)
         self.progress = mock.Mock(spec_set=TqdmProgressBars)
 
     def close(self, task):
@@ -215,7 +261,7 @@ class TestConcreteBaseEventHandler(TestBaseEventHandler):
     def setup_method(self, _, tqdm):  # pylint: disable=arguments-differ
         """Initialize default properties and instances."""
         super().setup_method()
-        self.handler = ConcreteBaseEventHandler(self.target, self.commands)
+        self.handler = ConcreteBaseEventHandler(self.target, self.commands, TqdmReporter())
         self.worker.eh = self.handler
         assert not tqdm.write.called
 
@@ -257,7 +303,7 @@ class TestConcreteBaseEventHandler(TestBaseEventHandler):
     def test_ev_read_single_host(self, tqdm):
         """Calling ev_read() should print the worker message if matching a single host."""
         self.target = Target(nodeset('node1'))
-        self.handler = ConcreteBaseEventHandler(self.target, self.commands)
+        self.handler = ConcreteBaseEventHandler(self.target, self.commands, TqdmReporter())
 
         output = b'node1 output'
         self.worker.nodes = self.target.hosts
@@ -283,7 +329,8 @@ class TestSyncEventHandler(TestBaseEventHandler):
     def setup_method(self, _, tqdm, logger):  # pylint: disable=arguments-differ
         """Initialize default properties and instances."""
         super().setup_method()
-        self.handler = clustershell.SyncEventHandler(self.target, self.commands, success_threshold=1)
+        self.handler = clustershell.SyncEventHandler(self.target, self.commands, TqdmReporter(),
+                                                     success_threshold=1)
         self.handler.progress = mock.Mock(spec_set=TqdmProgressBars)
         self.worker.eh = self.handler
         self.logger = logger
@@ -376,7 +423,7 @@ class TestAsyncEventHandler(TestBaseEventHandler):
     def setup_method(self, _, tqdm, logger, progress):  # pylint: disable=arguments-differ,unused-argument
         """Initialize default properties and instances."""
         super().setup_method()
-        self.handler = clustershell.AsyncEventHandler(self.target, self.commands)
+        self.handler = clustershell.AsyncEventHandler(self.target, self.commands, TqdmReporter())
         self.worker.eh = self.handler
         self.logger = logger
         assert not tqdm.write.called
