@@ -210,7 +210,7 @@ class Reporter:
 
         return log_message, nodes_string
 
-    def get_short_command(self, command: Command) -> str:
+    def _get_short_command(self, command: Command) -> str:
         """Return a shortened representation of a command omitting the central part, if it's too long.
 
         Arguments:
@@ -240,7 +240,7 @@ class Reporter:
         """
         nodelist = None
         if command is not None:
-            output_message = "----- OUTPUT of '{command}' -----".format(command=self.get_short_command(command))
+            output_message = "----- OUTPUT of '{command}' -----".format(command=self._get_short_command(command))
         else:
             output_message = '----- OUTPUT -----'
 
@@ -261,7 +261,7 @@ class Reporter:
     def report_single_command_output(self, command: Command) -> None:
         """Reports a single command execution."""
         output_message = "----- OUTPUT of '{command}' -----".format(
-            command=self.get_short_command(command))
+            command=self._get_short_command(command))
         tqdm.write(Colored.blue(output_message), file=sys.stdout)
 
     # FIXME: worker, node and msg should have more specific type annotations.
@@ -309,7 +309,7 @@ class Reporter:
                 if filter_command_index >= 0 and command is not None and index != filter_command_index:
                     continue
 
-                short_command = self.get_short_command(command) if command is not None else ''
+                short_command = self._get_short_command(command) if command is not None else ''
                 message = "of nodes {state} to execute command '{command}'".format(
                     state=State.states_representation[state], command=short_command)
                 log_message, nodes_string = self._get_log_message(len(failed_nodes), num_hosts=num_hosts,
@@ -342,7 +342,7 @@ class Reporter:
             post = '.'
         message_string = ' of nodes successfully executed all commands'
         if command is not None:
-            message_string = " for command: '{command}'".format(command=self.get_short_command(command))
+            message_string = " for command: '{command}'".format(command=self._get_short_command(command))
         nodes_to_log = None
         if num_successfull_nodes not in (0, tot):
             nodes_to_log = [node.name for node in nodes.values() if node.state.is_success]
