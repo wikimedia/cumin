@@ -331,14 +331,15 @@ def get_hosts(args, config):
         raise cumin.CuminError(message)
 
     for i in range(10):
-        stderr('Confirm to continue [y/n]?', end=' ')
+        stderr(('Ok to proceed on {num} hosts? Enter the number of affected hosts to confirm '
+                'or "q" to quit'.format(num=len(hosts))), end=' ')
         answer = input()  # nosec
         if not answer:
             continue
 
-        if answer in 'yY':
+        if answer == str(len(hosts)):
             break
-        if answer in 'nN':
+        if answer in 'qQ':
             raise KeyboardInterruptError
 
     else:

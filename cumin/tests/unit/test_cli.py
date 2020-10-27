@@ -192,27 +192,40 @@ def test_stderr(tqdm):
     assert tqdm.write.called
 
 
+@pytest.mark.parametrize('query, input_value', (
+    ('host1', '1'),
+    ('host[1000-2000]', '1001'),
+))
 @mock.patch('cumin.cli.stderr')
 @mock.patch('builtins.input')
 @mock.patch('cumin.cli.sys.stdout.isatty')
-def test_get_hosts_ok(isatty, mocked_input, stderr):
-    """Calling get_hosts() should query the backend and return the list of hosts."""
-    args = cli.parse_args(['D{host1}', 'command1'])
-    config = {'backend': 'direct'}
+def test_get_hosts_ok(isatty, mocked_input, stderr, query, input_value):
+    """Calling get_hosts() should query the backend and return the list of hosts asking for confirmation in a TTY."""
+    args = cli.parse_args([query, 'command1'])
+    config = {'backend': 'direct', 'default_backend': 'direct'}
     isatty.return_value = True
 
-    mocked_input.return_value = 'y'
-    assert cli.get_hosts(args, config) == nodeset('host1')
+    mocked_input.return_value = input_value
+    assert cli.get_hosts(args, config) == nodeset(query)
+    assert stderr.called
 
-    mocked_input.return_value = 'n'
-    with pytest.raises(cli.KeyboardInterruptError):
-        cli.get_hosts(args, config)
 
-    mocked_input.return_value = 'invalid_answer'
-    with pytest.raises(cli.KeyboardInterruptError):
-        cli.get_hosts(args, config)
+@pytest.mark.parametrize('query, input_value', (
+    ('host1', 'q'),
+    ('host1', 'invalid_answer'),
+    ('host1', ''),
+    ('host1', '2'),
+))
+@mock.patch('cumin.cli.stderr')
+@mock.patch('builtins.input')
+@mock.patch('cumin.cli.sys.stdout.isatty')
+def test_get_hosts_raise(isatty, mocked_input, stderr, query, input_value):
+    """Calling get_hosts() should query the backend and raise KeyboardInterruptError without a confirmation."""
+    args = cli.parse_args([query, 'command1'])
+    config = {'backend': 'direct', 'default_backend': 'direct'}
+    isatty.return_value = True
 
-    mocked_input.return_value = ''
+    mocked_input.return_value = input_value
     with pytest.raises(cli.KeyboardInterruptError):
         cli.get_hosts(args, config)
 
