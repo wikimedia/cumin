@@ -31,8 +31,7 @@ extras_require = {
         'bandit>=1.5.1',
         'flake8>=3.6.0',
         'flake8-import-order>=0.18.1',
-        # Temporary upper constraint until https://github.com/PyCQA/prospector/issues/389 is fixed
-        'prospector[with_everything]>=1.1.7,<=1.2.0',
+        'prospector[with_everything]>=1.3.1',
         'pytest-cov>=2.6.0',
         'pytest-xdist>=1.26.1',
         'pytest>=3.10.1',
@@ -49,7 +48,8 @@ extras_require['tests-base'] = extras_require['tests'][:]
 extras_require['tests'].extend(extras_require['with-openstack'])
 
 # Generate minimum dependencies
-extras_require['tests-min'] = [dep.replace('>=', '==') for dep in extras_require['tests']]
+extras_require['tests-min'] = [dep.replace('>=', '==') for dep in extras_require['tests']
+                               if not dep.startswith('flake8')]
 if os.getenv('CUMIN_MIN_DEPS', False):
     install_requires = [dep.split(',')[0].replace('>=', '==') for dep in install_requires]
 

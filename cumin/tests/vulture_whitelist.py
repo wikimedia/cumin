@@ -15,6 +15,9 @@ whitelist_logging.raiseExceptions
 whitelist_cli = Whitelist()
 whitelist_cli.run.h
 
+whitelist_Config = Whitelist()  # noqa: N816
+whitelist_Config.__new__
+
 whitelist_transports_clustershell = Whitelist()
 whitelist_transports_clustershell.BaseEventHandler.kwargs
 
