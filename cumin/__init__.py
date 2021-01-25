@@ -98,7 +98,7 @@ def parse_config(config_file):
 
     """
     try:
-        with open(config_file, 'r') as f:
+        with open(os.path.expanduser(config_file), 'r') as f:
             config = yaml.safe_load(f)
     except IOError as e:
         raise CuminError('Unable to read configuration file: {message}'.format(message=e))
