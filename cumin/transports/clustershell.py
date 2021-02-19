@@ -210,17 +210,17 @@ class Reporter:
 
         return log_message, nodes_string
 
-    def _get_short_command(self, command: Command) -> str:
+    def _get_short_command(self, command: Union[str, Command]) -> str:
         """Return a shortened representation of a command omitting the central part, if it's too long.
 
         Arguments:
-            command (Command): the command to be shortened.
+            command (str or Command optional): the command to be shortened.
 
         Returns:
             str: the short command.
 
         """
-        cmd = command.command
+        cmd = str(command)
         sublen = (self.short_command_length - 3) // 2  # The -3 is for the ellipsis
         return (cmd[:sublen] + '...' + cmd[-sublen:]) if len(cmd) > self.short_command_length else cmd
 
@@ -258,7 +258,7 @@ class Reporter:
 
         tqdm.write(Colored.blue(message), file=sys.stdout)
 
-    def report_single_command_output(self, command: Command) -> None:
+    def report_single_command_output(self, command: str) -> None:
         """Reports a single command execution."""
         output_message = "----- OUTPUT of '{command}' -----".format(
             command=self._get_short_command(command))
@@ -512,7 +512,7 @@ class BaseEventHandler(Event.EventHandler):
         """Print how many nodes successfully executed all commands in a colored and tqdm-friendly way.
 
         Arguments:
-            command (str, optional): the command the report is referring to.
+            command (Command, optional): the command the report is referring to.
 
         """
         if self.global_timedout and command is None:
@@ -700,9 +700,9 @@ class SyncEventHandler(BaseEventHandler):
         # No more nodes were left for the execution of the current command
         with self.lock:  # Avoid modifications of the same data from other callbacks triggered by ClusterShell
             try:
-                command = self.commands[self.current_command_index].command
+                command: Optional[str] = self.commands[self.current_command_index].command
             except IndexError:
-                command = None  # Last command reached
+                command: Optional[str] = None  # Last command reached
 
             # Get a list of the nodes still in pending state
             pending = [pending_node.name for pending_node in self.nodes.values() if pending_node.state.is_pending]
