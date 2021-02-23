@@ -43,6 +43,7 @@ _EXPECTED_LINES = {
         '100.0% (2/2) success ratio (>= 100.0% threshold) of nodes successfully executed all commands.',
     'all_success_threshold':
         '100.0% (5/5) success ratio (>= 50.0% threshold) of nodes successfully executed all commands.',
+    'one_success': '100.0% (1/1) success ratio (>= 100.0% threshold) of nodes successfully executed all commands.',
     'all_failure':
         '0.0% (0/5) success ratio (< 100.0% threshold) of nodes successfully executed all commands. Aborting.',
     'all_failure_threshold':
@@ -115,6 +116,9 @@ _TXT_EXPECTED_SINGLE_OUTPUT = """{prefix}{node_id}: First
 
 # Expected output for the -o/--out json option for one node
 _JSON_EXPECTED_SINGLE_OUTPUT = 'First\nSecond\nThird'
+
+# Expected output for the 'uname' command to stdout
+_UNAME_OUTPUT = "\x1b[34m----- OUTPUT of 'uname' -----\x1b[39m\nLinux\n\x1b[34m================\x1b[39m\n"
 
 
 def make_method(name, commands_set):
@@ -436,3 +440,16 @@ class TestCLI:
         expected_out = {self.nodes_prefix + str(i): _JSON_EXPECTED_SINGLE_OUTPUT for i in range(1, 6)}
 
         assert json.loads(out.split(cli.OUTPUT_SEPARATOR + '\n')[1]) == expected_out
+
+    def test_undeduplicated_output(self, capsys):
+        """Executing a command without output deduplication (1 target host) should work as expected."""
+        params = [self._get_nodes('1'), 'uname']
+        rc = cli.main(argv=self.default_params + params)
+        out, err = capsys.readouterr()
+        sys.stdout.write(out)
+        sys.stderr.write(err)
+        assert _UNAME_OUTPUT == out
+        assert _EXPECTED_LINES['one_success'] in err, _EXPECTED_LINES['one_success']
+        assert _EXPECTED_LINES['failed'] not in err, _EXPECTED_LINES['failed']
+        assert _EXPECTED_LINES['global_timeout'] not in err, _EXPECTED_LINES['global_timeout']
+        assert rc == 0
