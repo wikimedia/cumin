@@ -10,8 +10,6 @@ from cumin import cli, CuminError, LOGGING_TRACE_LEVEL_NUMBER, nodeset, transpor
 from cumin.color import Colored
 
 
-# Environment variables
-_ENV = {'USER': 'root', 'SUDO_USER': 'user'}
 # Command line arguments
 _ARGV = ['-c', 'doc/examples/config.yaml', '-d', '-m', 'sync', 'host', 'command1', 'command2']
 
@@ -108,7 +106,8 @@ def test_get_running_user():
     with mock.patch('os.getenv', env.get):
         assert cli.get_running_user() == 'user'
 
-    with mock.patch('os.getenv', _ENV.get):
+    env = {'USER': 'root', 'SUDO_USER': 'user'}
+    with mock.patch('os.getenv', env.get):
         assert cli.get_running_user() == 'user'
 
 

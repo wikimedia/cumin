@@ -12,10 +12,6 @@ import pytest
 
 from cumin import __version__, cli
 
-# Set environment variables
-_ENV = {'USER': 'root', 'SUDO_USER': 'user'}
-for key, value in _ENV.items():
-    os.environ[key] = value
 
 # Dictionary with expected strings to match in the execution stderr:
 # {label: string_to_match}
