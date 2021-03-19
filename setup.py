@@ -31,7 +31,7 @@ extras_require = {
         'bandit>=1.5.1',
         'flake8>=3.6.0',
         'flake8-import-order>=0.18.1',
-        'prospector[with_everything]>=1.3.1',
+        'mypy',
         'pytest-cov>=2.6.0',
         'pytest-xdist>=1.26.1',
         'pytest>=3.10.1',
@@ -40,12 +40,18 @@ extras_require = {
         'sphinx-argparse>=0.2.2',
         'Sphinx>=1.8.4',
     ],
+    'prospector': [
+        'prospector[with_everything]>=1.3.1',
+        'pytest>=3.10.1',
+        'requests-mock>=1.5.2',
+    ],
 }
 
 # Copy tests requirements to test only base dependencies
 extras_require['tests-base'] = extras_require['tests'][:]
 # Add optional dependencies to the tests ones
 extras_require['tests'].extend(extras_require['with-openstack'])
+extras_require['prospector'].extend(extras_require['with-openstack'])
 
 # Generate minimum dependencies
 extras_require['tests-min'] = [dep.replace('>=', '==') for dep in extras_require['tests']
