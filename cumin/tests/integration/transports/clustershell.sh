@@ -22,7 +22,7 @@ EOF
     for index in {1..5}; do
         HOST_NAME="${CUMIN_IDENTIFIER}-${index}"
         # TODO: use a custom-generated image
-        docker run -d -p "222${index}:22" -v "/${CUMIN_TMPDIR}/id_${SSH_KEY_ALGO}.pub:/root/.ssh/authorized_keys" --name "${HOST_NAME}" "panubo/sshd" > /dev/null
+        docker run -d -p "222${index}:22" -v "/${CUMIN_TMPDIR}/id_${SSH_KEY_ALGO}.pub:/root/.ssh/authorized_keys" -e SSH_ENABLE_ROOT=true --name "${HOST_NAME}" "panubo/sshd" > /dev/null
         DOCKER_INSTANCES="${DOCKER_INSTANCES} ${HOST_NAME}"
         SSH_ALIASES="${SSH_ALIASES}
 Host ${HOST_NAME}
@@ -47,6 +47,7 @@ EOF
 }
 
 function run_tests() {
+    sleep 5  # Make sure all SSH servers are up and running
     cumin --force -c "${CUMIN_TMPDIR}/config.yaml" "${CUMIN_IDENTIFIER}-[1-2,5]" "touch /tmp/maybe"
     cumin --force -c "${CUMIN_TMPDIR}/config.yaml" "${CUMIN_IDENTIFIER}-[1-5]" 'echo -e "First\nSecond\nThird" > /tmp/out'
     py.test -n auto --strict --cov-report term-missing --cov=cumin cumin/tests/integration
