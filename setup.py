@@ -49,13 +49,15 @@ extras_require = {
 
 # Copy tests requirements to test only base dependencies
 extras_require['tests-base'] = extras_require['tests'][:]
+# Copy tests requirements to test with the minimum version of the install_requires and Sphinx that is used to
+# generate the manpage during the Debian build process.
+extras_require['tests-min'] = [dep.split(',')[0].replace('>=', '==') if dep.lower().startswith('sphinx') else dep
+                               for dep in extras_require['tests']]
 # Add optional dependencies to the tests ones
 extras_require['tests'].extend(extras_require['with-openstack'])
+extras_require['tests-min'].extend(dep.replace('>=', '==') for dep in extras_require['with-openstack'])
 extras_require['prospector'].extend(extras_require['with-openstack'])
 
-# Generate minimum dependencies
-extras_require['tests-min'] = [dep.replace('>=', '==') for dep in extras_require['tests']
-                               if not dep.startswith('flake8')]
 if os.getenv('CUMIN_MIN_DEPS', False):
     install_requires = [dep.split(',')[0].replace('>=', '==') for dep in install_requires]
 

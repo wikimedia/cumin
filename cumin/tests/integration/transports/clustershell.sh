@@ -50,5 +50,5 @@ function run_tests() {
     sleep 5  # Make sure all SSH servers are up and running
     cumin --force -c "${CUMIN_TMPDIR}/config.yaml" "${CUMIN_IDENTIFIER}-[1-2,5]" "touch /tmp/maybe"
     cumin --force -c "${CUMIN_TMPDIR}/config.yaml" "${CUMIN_IDENTIFIER}-[1-5]" 'echo -e "First\nSecond\nThird" > /tmp/out'
-    py.test -n auto --strict --cov-report term-missing --cov=cumin cumin/tests/integration
+    py.test -n auto --strict-markers --cov-report term-missing --cov=cumin cumin/tests/integration
 }
