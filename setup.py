@@ -14,7 +14,7 @@ install_requires = [
     'pyparsing>=2.2.0,<=2.3',
     'pyyaml>=3.13',
     'requests>=2.21.0',
-    'tqdm>=4.19.4,<=4.24.0'
+    'tqdm>=4.19.4',
 ]
 
 # Extra dependencies
