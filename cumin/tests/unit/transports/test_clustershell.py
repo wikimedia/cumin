@@ -214,6 +214,17 @@ class TestClusterShellWorker:
         with pytest.raises(WorkerError, match='reporter must be a subclass of'):
             self.worker.reporter = InvalidReporter
 
+    def test_progress_bars_getter(self):
+        """Access to the progress_bars getter should return the current value."""
+        assert self.worker.progress_bars  # Current default
+        self.worker.progress_bars = False
+        assert not self.worker.progress_bars
+
+    def test_progress_bars_setter_invalid(self):
+        """Raise WorkerError if trying to set the progress_bars to an invalid value."""
+        with pytest.raises(WorkerError, match='progress_bars must be a boolean'):
+            self.worker.progress_bars = 'invalid'
+
     @staticmethod
     def iter_buffers():
         """A generator to simulate the buffer iteration of ClusterShell objects."""

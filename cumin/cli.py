@@ -125,6 +125,7 @@ def get_parser():
     parser.add_argument('--dry-run', action='store_true',
                         help=('Do not execute any command, just return the list of matching hosts and exit. '
                               '[default: False]'))
+    parser.add_argument('--no-progress', action='store_true', help='Do not show the progress bars during execution.')
     parser.add_argument('--version', action='version', version='%(prog)s {version}'.format(version=cumin.__version__))
     parser.add_argument('-d', '--debug', action='store_true',
                         help=('Set log level to DEBUG. See also log_file in the configuration. [default: False]'))
@@ -401,6 +402,7 @@ def run(args, config):
                        for command in args.commands]
     worker.timeout = args.global_timeout
     worker.handler = args.mode
+    worker.progress_bars = not args.no_progress
     if args.output is not None:  # TODO: set the reporter to tqdm when releasing v5.0.0
         worker.reporter = TqdmQuietReporter
     worker.success_threshold = args.success_percentage / 100

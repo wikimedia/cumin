@@ -44,6 +44,7 @@ class ClusterShellWorker(BaseWorker):
         self.task = Task.task_self()  # Initialize a ClusterShell task
         self._handler_instance: Optional[Event.EventHandler] = None
         self._reporter: Type[BaseReporter] = TqdmReporter  # TODO: change this to NullReporter when releasing v5.0.0
+        self._progress_bars: bool = True  # TODO: change this to False when releasing v5.0.0
 
         # Set any ClusterShell task options
         for key, value in config.get('clustershell', {}).items():
@@ -70,7 +71,8 @@ class ClusterShellWorker(BaseWorker):
         # Schedule only the first command for the first batch, the following ones must be handled by the EventHandler
         reporter = self._reporter()  # Instantiate a new Reporter at each execution
         self._handler_instance = self.handler(  # pylint: disable=not-callable
-            self.target, self.commands, reporter=reporter, success_threshold=self.success_threshold)
+            self.target, self.commands, reporter=reporter, success_threshold=self.success_threshold,
+            progress_bars=self._progress_bars)
 
         self.logger.info(
             "Executing commands %s on '%d' hosts: %s", self.commands, len(self.target.hosts), self.target.hosts)
@@ -150,6 +152,19 @@ class ClusterShellWorker(BaseWorker):
             raise_error('reporter', 'must be a subclass of cumin.transports.clustershell.BaseReporter', value)
 
         self._reporter = value
+
+    @property
+    def progress_bars(self) -> bool:
+        """Getter for the boolean progress_bars property."""
+        return self._progress_bars
+
+    @progress_bars.setter
+    def progress_bars(self, value: bool) -> None:
+        """Setter for the `progress_bars` property. The relative documentation is in the getter."""
+        if not isinstance(value, bool):
+            raise_error('progress_bars', 'must be a boolean', value)
+
+        self._progress_bars = value
 
 
 class Node:

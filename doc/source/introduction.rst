@@ -174,6 +174,8 @@ More complex example fine-tuning many of the parameters::
     # Change the worker's default reporter from the current default that outputs to stdout all commands stdout/err
     # outputs to the empty reporter that does nothing.
     worker.reporter = NullReporter
+    # Suppress the progress bars during execution
+    worker.progress_bars = False
     exit_code = worker.execute()
     for nodes, output in worker.get_results():
         print(nodes)
