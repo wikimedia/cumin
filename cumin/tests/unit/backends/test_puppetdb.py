@@ -32,9 +32,10 @@ def test_single_category_key_token():
 
 def test_hosts_selection():
     """A host selection is properly parsed and interpreted."""
-    hosts = {'hosts': 'host[10-20,30-40].domain'}
-    parsed = puppetdb.grammar().parseString(hosts['hosts'], parseAll=True)
-    assert parsed[0].asDict() == hosts
+    hosts = 'host[10-20,30-40].domain'
+    parsed = puppetdb.grammar().parseString(hosts, parseAll=True)
+    # Backward compatibility with PyParsing<2.3.1, this check works both with a list or a string
+    assert hosts in parsed[0].asDict()['hosts']
 
 
 class TestPuppetDBQueryV3:

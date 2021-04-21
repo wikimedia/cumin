@@ -359,22 +359,23 @@ class PuppetDBQuery(BaseQuery):
         """Add a list of hosts to the query.
 
         Arguments:
-            hosts (ClusterShell.NodeSet.NodeSet): with the list of hosts to search.
+            hosts (list): list of :py:class:`ClusterShell.NodeSet.NodeSet` with the list of hosts to search.
             neg (bool, optional): whether the token must be negated.
 
         """
-        if not hosts:
-            return
-
         hosts_tokens = []
-        for host in hosts:
-            operator = '='
-            # Convert a glob expansion into a regex
-            if '*' in host:
-                operator = '~'
-                host = r'^' + host.replace('.', r'\\.').replace('*', '.*') + r'$'
+        for hosts_set in hosts:
+            for host in hosts_set:
+                operator = '='
+                # Convert a glob expansion into a regex
+                if '*' in host:
+                    operator = '~'
+                    host = r'^' + host.replace('.', r'\\.').replace('*', '.*') + r'$'
 
-            hosts_tokens.append('["{op}", "{{host_key}}", "{host}"]'.format(op=operator, host=host))
+                hosts_tokens.append('["{op}", "{{host_key}}", "{host}"]'.format(op=operator, host=host))
+
+        if not hosts_tokens:
+            return
 
         query = '["or", {hosts}]'.format(hosts=', '.join(hosts_tokens))
         if neg:
@@ -414,7 +415,10 @@ class PuppetDBQuery(BaseQuery):
             self._add_bool(token_dict['bool'])
 
         elif 'hosts' in token_dict:
-            token_dict['hosts'] = nodeset(token_dict['hosts'])
+            if isinstance(token_dict['hosts'], str):  # Backward compatibility with PyParsing <2.3.1
+                token_dict['hosts'] = [token_dict['hosts']]
+
+            token_dict['hosts'] = [nodeset(token_hosts) for token_hosts in token_dict['hosts']]
             self._add_hosts(**token_dict)
 
         elif 'category' in token_dict:

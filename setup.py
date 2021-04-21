@@ -11,7 +11,7 @@ with open('README.rst', 'r') as readme:
 # Required dependencies
 install_requires = [
     'clustershell>=1.8.1,<=1.9',
-    'pyparsing>=2.2.0,<=2.3',
+    'pyparsing>=2.2.0,<=2.99.0',  # Prevent version 3 that is about to be released
     'pyyaml>=3.13',
     'requests>=2.21.0',
     'tqdm>=4.19.4',
