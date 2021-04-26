@@ -5,7 +5,8 @@ from unittest import mock
 import pytest
 
 from cumin import CuminError, nodeset
-from cumin.transports import BaseWorker, clustershell, Command, State, Target, TqdmProgressBars, WorkerError
+from cumin.transports import (BaseExecutionProgress, BaseWorker, clustershell, Command, State, Target,
+                              TqdmProgressBars, WorkerError)
 from cumin.transports.clustershell import Node, NullReporter, TqdmReporter
 
 
@@ -245,10 +246,12 @@ class TestBaseEventHandler:
         self.worker.nodes = self.target.hosts
         self.handler = None
         self.args = args
+        self.progress_bars = mock.MagicMock(spec_set=BaseExecutionProgress)
 
     def test_close(self):
         """Calling close should raise NotImplementedError."""
-        self.handler = clustershell.BaseEventHandler(self.target, self.commands, TqdmReporter())
+        self.handler = clustershell.BaseEventHandler(self.target, self.commands, TqdmReporter(),
+                                                     progress_bars=self.progress_bars)
         with pytest.raises(NotImplementedError):
             self.handler.close(self.worker)
 
@@ -272,7 +275,8 @@ class TestConcreteBaseEventHandler(TestBaseEventHandler):
     def setup_method(self, _, tqdm):  # pylint: disable=arguments-differ
         """Initialize default properties and instances."""
         super().setup_method()
-        self.handler = ConcreteBaseEventHandler(self.target, self.commands, TqdmReporter())
+        self.handler = ConcreteBaseEventHandler(self.target, self.commands, TqdmReporter(),
+                                                progress_bars=self.progress_bars)
         self.worker.eh = self.handler
         assert not tqdm.write.called
 
@@ -314,7 +318,8 @@ class TestConcreteBaseEventHandler(TestBaseEventHandler):
     def test_ev_read_single_host(self, tqdm):
         """Calling ev_read() should print the worker message if matching a single host."""
         self.target = Target(nodeset('node1'))
-        self.handler = ConcreteBaseEventHandler(self.target, self.commands, TqdmReporter())
+        self.handler = ConcreteBaseEventHandler(self.target, self.commands, TqdmReporter(),
+                                                progress_bars=self.progress_bars)
 
         output = b'node1 output'
         self.worker.nodes = self.target.hosts
@@ -341,8 +346,7 @@ class TestSyncEventHandler(TestBaseEventHandler):
         """Initialize default properties and instances."""
         super().setup_method()
         self.handler = clustershell.SyncEventHandler(self.target, self.commands, TqdmReporter(),
-                                                     success_threshold=1)
-        self.handler.progress = mock.Mock(spec_set=TqdmProgressBars)
+                                                     progress_bars=self.progress_bars, success_threshold=1)
         self.worker.eh = self.handler
         self.logger = logger
         assert not tqdm.write.called
@@ -428,13 +432,13 @@ class TestSyncEventHandler(TestBaseEventHandler):
 class TestAsyncEventHandler(TestBaseEventHandler):
     """AsyncEventHandler test class."""
 
-    @mock.patch('cumin.transports.clustershell.TqdmProgressBars')
     @mock.patch('cumin.transports.clustershell.logging')
     @mock.patch('cumin.transports.clustershell.tqdm')
-    def setup_method(self, _, tqdm, logger, progress):  # pylint: disable=arguments-differ,unused-argument
+    def setup_method(self, _, tqdm, logger):  # pylint: disable=arguments-differ,unused-argument
         """Initialize default properties and instances."""
         super().setup_method()
-        self.handler = clustershell.AsyncEventHandler(self.target, self.commands, TqdmReporter())
+        self.handler = clustershell.AsyncEventHandler(self.target, self.commands, TqdmReporter(),
+                                                      progress_bars=self.progress_bars)
         self.worker.eh = self.handler
         self.logger = logger
         assert not tqdm.write.called

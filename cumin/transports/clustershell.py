@@ -70,9 +70,10 @@ class ClusterShellWorker(BaseWorker):
         # Instantiate handler
         # Schedule only the first command for the first batch, the following ones must be handled by the EventHandler
         reporter = self._reporter()  # Instantiate a new Reporter at each execution
+        progress_bars_instance = TqdmProgressBars() if self._progress_bars else NoProgress()
         self._handler_instance = self.handler(  # pylint: disable=not-callable
             self.target, self.commands, reporter=reporter, success_threshold=self.success_threshold,
-            progress_bars=self._progress_bars)
+            progress_bars=progress_bars_instance)
 
         self.logger.info(
             "Executing commands %s on '%d' hosts: %s", self.commands, len(self.target.hosts), self.target.hosts)
@@ -504,16 +505,16 @@ class BaseEventHandler(Event.EventHandler):
 
     # FIXME: not sure what the type of **kwargs should be
     def __init__(self, target: Target, commands: List[Command], reporter: BaseReporter,
-                 success_threshold: float = 1.0, progress_bars: bool = True, **kwargs: Any) -> None:
+                 progress_bars: BaseExecutionProgress, success_threshold: float = 1.0, **kwargs: Any) -> None:
         """Event handler ClusterShell extension constructor.
 
         Arguments:
             target (cumin.transports.Target): a Target instance.
             commands (list): the list of Command objects that has to be executed on the nodes.
             reporter (cumin.transports.clustershell.BaseReporter): reporter used to output progress.
+            progress_bars (BaseExecutionProgress): the progress bars instance.
             success_threshold (float, optional): the success threshold, a :py:class:`float` between ``0`` and ``1``,
                 to consider the execution successful.
-            progress_bars (bool): should progress bars be displayed
             **kwargs (optional): additional keyword arguments that might be used by derived classes.
 
         """
@@ -538,7 +539,7 @@ class BaseEventHandler(Event.EventHandler):
         for node_name in target.first_batch:
             self.nodes[node_name].state.update(State.scheduled)
 
-        self.progress: BaseExecutionProgress = TqdmProgressBars() if progress_bars else NoProgress()
+        self.progress = progress_bars
         self.reporter = reporter
 
     def close(self, task):
@@ -677,7 +678,7 @@ class SyncEventHandler(BaseEventHandler):
     """
 
     def __init__(self, target: Target, commands: List[Command], reporter: BaseReporter,
-                 success_threshold: float = 1.0, progress_bars: bool = True, **kwargs: Any) -> None:
+                 progress_bars: BaseExecutionProgress, success_threshold: float = 1.0, **kwargs: Any) -> None:
         """Define a custom ClusterShell event handler to execute commands synchronously.
 
         :Parameters:
@@ -888,7 +889,7 @@ class AsyncEventHandler(BaseEventHandler):
     """
 
     def __init__(self, target: Target, commands: List[Command], reporter: BaseReporter,
-                 success_threshold: float = 1.0, progress_bars: bool = True, **kwargs: Any) -> None:
+                 progress_bars: BaseExecutionProgress, success_threshold: float = 1.0, **kwargs: Any) -> None:
         """Define a custom ClusterShell event handler to execute commands asynchronously between nodes.
 
         :Parameters:
