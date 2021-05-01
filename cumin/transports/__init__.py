@@ -241,6 +241,7 @@ class State:
 
     .. image:: ../../examples/transports_state_transitions.png
        :alt: State class allowed transitions diagram
+
     |
 
     """
