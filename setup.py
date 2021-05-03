@@ -11,10 +11,10 @@ with open('README.rst', 'r') as readme:
 # Required dependencies
 install_requires = [
     'clustershell>=1.8.1,<=1.9',
-    'pyparsing>=2.2.0,<=2.3',
+    'pyparsing>=2.2.0,<=2.99.0',  # Prevent version 3 that is about to be released
     'pyyaml>=3.13',
     'requests>=2.21.0',
-    'tqdm>=4.19.4,<=4.24.0'
+    'tqdm>=4.19.4',
 ]
 
 # Extra dependencies
@@ -31,8 +31,7 @@ extras_require = {
         'bandit>=1.5.1',
         'flake8>=3.6.0',
         'flake8-import-order>=0.18.1',
-        # Temporary upper constraint until https://github.com/PyCQA/prospector/issues/389 is fixed
-        'prospector[with_everything]>=1.1.7,<=1.2.0',
+        'mypy',
         'pytest-cov>=2.6.0',
         'pytest-xdist>=1.26.1',
         'pytest>=3.10.1',
@@ -41,15 +40,24 @@ extras_require = {
         'sphinx-argparse>=0.2.2',
         'Sphinx>=1.8.4',
     ],
+    'prospector': [
+        'prospector[with_everything]>=1.3.1',
+        'pytest>=3.10.1',
+        'requests-mock>=1.5.2',
+    ],
 }
 
 # Copy tests requirements to test only base dependencies
 extras_require['tests-base'] = extras_require['tests'][:]
+# Copy tests requirements to test with the minimum version of the install_requires and Sphinx that is used to
+# generate the manpage during the Debian build process.
+extras_require['tests-min'] = [dep.split(',')[0].replace('>=', '==') if dep.lower().startswith('sphinx') else dep
+                               for dep in extras_require['tests']]
 # Add optional dependencies to the tests ones
 extras_require['tests'].extend(extras_require['with-openstack'])
+extras_require['tests-min'].extend(dep.replace('>=', '==') for dep in extras_require['with-openstack'])
+extras_require['prospector'].extend(extras_require['with-openstack'])
 
-# Generate minimum dependencies
-extras_require['tests-min'] = [dep.replace('>=', '==') for dep in extras_require['tests']]
 if os.getenv('CUMIN_MIN_DEPS', False):
     install_requires = [dep.split(',')[0].replace('>=', '==') for dep in install_requires]
 
@@ -70,6 +78,8 @@ setup(
         'Operating System :: POSIX :: BSD',
         'Operating System :: POSIX :: Linux',
         'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: 3 :: Only',
         'Topic :: Software Development :: Libraries :: Python Modules',
         'Topic :: System :: Clustering',
@@ -88,6 +98,7 @@ setup(
     keywords=['cumin', 'automation', 'orchestration'],
     license='GPLv3+',
     long_description=long_description,
+    long_description_content_type='text/x-rst',
     name='cumin',
     packages=find_packages(exclude=['*.tests', '*.tests.*']),
     platforms=['GNU/Linux', 'BSD', 'MacOSX'],

@@ -50,7 +50,7 @@ def trace(self, msg, *args, **kwargs):
 if LOGGING_TRACE_LEVEL_NAME not in logging._nameToLevel:  # pylint: disable=protected-access
     logging.addLevelName(LOGGING_TRACE_LEVEL_NUMBER, LOGGING_TRACE_LEVEL_NAME)
 if not hasattr(logging.Logger, 'trace'):
-    logging.Logger.trace = trace
+    logging.Logger.trace = trace  # type: ignore
 ##############################################################################
 
 
@@ -98,7 +98,7 @@ def parse_config(config_file):
 
     """
     try:
-        with open(config_file, 'r') as f:
+        with open(os.path.expanduser(config_file), 'r') as f:
             config = yaml.safe_load(f)
     except IOError as e:
         raise CuminError('Unable to read configuration file: {message}'.format(message=e))

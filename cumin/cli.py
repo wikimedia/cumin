@@ -17,6 +17,7 @@ import cumin
 
 from cumin import backends, query, transport, transports
 from cumin.color import Colored
+from cumin.transports.clustershell import TqdmQuietReporter
 
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -108,6 +109,7 @@ def get_parser():
                         help='Specify a different output format. [default: None]')
     parser.add_argument('-i', '--interactive', action='store_true',
                         help='Drop into a Python shell with the results. [default: False]')
+    parser.add_argument('-n', '--no-colors', action='store_true', help='Disable colored output. [default: False]')
     parser.add_argument('--force', action='store_true',
                         help=('USE WITH CAUTION! Force the execution without confirmation of the affected hosts. '
                               '[default: False]'))
@@ -123,6 +125,7 @@ def get_parser():
     parser.add_argument('--dry-run', action='store_true',
                         help=('Do not execute any command, just return the list of matching hosts and exit. '
                               '[default: False]'))
+    parser.add_argument('--no-progress', action='store_true', help='Do not show the progress bars during execution.')
     parser.add_argument('--version', action='version', version='%(prog)s {version}'.format(version=cumin.__version__))
     parser.add_argument('-d', '--debug', action='store_true',
                         help=('Set log level to DEBUG. See also log_file in the configuration. [default: False]'))
@@ -183,6 +186,8 @@ def parse_args(argv):
     """
     parser = get_parser()
     parsed_args = parser.parse_args(argv)
+    if parsed_args.no_colors:
+        Colored.disabled = True
 
     # Validation and default values
     num_commands = len(parsed_args.commands)
@@ -309,11 +314,14 @@ def get_hosts(args, config):
         return hosts
 
     stderr('{num} hosts will be targeted:'.format(num=len(hosts)))
-    stderr(Colored.cyan(cumin.nodeset_fromlist(hosts)))
+    # The list is sent to stdout or stderr based on the dry_run mode
 
     if args.dry_run:
+        tqdm.write(Colored.cyan(cumin.nodeset_fromlist(hosts)))
         stderr('DRY-RUN mode enabled, aborting')
         return []
+
+    stderr(Colored.cyan(cumin.nodeset_fromlist(hosts)))
 
     if args.force:
         stderr('FORCE mode enabled, continuing without confirmation')
@@ -325,14 +333,15 @@ def get_hosts(args, config):
         raise cumin.CuminError(message)
 
     for i in range(10):
-        stderr('Confirm to continue [y/n]?', end=' ')
+        stderr(('Ok to proceed on {num} hosts? Enter the number of affected hosts to confirm '
+                'or "q" to quit'.format(num=len(hosts))), end=' ')
         answer = input()  # nosec
         if not answer:
             continue
 
-        if answer in 'yY':
+        if answer == str(len(hosts)):
             break
-        if answer in 'nN':
+        if answer in 'qQ':
             raise KeyboardInterruptError
 
     else:
@@ -393,6 +402,9 @@ def run(args, config):
                        for command in args.commands]
     worker.timeout = args.global_timeout
     worker.handler = args.mode
+    worker.progress_bars = not args.no_progress
+    if args.output is not None:  # TODO: set the reporter to tqdm when releasing v5.0.0
+        worker.reporter = TqdmQuietReporter
     worker.success_threshold = args.success_percentage / 100
     exit_code = worker.execute()
 
@@ -404,7 +416,7 @@ def run(args, config):
             tqdm.write(INTERACTIVE_BANNER)
         code.interact(banner=INTERACTIVE_BANNER, local=locals())
     elif args.output is not None:
-        tqdm.write(OUTPUT_SEPARATOR)
+        tqdm.write(OUTPUT_SEPARATOR)  # TODO: to be removed when releasing v5.0.0
         print_output(args.output, worker)
 
     return exit_code
@@ -444,7 +456,7 @@ def main(argv=None):
         user = get_running_user()
         config = cumin.Config(args.config)
         validate_config(config)
-        setup_logging(config['log_file'], debug=args.debug, trace=args.trace)
+        setup_logging(os.path.expanduser(config['log_file']), debug=args.debug, trace=args.trace)
     except cumin.CuminError as e:
         stderr(e)
         return 2

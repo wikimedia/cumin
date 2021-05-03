@@ -7,10 +7,9 @@ from unittest import mock
 import pytest
 
 from cumin import cli, CuminError, LOGGING_TRACE_LEVEL_NUMBER, nodeset, transports
+from cumin.color import Colored
 
 
-# Environment variables
-_ENV = {'USER': 'root', 'SUDO_USER': 'user'}
 # Command line arguments
 _ARGV = ['-c', 'doc/examples/config.yaml', '-d', '-m', 'sync', 'host', 'command1', 'command2']
 
@@ -62,6 +61,14 @@ def test_parse_args_no_mode():
         cli.parse_args(_ARGV[:index] + _ARGV[index + 1:])
 
 
+def test_parse_args_no_colors():
+    """If -n/--no-colors is specified, the colors should be globally disabled."""
+    assert not Colored.disabled
+    cli.parse_args(_ARGV[:2] + ['-n'] + _ARGV[3:])
+    assert Colored.disabled
+    Colored.disabled = False  # Reset it
+
+
 def test_target_batch_size():
     """Calling target_batch_size() should properly parse integer values."""
     assert cli.target_batch_size('1') == {'value': 1, 'ratio': None}
@@ -99,7 +106,8 @@ def test_get_running_user():
     with mock.patch('os.getenv', env.get):
         assert cli.get_running_user() == 'user'
 
-    with mock.patch('os.getenv', _ENV.get):
+    env = {'USER': 'root', 'SUDO_USER': 'user'}
+    with mock.patch('os.getenv', env.get):
         assert cli.get_running_user() == 'user'
 
 
@@ -183,27 +191,40 @@ def test_stderr(tqdm):
     assert tqdm.write.called
 
 
+@pytest.mark.parametrize('query, input_value', (
+    ('host1', '1'),
+    ('host[1000-2000]', '1001'),
+))
 @mock.patch('cumin.cli.stderr')
 @mock.patch('builtins.input')
 @mock.patch('cumin.cli.sys.stdout.isatty')
-def test_get_hosts_ok(isatty, mocked_input, stderr):
-    """Calling get_hosts() should query the backend and return the list of hosts."""
-    args = cli.parse_args(['D{host1}', 'command1'])
-    config = {'backend': 'direct'}
+def test_get_hosts_ok(isatty, mocked_input, stderr, query, input_value):
+    """Calling get_hosts() should query the backend and return the list of hosts asking for confirmation in a TTY."""
+    args = cli.parse_args([query, 'command1'])
+    config = {'backend': 'direct', 'default_backend': 'direct'}
     isatty.return_value = True
 
-    mocked_input.return_value = 'y'
-    assert cli.get_hosts(args, config) == nodeset('host1')
+    mocked_input.return_value = input_value
+    assert cli.get_hosts(args, config) == nodeset(query)
+    assert stderr.called
 
-    mocked_input.return_value = 'n'
-    with pytest.raises(cli.KeyboardInterruptError):
-        cli.get_hosts(args, config)
 
-    mocked_input.return_value = 'invalid_answer'
-    with pytest.raises(cli.KeyboardInterruptError):
-        cli.get_hosts(args, config)
+@pytest.mark.parametrize('query, input_value', (
+    ('host1', 'q'),
+    ('host1', 'invalid_answer'),
+    ('host1', ''),
+    ('host1', '2'),
+))
+@mock.patch('cumin.cli.stderr')
+@mock.patch('builtins.input')
+@mock.patch('cumin.cli.sys.stdout.isatty')
+def test_get_hosts_raise(isatty, mocked_input, stderr, query, input_value):
+    """Calling get_hosts() should query the backend and raise KeyboardInterruptError without a confirmation."""
+    args = cli.parse_args([query, 'command1'])
+    config = {'backend': 'direct', 'default_backend': 'direct'}
+    isatty.return_value = True
 
-    mocked_input.return_value = ''
+    mocked_input.return_value = input_value
     with pytest.raises(cli.KeyboardInterruptError):
         cli.get_hosts(args, config)
 

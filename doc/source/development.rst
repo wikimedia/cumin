@@ -48,21 +48,22 @@ To run one specific environment only:
 
 .. code-block:: bash
 
-    tox -e flake8
+    tox -e py38-flake8
 
 It's possible to pass extra arguments to the underlying environment:
 
 .. code-block:: bash
 
     # Run only tests in a specific file:
-    tox -e unit -- -k test_puppetdb.py
+    tox -e py38-unit -- -k test_puppetdb.py
 
     # Run only one specific test:
-    tox -e unit -- -k test_invalid_grammars
+    tox -e py38-unit -- -k test_invalid_grammars
 
 Integration tests are also available, but are not run by default by tox. They depends on a running Docker instance.
 To run them:
 
 .. code-block:: bash
 
-    tox -e integration
+    tox -e py38-integration
+    tox -e py38-integration-min

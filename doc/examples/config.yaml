@@ -3,7 +3,7 @@
 # By default Cumin load the configuration from /etc/cumin/config.yaml, but it can be overriden by command line argument
 #
 transport: clustershell  # Default transport to use, can be overriden by command line argument
-log_file: logs/cumin.log  # Absolute or relative path for the log file
+log_file: ~/.cumin/cumin.log  # Absolute or relative path for the log file, expands ~ into the user's home directory
 # If set, use this backend to parse the query first and only if it fails, fallback to parse it with the general
 # multi-query grammar [optional]
 default_backend: direct
