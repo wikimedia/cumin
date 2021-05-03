@@ -1,6 +1,117 @@
 Cumin Changelog
 ---------------
 
+`v4.1.0`_ (2021-05-03)
+^^^^^^^^^^^^^^^^^^^^^^
+
+CLI breaking changes
+""""""""""""""""""""
+
+* cli: change confirmation input check
+
+  * When asking for confirmation to execute a command in interactive mode, instead of ``y/n`` ask the user to enter the
+    exact number of affected hosts to make sure they are aware of the impact of the action to be performed and prevent
+    muscle memory errors.
+  * Inspired by: https://rachelbythebay.com/w/2020/10/26/num/
+
+* cli: in dry-run mode send the list of hosts to stdout (`T212783`_).
+
+  * To simplify the usage from other tools that want to consume the generated list of hosts when not executing
+    commands (dry-run mode), using cumin just to query matching hosts, send the list to stdout while the rest of
+    the output is sent to stderr.
+  * In conjunction with the new ``-n/--no-color`` option it should allow for an easy piping into additional tools
+    using cumin as a selector of hosts::
+
+      cumin -n "QUERY" 2> /dev/null | some_other_tool
+
+New features
+""""""""""""
+
+* cli: add a ``-n/--no-colors`` option to suppress any colored output (`T212783`_).
+* cli/clustershell: allow to disable progress bars (`T212783`_):
+
+  * Expose in the clustershell module the possibility to disable the show of the progress bars during execution.
+  * Allow to disable the progress bars also in the CLI with a ``--no-progress`` flag.
+
+* config: allow using tilde ``~`` to specify config paths. This allows abstracting away the paths and seamlessly
+  allowing per-user configurations.
+* config: expand user's home directory for logging. Allow to specify a log path relative to the user's home directory
+  in the configuration file for the ``log_file`` entry that will expand ``~`` when present.
+* clustershell: allow to choose different reporters (`T212783`_):
+
+  * Make the event handler reporter configuratble between:
+
+    * A null reporter that doesn't print anything (``NullReporter``)
+    * A Tqdm-compatible reporter that prints just the success/failure results to stderr but doesn't print the actual
+      command outputs (``TqdmQuietReporter``)
+    * A Tqdm-compatible reporter that prints the command outputs to stdout and the success/failure results to stderr,
+      as it was until now (``TqdmReporter``, the default).
+
+* setup.py: support more recent PyParsing versions
+
+  * In order to be able to build Cumin on Debian bullseye, add support for more recent versions of PyParsing that
+    introduced backward incompatible changes.
+
+Minor improvements
+""""""""""""""""""
+
+* Add support for Python 3.8 and 3.9
+
+Bug fixes
+"""""""""
+
+* tests: fix dependencies for tests (`T270795`_).
+
+  * Remove the limitation on prospector as the upstream bug was fixed.
+  * Exclude flake8 from the minimum requirements as we just run the unit tests with the minimum requirements.
+  * This will require the removal of ``python3-flake8`` from the ``Build-Depends`` on ``debian/control`` when doing
+    the next release as ``flake8`` is not needed when building the package.
+
+* tests: fix integration tests as the newer versions of the sshd docker container needs a specific environment
+  variable to enable the root user SSH access.
+* setup.py: Add missing ``long_description_content_type`` parameter.
+* doc: fix sphinx warning in docstring.
+
+Miscellanea
+"""""""""""
+
+* setup.py: revert tqdm upper limit constraint.
+
+  * As the upstream issue has been fixed in tqdm ``v4.48.0``, remove the upper limit constraint.
+  * Note: cumin will have output issues if used with a tqdm between ``v4.24.0`` and ``v4.48.0`` excluded.
+
+* Use ``@abstractmethod`` instead of ``@abstractproperty``. The latter it's actually deprecated in favor of usin
+  ``@abstractmethod`` in conjunction with ``@property`` and ``@example.setter``.
+* Extracting obvious reporting code to a Reporter class to be able to expose the reporting functionality via the
+  library APIs (`T212783`_).
+* Introduce an interface for progress bars.
+* tox: add mypy environment.
+
+  * In order to start adding type hints to the project, add a mypy environment to tox to ensure those added are
+    correct.
+  * Keep the configuration very light for now until type hints are added to the whole project.
+
+* tests: remove unnecessary environmental variables config. As cumin can run as a normal user some configuration to
+  make it think it was run as root is not needed anymore across unit and integration tests.
+
+* integration tests: add undeduplicated output test.
+
+  * The case of undeduplicated output, like when there is only one target host, was not tested by the integration
+    tests. Adding a test to cover that use case too.
+
+* tests: fix pip backtracking
+
+  * With the current setup of minimizing the number of different virtualenvs used by tox we ended up hitting an issue
+    of pip backtracking. As prospector seems to be the most likely culprit here because has a lot of dependencies, and
+    in the past too we had issues between prospector and flake8 dependencies, move prospector to its own virtualenv.
+  * Add also mypy as an explicit dependency.
+
+* tests: fix minimum dependency and pytest warning.
+
+  * Change the behaviour of the -min environment in tox to test with the minimum supported version of only the real
+    dependencies and not the ones used only for the tests, with the only exception of Sphinx-related dependencies that
+    are needed to build the manpage during the Debian build process.
+  * Update pytest's command line options to prevent deprecation warnings.
 
 `v4.0.0`_ (2020-09-10)
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -615,9 +726,11 @@ Bug Fixes
 .. _`T201881`: https://phabricator.wikimedia.org/T201881
 .. _`T204680`: https://phabricator.wikimedia.org/T204680
 .. _`T207037`: https://phabricator.wikimedia.org/T207037
+.. _`T212783`: https://phabricator.wikimedia.org/T212783
 .. _`T217038`: https://phabricator.wikimedia.org/T217038
 .. _`T218440`: https://phabricator.wikimedia.org/T218440
 .. _`T218441`: https://phabricator.wikimedia.org/T218441
+.. _`T270795`: https://phabricator.wikimedia.org/T270795
 
 .. _`v0.0.1`: https://github.com/wikimedia/cumin/releases/tag/v0.0.1
 .. _`v0.0.2`: https://github.com/wikimedia/cumin/releases/tag/v0.0.2
@@ -633,3 +746,4 @@ Bug Fixes
 .. _`v3.0.2`: https://github.com/wikimedia/cumin/releases/tag/v3.0.2
 .. _`v4.0.0rc1`: https://github.com/wikimedia/cumin/releases/tag/v4.0.0rc1
 .. _`v4.0.0`: https://github.com/wikimedia/cumin/releases/tag/v4.0.0
+.. _`v4.1.0`: https://github.com/wikimedia/cumin/releases/tag/v4.1.0
