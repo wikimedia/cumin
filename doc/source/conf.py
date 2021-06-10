@@ -183,4 +183,4 @@ def setup(app):
     """Register the helper functions."""
     app.connect('autodoc-process-docstring', filter_namedtuple_docstrings)
     app.connect('autodoc-process-docstring', add_abstract_annotations)
-    app.add_stylesheet('theme_overrides.css')  # override wide tables in RTD theme
+    app.add_css_file('theme_overrides.css')  # override wide tables in RTD theme
