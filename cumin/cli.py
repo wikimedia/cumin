@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 import cumin
 
-from cumin import backends, query, transport, transports
+from cumin import backends, ensure_kerberos_ticket, query, transport, transports
 from cumin.color import Colored
 from cumin.transports.clustershell import TqdmQuietReporter
 
@@ -390,6 +390,7 @@ def run(args, config):
     if not hosts:
         return 0
 
+    ensure_kerberos_ticket(config)
     target = transports.Target(hosts, batch_size=args.batch_size['value'], batch_size_ratio=args.batch_size['ratio'],
                                batch_sleep=args.batch_sleep)
     worker = transport.Transport.new(config, target)

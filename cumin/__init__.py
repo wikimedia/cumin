@@ -1,6 +1,7 @@
 """Automation and orchestration framework written in Python."""
 import logging
 import os
+import subprocess
 
 import yaml
 
@@ -8,6 +9,7 @@ from ClusterShell.NodeSet import NodeSet, RESOLVER_NOGROUP
 from pkg_resources import DistributionNotFound, get_distribution
 
 
+KERBEROS_KLIST = '/usr/bin/klist'
 try:
     __version__ = get_distribution(__name__).version
     """:py:class:`str`: the version of the current Cumin module."""
@@ -140,3 +142,28 @@ def nodeset_fromlist(nodelist):
 
     """
     return NodeSet.fromlist(nodelist, resolver=RESOLVER_NOGROUP)
+
+
+def ensure_kerberos_ticket(config: Config) -> None:
+    """Ensure that there is a valid Kerberos ticket for the current user, according to the given configuration.
+
+    Arguments:
+        config (cumin.Config): the Cumin's configuration dictionary.
+
+    """
+    kerberos_config = config.get('kerberos', {})
+    if not kerberos_config or not kerberos_config.get('ensure_ticket', False):
+        return
+
+    if not kerberos_config.get('ensure_ticket_root', False) and os.geteuid() == 0:
+        return
+
+    if not os.access(KERBEROS_KLIST, os.X_OK):
+        raise CuminError('The Kerberos config ensure_ticket is set to true, but {klist} executable was '
+                         'not found.'.format(klist=KERBEROS_KLIST))
+
+    try:
+        subprocess.run([KERBEROS_KLIST, '-s'], check=True)  # nosec
+    except subprocess.CalledProcessError as e:
+        raise CuminError('The Kerberos config ensure_ticket is set to true, but no active Kerberos ticket was found, '
+                         "please run 'kinit' and retry.") from e

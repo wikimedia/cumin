@@ -4,6 +4,9 @@ import importlib
 import logging
 import os
 
+from subprocess import CalledProcessError, CompletedProcess
+from unittest import mock
+
 import pytest
 
 from ClusterShell.NodeSet import NodeSet
@@ -159,3 +162,95 @@ def test_nodeset_fromlist_empty():
     assert isinstance(nodeset, NodeSet)
     assert nodeset == NodeSet()
     assert nodeset._resolver is None  # pylint: disable=protected-access
+
+
+@pytest.mark.parametrize('config', (
+    {},
+    {'kerberos': {}},
+    {'kerberos': {'ensure_ticket': False}},
+))
+def test_ensure_kerberos_ticket_config_disabled(config):
+    """It should return without raising an exception if it's disabled from the config."""
+    cumin.ensure_kerberos_ticket(config)
+
+
+@pytest.mark.parametrize('config', (
+    {'kerberos': {'ensure_ticket': True}},
+    {'kerberos': {'ensure_ticket': True, 'ensure_ticket_root': False}},
+))
+@mock.patch('cumin.os.geteuid')
+def test_ensure_kerberos_ticket_root_excluded(mocked_geteuid, config):
+    """It should not check the Kerberos ticket when running as root if ensure_ticket_root is not set."""
+    mocked_geteuid.return_value = 0
+    cumin.ensure_kerberos_ticket(config)
+    mocked_geteuid.assert_called_once_with()
+
+
+@pytest.mark.parametrize('uid, ensure_ticket_root', (
+    (1000, False),
+    (0, True),
+))
+@mock.patch('cumin.os.access')
+@mock.patch('cumin.os.geteuid')
+def test_ensure_kerberos_ticket_no_klist(mocked_geteuid, mocked_os_access, uid, ensure_ticket_root):
+    """It should raise CuminError if the klist executable is not found."""
+    mocked_geteuid.return_value = uid
+    mocked_os_access.return_value = False
+    with pytest.raises(cumin.CuminError, match='klist executable was not found'):
+        cumin.ensure_kerberos_ticket({'kerberos': {'ensure_ticket': True, 'ensure_ticket_root': ensure_ticket_root}})
+
+    if ensure_ticket_root:
+        assert not mocked_geteuid.called
+    else:
+        mocked_geteuid.assert_called_once_with()
+
+    mocked_os_access.assert_called_once_with(cumin.KERBEROS_KLIST, os.X_OK)
+
+
+@pytest.mark.parametrize('uid, ensure_ticket_root', (
+    (1000, False),
+    (0, True),
+))
+@mock.patch('cumin.subprocess.run')
+@mock.patch('cumin.os.access')
+@mock.patch('cumin.os.geteuid')
+def test_ensure_kerberos_ticket_no_ticket(mocked_geteuid, mocked_os_access, mocked_run, uid, ensure_ticket_root):
+    """It should raise CuminError if there is no valid Kerberos ticket."""
+    run_command = [cumin.KERBEROS_KLIST, '-s']
+    mocked_run.side_effect = CalledProcessError(1, run_command)
+    mocked_geteuid.return_value = uid
+    mocked_os_access.return_value = True
+    with pytest.raises(cumin.CuminError, match='but no active Kerberos ticket was found'):
+        cumin.ensure_kerberos_ticket({'kerberos': {'ensure_ticket': True, 'ensure_ticket_root': ensure_ticket_root}})
+
+    if ensure_ticket_root:
+        assert not mocked_geteuid.called
+    else:
+        mocked_geteuid.assert_called_once_with()
+
+    mocked_os_access.assert_called_once_with(cumin.KERBEROS_KLIST, os.X_OK)
+    mocked_run.assert_called_once_with(run_command, check=True)
+
+
+@pytest.mark.parametrize('uid, ensure_ticket_root', (
+    (1000, False),
+    (0, True),
+))
+@mock.patch('cumin.subprocess.run')
+@mock.patch('cumin.os.access')
+@mock.patch('cumin.os.geteuid')
+def test_ensure_kerberos_ticket_valid(mocked_geteuid, mocked_os_access, mocked_run, uid, ensure_ticket_root):
+    """It should return without raising any error if there is a valid Kerberos ticket."""
+    run_command = [cumin.KERBEROS_KLIST, '-s']
+    mocked_run.return_value = CompletedProcess(run_command, 0)
+    mocked_geteuid.return_value = uid
+    mocked_os_access.return_value = True
+    cumin.ensure_kerberos_ticket({'kerberos': {'ensure_ticket': True, 'ensure_ticket_root': ensure_ticket_root}})
+
+    if ensure_ticket_root:
+        assert not mocked_geteuid.called
+    else:
+        mocked_geteuid.assert_called_once_with()
+
+    mocked_os_access.assert_called_once_with(cumin.KERBEROS_KLIST, os.X_OK)
+    mocked_run.assert_called_once_with(run_command, check=True)
