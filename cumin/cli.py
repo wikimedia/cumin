@@ -333,8 +333,8 @@ def get_hosts(args, config):
         raise cumin.CuminError(message)
 
     for i in range(10):
-        stderr(('Ok to proceed on {num} hosts? Enter the number of affected hosts to confirm '
-                'or "q" to quit'.format(num=len(hosts))), end=' ')
+        stderr(('OK to proceed on {num} hosts? Enter the number of affected hosts to confirm '
+                'or "q" to quit:'.format(num=len(hosts))), end=' ')
         answer = input()  # nosec
         if not answer:
             continue
