@@ -1,6 +1,30 @@
 Cumin Changelog
 ---------------
 
+`v4.1.1`_ (2021-06-23)
+^^^^^^^^^^^^^^^^^^^^^^
+
+New features
+""""""""""""
+
+* config: add support for Kerberos auth (`T244840`_):
+
+  * In an environment where when running Cumin the user authenticates the SSH connection to the remote hosts via
+    Kerberos, in case the user doesn't have a valid Kerberos ticket, it would get a cryptic authentication failure
+    message.
+  * In order to present the user a more meaningful error, a new configuration stanza named ``kerberos`` is added, see
+    the example configuration file for all the details.
+  * When configured to do so Cumin will ensure that the running user has a valid Kerberos ticket before trying to SSH
+    to the target hosts, and present the user a nicer error message otherwise.
+  * When using Cumin as a library, the ``cumin.ensure_kerberos_ticket`` function can be used to achieve the same
+    functionality.
+
+Miscellanea
+"""""""""""
+
+* setup.py: add types dependencies for mypy for dependencies that don't have yet type hints.
+* doc: use ``add_css_file()`` instead of ``add_stylesheet()`` as Sphinx version 4 removed the old name.
+
 `v4.1.0`_ (2021-05-03)
 ^^^^^^^^^^^^^^^^^^^^^^
 
@@ -730,6 +754,7 @@ Bug Fixes
 .. _`T217038`: https://phabricator.wikimedia.org/T217038
 .. _`T218440`: https://phabricator.wikimedia.org/T218440
 .. _`T218441`: https://phabricator.wikimedia.org/T218441
+.. _`T244840`: https://phabricator.wikimedia.org/T244840
 .. _`T270795`: https://phabricator.wikimedia.org/T270795
 
 .. _`v0.0.1`: https://github.com/wikimedia/cumin/releases/tag/v0.0.1
@@ -747,3 +772,4 @@ Bug Fixes
 .. _`v4.0.0rc1`: https://github.com/wikimedia/cumin/releases/tag/v4.0.0rc1
 .. _`v4.0.0`: https://github.com/wikimedia/cumin/releases/tag/v4.0.0
 .. _`v4.1.0`: https://github.com/wikimedia/cumin/releases/tag/v4.1.0
+.. _`v4.1.1`: https://github.com/wikimedia/cumin/releases/tag/v4.1.1
