@@ -1,3 +1,9 @@
+cumin (4.1.1-1) unstable; urgency=medium
+
+  * v4.1.1 upstream release.
+
+ -- Riccardo Coccioli <rcoccioli@wikimedia.org>  Wed, 23 Jun 2021 13:23:19 -0000
+
 cumin (4.1.0-1) unstable; urgency=medium
 
   * v4.1.0 upstream release.
