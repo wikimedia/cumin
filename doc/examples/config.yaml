@@ -47,6 +47,15 @@ clustershell:
         - 'some_option'
     fanout: 16  # Max size of the sliding window of concurrent workers active at any given time [optional, default: 64]
 
+# Kerberos specific configuration [optional]
+kerberos:
+    # Whether the SSH authentication to the hosts will be done via Kerberos. If true ensures that a valid Kerberos
+    # ticket is present for the current user. [optional, default: false]
+    ensure_ticket: false
+    # Whether the check for a valid Kerberos ticket should be performed also when Cumin is run as root.
+    # [optional, default: false]
+    ensure_ticket_root: false
+
 # Plugins-specific configuration
 plugins:
     backends:  # External backends. Each module must define GRAMMAR_PREFIX and query_class, and be in Python PATH

@@ -60,8 +60,8 @@ The transport layer is the one used to convey the commands to be executed into t
 abstraction allow to specify different execution strategies. Those are the available backends:
 
 * **ClusterShell**: SSH transport using the `ClusterShell <https://github.com/cea-hpc/clustershell>`__ Python library.
-  See the :py:class:`cumin.transports.clustershell.ClusterShellWorker` class documentation for the details. The root
-  user must be able to SSH into the target hosts. It's possible to set SSH-related options in the configuration.
+  See the :py:class:`cumin.transports.clustershell.ClusterShellWorker` class documentation for the details. It's
+  possible to set all SSH-related options in the configuration file, also passing directly an existing ssh_config file.
 
 Examples
 --------
@@ -158,6 +158,9 @@ More complex example fine-tuning many of the parameters::
 
     config = cumin.Config(config='/path/to/custom/cumin/config.yaml')
     hosts = query.Query(config).execute('A:nginx')  # Match hosts defined by the query alias named 'nginx'.
+    # Needed only if SSH is authenticated via Kerberos and the related configuration flags are set
+    # (see also the example configuration).
+    cumin.ensure_kerberos_ticket(config)
     # Moving window of 5 hosts a time with 30s sleep before adding a new host once the previous one has finished.
     target = transports.Target(hosts, batch_size=5, batch_sleep=30.0)
     worker = transport.Transport.new(config, target)
