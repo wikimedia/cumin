@@ -149,7 +149,7 @@ class KnownHostsQuery(BaseQueryAggregator):
 
         for filename in known_hosts_filenames:
             hosts = set()
-            with open(filename, 'r') as known_hosts_file:
+            with open(filename, 'r', encoding='utf8') as known_hosts_file:
                 for lineno, line in enumerate(known_hosts_file, 1):
                     try:
                         found, skipped = KnownHostsQuery.parse_known_hosts_line(line)
