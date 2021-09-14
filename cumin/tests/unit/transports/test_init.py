@@ -563,7 +563,7 @@ class TestProgressBars:
         assert tqdm.mock_calls[-2] == mock.call().close()
         assert tqdm.mock_calls[-1] == mock.call().close()
 
-    def test_progress_bar_is_updated_on_success(self, tqdm):
+    def test_progress_bars_is_updated_on_success(self, tqdm):
         """Progress bar is updated on success."""
         progress = TqdmProgressBars()
         progress.init(10)
@@ -572,7 +572,7 @@ class TestProgressBars:
 
         assert mock.call().update(5) in tqdm.mock_calls
 
-    def test_progress_bar_is_updated_on_failure(self, tqdm):
+    def test_progress_bars_is_updated_on_failure(self, tqdm):
         """Progress bar is updated on failure."""
         progress = TqdmProgressBars()
         progress.init(10)
