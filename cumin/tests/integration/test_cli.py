@@ -1,7 +1,4 @@
 """CLI integration tests."""
-# pylint: disable=protected-access
-
-
 import copy
 import json
 import os
@@ -204,7 +201,7 @@ def get_rc(params):
     return return_value
 
 
-def get_global_timeout_expected_lines(params):  # pylint: disable=invalid-name
+def get_global_timeout_expected_lines(params):
     """Return a list of expected lines labels for global timeout-based tests.
 
     Arguments:

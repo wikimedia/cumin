@@ -1,5 +1,5 @@
 """ClusterShell transport tests."""
-# pylint: disable=invalid-name,no-member,protected-access,attribute-defined-outside-init
+# pylint: disable=no-member,protected-access,attribute-defined-outside-init
 from unittest import mock
 
 import pytest
@@ -52,7 +52,7 @@ class TestClusterShellWorker:
     """ClusterShell backend worker test class."""
 
     @mock.patch('cumin.transports.clustershell.Task.task_self')
-    def setup_method(self, _, task_self):  # pylint: disable=arguments-differ
+    def setup_method(self, _, task_self):
         """Initialize default properties and instances."""
         self.config = {
             'clustershell': {
@@ -236,7 +236,7 @@ class TestClusterShellWorker:
 class TestBaseEventHandler:
     """BaseEventHandler test class."""
 
-    def setup_method(self, *args):  # pylint: disable=arguments-differ
+    def setup_method(self, *args):
         """Initialize default properties and instances."""
         self.target = Target(nodeset('node[1-2]'))
         self.commands = [Command('command1', ok_codes=[0, 100]), Command('command2', timeout=5)]
@@ -434,7 +434,7 @@ class TestAsyncEventHandler(TestBaseEventHandler):
 
     @mock.patch('cumin.transports.clustershell.logging')
     @mock.patch('cumin.transports.clustershell.tqdm')
-    def setup_method(self, _, tqdm, logger):  # pylint: disable=arguments-differ,unused-argument
+    def setup_method(self, _, tqdm, logger):  # pylint: disable=arguments-differ
         """Initialize default properties and instances."""
         super().setup_method()
         self.handler = clustershell.AsyncEventHandler(self.target, self.commands, TqdmReporter(),

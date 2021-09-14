@@ -1,5 +1,4 @@
 """Cumin package tests."""
-# pylint: disable=invalid-name
 import importlib
 import logging
 import os

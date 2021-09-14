@@ -1,6 +1,4 @@
 """Query handling tests."""
-# pylint: disable=invalid-name
-
 import pytest
 
 from cumin import backends, nodeset

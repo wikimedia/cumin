@@ -428,7 +428,7 @@ class PuppetDBQuery(BaseQuery):
             raise InvalidQueryError(
                 "No valid key found in token, one of bool|hosts|category expected: {token}".format(token=token_dict))
 
-    def _get_resource_query(self, key, value=None, operator='='):  # pylint: disable=no-self-use
+    def _get_resource_query(self, key, value=None, operator='='):
         """Build a resource query based on the parameters, resolving the special cases for ``%params`` and ``@field``.
 
         Arguments:
