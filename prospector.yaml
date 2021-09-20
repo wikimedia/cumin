@@ -27,6 +27,7 @@ pylint:
   disable:
     - pointless-string-statement  # used as documentation for class attributes
     - unsubscriptable-object  # Breaks for latest pylint https://github.com/PyCQA/pylint/issues/3882
+    - consider-using-f-string  # The code still use format(), disable for now
   options:
     ignore: vulture_whitelist.py
     max-line-length: 120
