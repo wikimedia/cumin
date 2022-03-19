@@ -258,11 +258,11 @@ class BaseReporter(metaclass=ABCMeta):
         """
 
     @abstractmethod
-    def command_header(self, command: str) -> None:
+    def command_header(self, command: Command) -> None:
         """Reports a single command execution.
 
         Arguments:
-            command (str): the command the header belongs to.
+            command (cumin.transports.Command): the command the header belongs to.
 
         """
 
@@ -336,20 +336,6 @@ class TqdmQuietReporter(NullReporter):  # pylint: disable=abstract-method some a
 
         return log_message, nodes_string
 
-    def _get_short_command(self, command: Union[str, Command]) -> str:
-        """Return a shortened representation of a command omitting the central part, if it's too long.
-
-        Arguments:
-            command (str or Command optional): the command to be shortened.
-
-        Returns:
-            str: the short command.
-
-        """
-        cmd = str(command)
-        sublen = (self.short_command_length - 3) // 2  # The -3 is for the ellipsis
-        return (cmd[:sublen] + '...' + cmd[-sublen:]) if len(cmd) > self.short_command_length else cmd
-
     def global_timeout_nodes(self, nodes: dict[str, Node], num_hosts: int) -> None:
         """Print the nodes that were caught by the global timeout in a colored and tqdm-friendly way.
 
@@ -390,7 +376,7 @@ class TqdmQuietReporter(NullReporter):  # pylint: disable=abstract-method some a
                 if filter_command_index >= 0 and command is not None and index != filter_command_index:
                     continue
 
-                short_command = self._get_short_command(command) if command is not None else ''
+                short_command = command.shortened() if command is not None else ''
                 message = "of nodes {state} to execute command '{command}'".format(
                     state=state, command=short_command)
                 log_message, nodes_string = self._get_log_message(len(failed_nodes), num_hosts=num_hosts,
@@ -415,7 +401,7 @@ class TqdmQuietReporter(NullReporter):  # pylint: disable=abstract-method some a
             post = '.'
         message_string = ' of nodes successfully executed all commands'
         if command is not None:
-            message_string = " for command: '{command}'".format(command=self._get_short_command(command))
+            message_string = " for command: '{command}'".format(command=command.shortened())
         nodes_to_log = None
         if num_successfull_nodes not in (0, tot):
             nodes_to_log = [node.name for node in nodes.values() if node.state.is_success]
@@ -457,7 +443,7 @@ class TqdmReporter(TqdmQuietReporter):
         """
         nodelist = None
         if command is not None:
-            output_message = "----- OUTPUT of '{command}' -----".format(command=self._get_short_command(command))
+            output_message = "----- OUTPUT of '{command}' -----".format(command=command.shortened())
         else:
             output_message = '----- OUTPUT -----'
 
@@ -475,14 +461,14 @@ class TqdmReporter(TqdmQuietReporter):
 
         tqdm.write(Colored.blue(message), file=sys.stdout)
 
-    def command_header(self, command: str) -> None:
+    def command_header(self, command: Command) -> None:
         """Reports a single command execution.
 
         :Parameters:
             according to parent :py:meth:`BaseReporter.command_header`.
 
         """
-        output_message = "----- OUTPUT of '{command}' -----".format(command=self._get_short_command(command))
+        output_message = "----- OUTPUT of '{command}' -----".format(command=command.shortened())
         tqdm.write(Colored.blue(output_message), file=sys.stdout)
 
     def message_element(self, message: MsgTreeElem) -> None:  # pylint: disable=no-self-use
@@ -593,15 +579,15 @@ class BaseEventHandler(Event.EventHandler):
             curr_node = self.nodes[node]
             curr_node.state.update(HostState.RUNNING)  # Update the node's state to running
 
-            command = curr_node.commands[curr_node.running_command_index + 1].command
+            command = curr_node.commands[curr_node.running_command_index + 1]
             # Security check, it should never be triggered
-            if command != worker.command:
+            if command.command != worker.command:
                 raise WorkerError("ev_pickup: got unexpected command '{command}', expected '{expected}'".format(
-                    command=command, expected=worker.command))
+                    command=command.command, expected=worker.command))
             curr_node.running_command_index += 1  # Move the pointer of the current command
 
         if not self.deduplicate_output:
-            self.reporter.command_header(worker.command)
+            self.reporter.command_header(command)
 
     def ev_read(self, worker, node, _, msg):
         """Worker has data to read from a specific node. Print it if running on a single host.

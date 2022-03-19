@@ -80,7 +80,6 @@ class TestCommandParametrized:
         command_repr = repr(command['obj'])
         if r'\ ' in command_repr:
             return  # Skip tests with bash-escaped spaces are they will trigger DeprecationWarning
-
         command_instance = eval(command_repr)  # nosec # pylint: disable=eval-used
         assert isinstance(command_instance, transports.Command)
         assert repr(command_instance) == repr(command['obj'])
@@ -200,6 +199,35 @@ class TestCommand:
             codes.insert(0, 0)
             with pytest.raises(transports.WorkerError, match=message):
                 command.ok_codes = codes
+
+    @pytest.mark.parametrize('length', range(5, 50, 3))
+    def test_shortened(self, length):
+        """Calling the shortened() method should return a shortened version of the command."""
+        command = transports.Command('X' * 50)
+        shortened = command.shortened(length)
+        assert len(shortened) == length
+        assert shortened.count('.') == 3
+        assert shortened.count('X') == length - 3
+        parts = shortened.split('...')
+        assert len(parts) == 2
+        assert (len(parts[0]) - len(parts[1])) in (0, 1)
+
+    @pytest.mark.parametrize('command_length', range(1, 50, 3))
+    def test_shortened_default_length(self, command_length):
+        """Not passing the length should truncate the command at 35 characters."""
+        command = transports.Command('X' * command_length)
+        shortened = command.shortened()
+        if command_length <= 35:
+            assert shortened == command.command
+        else:
+            assert len(shortened) == 35
+
+    @pytest.mark.parametrize('length', range(5))
+    def test_shortened_raise(self, length):
+        """Calling the shortened() method with a too short length should raise a WorkerError."""
+        command = transports.Command('command1')
+        with pytest.raises(transports.WorkerError, match='Commands longer than 5 chars cannot be shortened to'):
+            command.shortened(length)
 
 
 class TestState:

@@ -119,6 +119,46 @@ class Command:
         """
         return not self == other
 
+    def shortened(self, max_len: int = 35) -> str:
+        """Return the shortened version of the command up to the given length, omitting the central part.
+
+        Examples:
+            ::
+
+                >>> command = Command('long-command --with --many --options and arguments')
+                >>> command.shortened()
+                'long-command --w...ns and arguments'
+                >>> command.shortened(20)
+                'long-comm...rguments'
+                >>> command.shortened(50)
+                'long-command --with --many --options and arguments'
+                >>> command.shortened(5)
+                'l...s'
+
+        Arguments:
+            max_len (int): the maximum length of the returned string, must be at least 5.
+
+        Raises:
+            cumin.transports.WorkerError: if the max_len argument is smaller than 5.
+
+        Returns:
+            str: the shortened version of the command, if it's longer than max_len.
+
+        """
+        if len(self.command) <= max_len:
+            return self.command
+
+        if max_len < 5:
+            raise WorkerError(f'Commands longer than 5 chars cannot be shortened to {max_len} chars, at least 5.')
+
+        half = max_len // 2
+        pref_len = half - 1
+        if half * 2 == max_len:
+            suff_len = half - 2
+        else:
+            suff_len = half - 1
+        return f'{self.command[:pref_len]}...{self.command[-suff_len:]}'
+
     @property
     def timeout(self):
         """Timeout of the :py:class:`Command`.
