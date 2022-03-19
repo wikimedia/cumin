@@ -5,7 +5,7 @@ from unittest import mock
 import pytest
 
 from cumin import CuminError, nodeset
-from cumin.transports import (BaseExecutionProgress, BaseWorker, clustershell, Command, State, Target,
+from cumin.transports import (BaseExecutionProgress, BaseWorker, clustershell, Command, HostState, State, Target,
                               TqdmProgressBars, WorkerError)
 from cumin.transports.clustershell import Node, NullReporter, TqdmReporter
 
@@ -366,9 +366,9 @@ class TestSyncEventHandler(TestBaseEventHandler):
         """Calling start_command() with schedule should also change the state of the first batch nodes."""
         # Reset the state of nodes to pending
         for node in self.handler.nodes.values():
-            node.state.update(clustershell.State.running)
-            node.state.update(clustershell.State.success)
-            node.state.update(clustershell.State.pending)
+            node.state.update(HostState.RUNNING)
+            node.state.update(HostState.SUCCESS)
+            node.state.update(HostState.PENDING)
 
         self.handler.start_command(schedule=True)
         assert self.handler.progress.init.called

@@ -208,25 +208,25 @@ class TestState:
     def test_instantiation_no_init(self):
         """A new State without an init value should start in the pending state."""
         state = transports.State()
-        assert state._state == transports.State.pending
+        assert state._state == transports.HostState.PENDING
 
     def test_instantiation_init_ok(self):
         """A new State with a valid init value should start in this state."""
-        state = transports.State(init=transports.State.running)
-        assert state._state == transports.State.running
+        state = transports.State(init=transports.HostState.RUNNING)
+        assert state._state == transports.HostState.RUNNING
 
     def test_instantiation_init_ko(self):
         """A new State with an invalid init value should raise InvalidStateError."""
-        with pytest.raises(transports.InvalidStateError, match='is not a valid state'):
+        with pytest.raises(transports.InvalidStateError, match='is not valid, must be an instance of HostState'):
             transports.State(init='invalid_state')
 
     def test_getattr_current(self):
         """Accessing the 'current' property should return the current state."""
-        assert transports.State().current == transports.State.pending
+        assert transports.State().current == transports.HostState.PENDING
 
     def test_getattr_is_valid_state(self):
         """Accessing a property named is_{a_valid_state_name} should return a boolean."""
-        state = transports.State(init=transports.State.failed)
+        state = transports.State(init=transports.HostState.FAILED)
         assert not state.is_pending
         assert not state.is_scheduled
         assert not state.is_running
@@ -236,50 +236,39 @@ class TestState:
 
     def test_getattr_invalid_property(self):
         """Accessing a property with an invalid name should raise AttributeError."""
-        state = transports.State(init=transports.State.failed)
+        state = transports.State(init=transports.HostState.FAILED)
         with pytest.raises(AttributeError, match='object has no attribute'):
             state.invalid_property  # pylint: disable=pointless-statement
 
     def test_repr(self):
         """A State repr should return its representation that allows to recreate the same State instance."""
-        assert repr(transports.State()) == 'cumin.transports.State(init={state})'.format(state=transports.State.pending)
-        state = transports.State.running
+        assert repr(transports.State()) == 'cumin.transports.State(init={state})'.format(
+            state=transports.HostState.PENDING)
+        state = transports.HostState.RUNNING
         assert repr(transports.State(init=state)) == 'cumin.transports.State(init={state})'.format(state=state)
 
     def test_str(self):
         """A State string should return its string representation."""
         assert str(transports.State()) == 'pending'
-        assert str(transports.State(init=transports.State.running)) == 'running'
+        assert str(transports.State(init=transports.HostState.RUNNING)) == 'running'
 
     def test_cmp_state(self):
         """Two State instance can be compared between each other."""
         state = transports.State()
-        greater_state = transports.State(init=transports.State.failed)
+        other_state = transports.State(init=transports.HostState.FAILED)
         same_state = transports.State()
 
-        assert greater_state > state
-        assert greater_state >= state
-        assert same_state >= state
-        assert state < greater_state
-        assert state <= greater_state
-        assert state <= same_state
-        assert state == same_state
-        assert state != greater_state
+        assert other_state != state
+        assert same_state == state
 
-    def test_cmp_int(self):
-        """A State instance can be compared with integers."""
+    def test_cmp_host_state(self):
+        """A State instance can be compared with HostState instances."""
         state = transports.State()
-        greater_state = transports.State.running
-        same_state = transports.State.pending
+        other_state = transports.HostState.RUNNING
+        same_state = transports.HostState.PENDING
 
-        assert greater_state > state
-        assert greater_state >= state
-        assert same_state >= state
-        assert state < greater_state
-        assert state <= greater_state
-        assert state <= same_state
-        assert state == same_state
-        assert state != greater_state
+        assert other_state != state
+        assert same_state == state
 
     def test_cmp_invalid(self):
         """Trying to compare a State instance with an invalid object should raise ValueError."""
@@ -291,26 +280,26 @@ class TestState:
     def test_update_invalid_state(self):
         """Trying to update a State with an invalid value should raise ValueError."""
         state = transports.State()
-        with pytest.raises(ValueError, match='State must be one of'):
+        with pytest.raises(ValueError, match='State must be an instance of HostState'):
             state.update('invalid_state')
 
     def test_update_invalid_transition(self):
         """Trying to update a State with an invalid transition should raise StateTransitionError."""
         state = transports.State()
         with pytest.raises(transports.StateTransitionError, match='the allowed states are'):
-            state.update(transports.State.failed)
+            state.update(transports.HostState.FAILED)
 
     def test_update_ok(self):
         """Properly updating a State should update it without errors."""
         state = transports.State()
-        state.update(transports.State.scheduled)
-        assert state.current == transports.State.scheduled
-        state.update(transports.State.running)
-        assert state.current == transports.State.running
-        state.update(transports.State.success)
-        assert state.current == transports.State.success
-        state.update(transports.State.pending)
-        assert state.current == transports.State.pending
+        state.update(transports.HostState.SCHEDULED)
+        assert state.current == transports.HostState.SCHEDULED
+        state.update(transports.HostState.RUNNING)
+        assert state.current == transports.HostState.RUNNING
+        state.update(transports.HostState.SUCCESS)
+        assert state.current == transports.HostState.SUCCESS
+        state.update(transports.HostState.PENDING)
+        assert state.current == transports.HostState.PENDING
 
 
 class TestTarget:

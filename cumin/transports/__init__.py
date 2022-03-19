@@ -5,6 +5,7 @@ import shlex
 import sys
 
 from abc import ABCMeta, abstractmethod
+from enum import auto, StrEnum
 from typing import Callable, Optional
 
 from ClusterShell.NodeSet import NodeSet
@@ -184,55 +185,69 @@ class Command:
         self._ok_codes = value
 
 
+class HostState(StrEnum):
+    """StrEnum to describe all the possible states for a host."""
+
+    PENDING = auto()
+    """:py:class:`str`: Pending state, not yet scheduled."""
+    SCHEDULED = auto()
+    """:py:class:`str`: Scheduled for execution state."""
+    RUNNING = auto()
+    """:py:class:`str`: Running state, during the execution."""
+    SUCCESS = auto()
+    """:py:class:`str`: Execution completed with success state."""
+    FAILED = auto()
+    """:py:class:`str`: Exectution failed state."""
+    TIMEOUT = auto()
+    """:py:class:`str`: Execution timed out state."""
+
+
 class State:
     """State machine for the state of a host.
 
     .. attribute:: current
 
-       :py:class:`int`: the current state.
+       :py:class:`cumin.transports.HostState`: the current state.
 
     .. attribute:: is_pending
 
-       :py:class:`bool`: :py:data:`True` if the current state is `pending`, :py:data:`False` otherwise.
+       :py:class:`bool`: :py:data:`True` if the current state is :py:attr:`cumin.transports.HostState.PENDING`,
+       :py:data:`False` otherwise.
 
     .. attribute:: is_scheduled
 
-       :py:class:`bool`: :py:data:`True` if the current state is `scheduled`, :py:data:`False` otherwise.
+       :py:class:`bool`: :py:data:`True` if the current state is :py:attr:`cumin.transports.HostState.SCHEDULED`,
+       :py:data:`False` otherwise.
 
     .. attribute:: is_running
 
-       :py:class:`bool`: :py:data:`True` if the current state is `running`, :py:data:`False` otherwise.
+       :py:class:`bool`: :py:data:`True` if the current state is :py:attr:`cumin.transports.HostState.RUNNING`,
+       :py:data:`False` otherwise.
 
     .. attribute:: is_success
 
-       :py:class:`bool`: :py:data:`True` if the current state is `success`, :py:data:`False` otherwise.
+       :py:class:`bool`: :py:data:`True` if the current state is :py:attr:`cumin.transports.HostState.SUCCESS`,
+       :py:data:`False` otherwise.
 
     .. attribute:: is_failed
 
-       :py:class:`bool`: :py:data:`True` if the current state is `failed`, :py:data:`False` otherwise.
+       :py:class:`bool`: :py:data:`True` if the current state is :py:attr:`cumin.transports.HostState.FAILED`,
+       :py:data:`False` otherwise.
 
     .. attribute:: is_timeout
 
-       :py:class:`bool`: :py:data:`True` if the current state is `timeout`, :py:data:`False` otherwise.
+       :py:class:`bool`: :py:data:`True` if the current state is :py:attr:`cumin.transports.HostState.TIMEOUT`,
+       :py:data:`False` otherwise.
 
     """
 
-    valid_states = range(6)
-    """:py:class:`list`: valid states integer indexes."""
-
-    pending, scheduled, running, success, failed, timeout = valid_states
-    """Valid state property, one for each :py:data:`cumin.transports.State.valid_states`."""
-
-    states_representation = ('pending', 'scheduled', 'running', 'success', 'failed', 'timeout')
-    """:py:func:`tuple`: Tuple with the string representations of the valid states."""
-
     allowed_state_transitions = {
-        pending: (scheduled, ),
-        scheduled: (running, ),
-        running: (running, success, failed, timeout),
-        success: (pending, ),
-        failed: (),
-        timeout: (),
+        HostState.PENDING: (HostState.SCHEDULED, ),
+        HostState.SCHEDULED: (HostState.RUNNING, ),
+        HostState.RUNNING: (HostState.RUNNING, HostState.SUCCESS, HostState.FAILED, HostState.TIMEOUT),
+        HostState.SUCCESS: (HostState.PENDING, ),
+        HostState.FAILED: (),
+        HostState.TIMEOUT: (),
     }
     """:py:class:`dict`: Dictionary with ``{valid state: tuple of valid states}`` mapping of the allowed transitions
     between all the possile states.
@@ -250,25 +265,26 @@ class State:
         """State constructor. The initial state is set to `pending` it not provided.
 
         Arguments:
-            init (int, optional): the initial state from where to start. The `pending` state will be used if not set.
+            init (cumin.transports.HostState, optional): the initial state from where to start. The `pending` state
+                will be used if not set.
 
         Raises:
             cumin.transports.InvalidStateError: if `init` is an invalid state.
 
         """
         if init is None:
-            self._state = self.pending
-        elif init in self.valid_states:
+            self._state = HostState.PENDING
+        elif isinstance(init, HostState):
             self._state = init
         else:
-            raise InvalidStateError("Initial state '{state}' is not a valid state. Expected one of {states}".format(
-                state=init, states=self.valid_states))
+            raise InvalidStateError("Initial state '{state}' is not valid, must be an instance of HostState".format(
+                state=init))
 
     def __getattr__(self, name):
         """Attribute accessor.
 
         :Accessible properties:
-            * `current` (:py:class:`int`): retuns the current state.
+            * `current` (:py:class:`cumin.transports.HostState`): retuns the current state.
             * `is_{valid_state_name}` (:py:class:`bool`): for each valid state name, returns :py:data:`True` if the
               current state matches the state in the variable name. :py:data:`False` otherwise.
 
@@ -282,8 +298,8 @@ class State:
         if name == 'current':
             return self._state
 
-        if name.startswith('is_') and name[3:] in self.states_representation:
-            return getattr(self, name[3:]) == self._state
+        if name.startswith('is_') and hasattr(HostState, name[3:].upper()):
+            return HostState[name[3:].upper()] == self._state
 
         raise AttributeError("'State' object has no attribute '{name}'".format(name=name))
 
@@ -305,7 +321,7 @@ class State:
             str: the string representation of the object.
 
         """
-        return self.states_representation[self._state]
+        return str(self._state)
 
     def __eq__(self, other):
         """Equality operator for rich comparison.
@@ -317,89 +333,31 @@ class State:
             bool: :py:data:`True` if `self` is equal to `other`, :py:data:`False` otherwise.
 
         Raises:
-            exceptions.ValueError: if the comparing object is not an instance of :py:class:`State` or a
-                :py:class:`int`.
+            exceptions.ValueError: if the comparing object is not an instance of :py:class:`cumin.transports.State`
+                or a :py:class:`cumin.transports.HostState`.
 
         """
-        return self._cmp(other) == 0
+        if isinstance(other, HostState):
+            return self._state.value == other.value
 
-    def __lt__(self, other):
-        """Less than operator for rich comparison.
+        if isinstance(other, State):
+            return self._state.value == other._state.value  # pylint: disable=protected-access
 
-        :Parameters:
-            according to Python's Data model :py:meth:`object.__lt__`.
-
-        Returns:
-            bool: :py:data:`True` if `self` is lower than `other`, :py:data:`False` otherwise.
-
-        Raises:
-            exceptions.ValueError: if the comparing object is not an instance of :py:class:`State` or a
-                :py:class:`int`.
-
-        """
-        return self._cmp(other) < 0
-
-    def __le__(self, other):
-        """Less than or equal operator for rich comparison.
-
-        :Parameters:
-            according to Python's Data model :py:meth:`object.__le__`.
-
-        Returns:
-            bool: :py:data:`True` if `self` is lower or equal than `other`, :py:data:`False` otherwise.
-
-        Raises:
-            exceptions.ValueError: if the comparing object is not an instance of :py:class:`State` or a
-                :py:class:`int`.
-
-        """
-        return self._cmp(other) <= 0
-
-    def __gt__(self, other):
-        """Greater than operator for rich comparison.
-
-        :Parameters:
-            according to Python's Data model :py:meth:`object.__gt__`.
-
-        Returns:
-            bool: :py:data:`True` if `self` is greater than `other`, :py:data:`False` otherwise.
-
-        Raises:
-            exceptions.ValueError: if the comparing object is not an instance of :py:class:`State` or a
-                :py:class:`int`.
-
-        """
-        return self._cmp(other) > 0
-
-    def __ge__(self, other):
-        """Greater than or equal operator for rich comparison.
-
-        :Parameters:
-            according to Python's Data model :py:meth:`object.__ge__`.
-
-        Returns:
-            bool: :py:data:`True` if `self` is greater or equal than `other`, :py:data:`False` otherwise.
-
-        Raises:
-            exceptions.ValueError: if the comparing object is not an instance of :py:class:`State` or a
-                :py:class:`int`.
-
-        """
-        return self._cmp(other) >= 0
+        raise ValueError("Unable to compare instance of '{other}' with State instance".format(other=type(other)))
 
     def update(self, new):
         """Transition the state from the current state to the new one, if the transition is allowed.
 
         Arguments:
-            new (int): the new state to set. Only specific state transitions are allowed.
+            new (cumin.transports.HostState): the new state to set. Only specific state transitions are allowed.
 
         Raises:
             cumin.transports.StateTransitionError: if the transition is not allowed, see
                 :py:attr:`allowed_state_transitions`.
 
         """
-        if new not in self.valid_states:
-            raise ValueError("State must be one of {valid}, got '{new}'".format(valid=self.valid_states, new=new))
+        if not isinstance(new, HostState):
+            raise ValueError("State must be an instance of HostState, got '{new}'".format(new=new))
 
         if new not in self.allowed_state_transitions[self._state]:
             raise StateTransitionError(
@@ -407,24 +365,6 @@ class State:
                     current=self._state, allowed=self.allowed_state_transitions[self._state], new=new))
 
         self._state = new
-
-    def _cmp(self, other):
-        """Comparison operation. Allow to directly compare a state object to another or to an integer.
-
-        Arguments:
-            other (mixed): the object to compare the current instance to.
-
-        Raises:
-            ValueError: if the comparing object is not an instance of State or an integer.
-
-        """
-        if isinstance(other, int):
-            return self._state - other
-
-        if isinstance(other, State):
-            return self._state - other._state  # pylint: disable=protected-access
-
-        raise ValueError("Unable to compare instance of '{other}' with State instance".format(other=type(other)))
 
 
 class Target:

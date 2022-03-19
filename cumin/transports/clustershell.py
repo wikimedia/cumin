@@ -13,7 +13,7 @@ from tqdm import tqdm
 
 from cumin import nodeset, nodeset_fromlist
 from cumin.color import Colored
-from cumin.transports import (BaseExecutionProgress, BaseWorker, Command, NoProgress, raise_error, State,
+from cumin.transports import (BaseExecutionProgress, BaseWorker, Command, HostState, NoProgress, raise_error, State,
                               Target, TqdmProgressBars, WorkerError)
 
 
@@ -379,7 +379,7 @@ class TqdmQuietReporter(NullReporter):  # pylint: disable=abstract-method some a
             according to parent :py:meth:`BaseReporter.failed_nodes`.
 
         """
-        for state in (State.failed, State.timeout):
+        for state in (HostState.FAILED, HostState.TIMEOUT):
             failed_commands = defaultdict(list)
             for node in [node for node in nodes.values() if node.state == state]:
                 failed_commands[node.running_command_index].append(node.name)
@@ -392,7 +392,7 @@ class TqdmQuietReporter(NullReporter):  # pylint: disable=abstract-method some a
 
                 short_command = self._get_short_command(command) if command is not None else ''
                 message = "of nodes {state} to execute command '{command}'".format(
-                    state=State.states_representation[state], command=short_command)
+                    state=state, command=short_command)
                 log_message, nodes_string = self._get_log_message(len(failed_nodes), num_hosts=num_hosts,
                                                                   message=message, nodes=failed_nodes)
                 self.logger.error('%s%s', log_message, nodes_string)
@@ -537,7 +537,7 @@ class BaseEventHandler(Event.EventHandler):
         # Move already all the nodes in the first_batch to the scheduled state, it means that ClusterShell was
         # already instructed to execute a command on those nodes
         for node_name in target.first_batch:
-            self.nodes[node_name].state.update(State.scheduled)
+            self.nodes[node_name].state.update(HostState.SCHEDULED)
 
         self.progress = progress_bars
         self.reporter = reporter
@@ -591,7 +591,7 @@ class BaseEventHandler(Event.EventHandler):
 
         with self.lock:  # Avoid modifications of the same data from other callbacks triggered by ClusterShell
             curr_node = self.nodes[node]
-            curr_node.state.update(State.running)  # Update the node's state to running
+            curr_node.state.update(HostState.RUNNING)  # Update the node's state to running
 
             command = curr_node.commands[curr_node.running_command_index + 1].command
             # Security check, it should never be triggered
@@ -636,7 +636,7 @@ class BaseEventHandler(Event.EventHandler):
             self.counters['timeout'] = worker.task.num_timeout()
             for node in worker.task.iter_keys_timeout():
                 if not self.nodes[node].state.is_timeout:
-                    self.nodes[node].state.update(State.timeout)
+                    self.nodes[node].state.update(HostState.TIMEOUT)
 
         # Schedule a timer to run the current command on the next node or start the next command
         worker.task.timer(self.target.batch_sleep, worker.eh)
@@ -712,7 +712,7 @@ class SyncEventHandler(BaseEventHandler):
                 first_batch = remaining_nodes[:self.target.batch_size]
                 first_batch_set = nodeset_fromlist(first_batch)
                 for node_name in first_batch:
-                    self.nodes[node_name].state.update(State.scheduled)
+                    self.nodes[node_name].state.update(HostState.SCHEDULED)
 
             command = self.commands[self.current_command_index]
             self.logger.debug(
@@ -789,11 +789,11 @@ class SyncEventHandler(BaseEventHandler):
             if rc in ok_codes or not ok_codes:
                 self.progress.update_success()
                 self.counters['success'] += 1
-                new_state = State.success
+                new_state = HostState.SUCCESS
             else:
                 self.progress.update_failed()
                 self.counters['failed'] += 1
-                new_state = State.failed
+                new_state = HostState.FAILED
 
             curr_node.state.update(new_state)
 
@@ -818,7 +818,7 @@ class SyncEventHandler(BaseEventHandler):
                     if new_node.state.is_pending:
                         # Found the next node where to execute the command
                         node = new_node
-                        node.state.update(State.scheduled)
+                        node.state.update(HostState.SCHEDULED)
                         break
 
         if node is not None:
@@ -858,7 +858,7 @@ class SyncEventHandler(BaseEventHandler):
                 for node in self.nodes.values():
                     if node.state.is_success:
                         # Only nodes in pending state will be scheduled for the next command
-                        node.state.update(State.pending)
+                        node.state.update(HostState.PENDING)
 
         if restart:
             self.start_command(schedule=True)
@@ -922,14 +922,14 @@ class AsyncEventHandler(BaseEventHandler):
                 if curr_node.running_command_index == (len(curr_node.commands) - 1):
                     self.progress.update_success()
                     self.counters['success'] += 1
-                    curr_node.state.update(State.success)
+                    curr_node.state.update(HostState.SUCCESS)
                     schedule_timer = True  # Continue the execution on other nodes if criteria are met
                 else:
                     schedule_next = True  # Continue the execution in the current node with the next command
             else:
                 self.progress.update_failed()
                 self.counters['failed'] += 1
-                curr_node.state.update(State.failed)
+                curr_node.state.update(HostState.FAILED)
                 schedule_timer = True  # Continue the execution on other nodes if criteria are met
 
         if schedule_next:
@@ -959,7 +959,7 @@ class AsyncEventHandler(BaseEventHandler):
                     if new_node.state.is_pending:
                         # Found the next node where to execute all the commands
                         node = new_node
-                        node.state.update(State.scheduled)
+                        node.state.update(HostState.SCHEDULED)
                         break
 
         if node is not None:
