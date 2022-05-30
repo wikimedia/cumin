@@ -1,5 +1,5 @@
 """Transport tests."""
-# pylint: disable=protected-access,no-self-use
+# pylint: disable=protected-access
 from unittest import mock
 
 import pytest

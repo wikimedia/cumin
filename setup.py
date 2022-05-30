@@ -56,6 +56,8 @@ extras_require['tests-base'] = extras_require['tests'][:]
 # generate the manpage during the Debian build process.
 extras_require['tests-min'] = [dep.split(',')[0].replace('>=', '==') if dep.lower().startswith('sphinx') else dep
                                for dep in extras_require['tests']]
+# Add Jinja2 upper limit for min-tests, it breaks with more recent versions
+extras_require['tests-min'].append('jinja2<3.1.0')
 # Add optional dependencies to the tests ones
 extras_require['tests'].extend(extras_require['with-openstack'])
 extras_require['tests-min'].extend(dep.replace('>=', '==') for dep in extras_require['with-openstack'])

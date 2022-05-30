@@ -5,8 +5,7 @@ from string import capwords
 
 import pyparsing as pp
 import requests
-
-from requests.packages import urllib3
+import urllib3
 
 from cumin import nodeset, nodeset_fromlist
 from cumin.backends import BaseQuery, InvalidQueryError

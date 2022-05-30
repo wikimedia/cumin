@@ -389,7 +389,7 @@ class TestCLI:
         assert _EXPECTED_LINES['failed'] not in err, _EXPECTED_LINES['failed']
         assert rc == 2
 
-    def test_version(self, capsys):  # pylint: disable=no-self-use
+    def test_version(self, capsys):
         """Calling --version should return the version and exit."""
         with pytest.raises(SystemExit) as e:
             cli.main(argv=['--version'])
