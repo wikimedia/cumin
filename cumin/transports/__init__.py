@@ -612,8 +612,7 @@ class BaseWorker(metaclass=ABCMeta):
 
         self._commands = commands
 
-    # mypy doesn't support decorated properties: https://github.com/python/mypy/issues/1362
-    @property  # type: ignore
+    @property
     @abstractmethod
     def handler(self):
         """Get and set the `handler` for the current execution.
@@ -629,7 +628,7 @@ class BaseWorker(metaclass=ABCMeta):
             * an event handler class object (not instance)
         """
 
-    @handler.setter  # type: ignore
+    @handler.setter
     @abstractmethod
     def handler(self, value):
         """Setter for the `handler` property. The relative documentation is in the getter."""
