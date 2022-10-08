@@ -230,6 +230,7 @@ class PuppetDBQuery(BaseQuery):
             host=puppetdb_config.get('host', 'localhost'),
             port=puppetdb_config.get('port', 443))
 
+        self.timeout = puppetdb_config.get('timeout', 30)
         self.api_version = puppetdb_config.get('api_version', 4)
         if self.api_version == 3:
             self.url = base_url + '/v3/'
@@ -574,10 +575,15 @@ class PuppetDBQuery(BaseQuery):
 
         """
         if self.api_version == 3:
-            resources = requests.get(self.url + self.endpoint, params={'query': query}, verify=True)
+            payload_key = 'params'
+            verb = 'GET'
         else:
-            resources = requests.post(self.url + self.endpoint, json={'query': query}, verify=True)
+            payload_key = 'json'
+            verb = 'POST'
 
+        params = {'verify': True, 'timeout': self.timeout}
+        params[payload_key] = {'query': query}
+        resources = requests.request(verb, self.url + self.endpoint, **params)
         resources.raise_for_status()
         return resources.json()
 
