@@ -21,6 +21,20 @@ puppetdb:
     scheme: https
     api_version: 4  # Supported versions are v3 and v4. If not specified, v4 will be used.
     timeout: 30  # The timeout in seconds to pass to requests when calling the PuppetDB API [optional]
+
+    # [optional] Whether to verify SSL CA certificate: true to verify with the default system CA
+    # bundle, a path to a certificate to verify against that certificate, or false to disable
+    # verification. This is passed to requests's 'verify' option, for more details see:
+    # https://requests.readthedocs.io/en/latest/user/advanced/#ssl-cert-verification
+    ssl_verify: true
+
+    # [optional] Path to SSL client certificiate and key for communicating with PuppetDB.
+    # If only ssl_client_cert is set, it is assumed that the single file contains both the private
+    # key and the certificate. For more details, see:
+    # https://requests.readthedocs.io/en/latest/user/advanced/#client-side-certificates
+    ssl_client_cert: /path/to/cert.pem
+    ssl_client_key: /path/to/key.pem
+
     urllib3_disable_warnings:  # List of Python urllib3 exceptions to ignore
         - SubjectAltNameWarning
 

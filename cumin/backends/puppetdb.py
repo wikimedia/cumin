@@ -231,6 +231,10 @@ class PuppetDBQuery(BaseQuery):
             port=puppetdb_config.get('port', 443))
 
         self.timeout = puppetdb_config.get('timeout', 30)
+        self.ssl_verify = puppetdb_config.get('ssl_verify', True)
+        self.ssl_client_cert = puppetdb_config.get('ssl_client_cert', '')
+        self.ssl_client_key = puppetdb_config.get('ssl_client_key', '')
+
         self.api_version = puppetdb_config.get('api_version', 4)
         if self.api_version == 3:
             self.url = base_url + '/v3/'
@@ -581,8 +585,19 @@ class PuppetDBQuery(BaseQuery):
             payload_key = 'json'
             verb = 'POST'
 
-        params = {'verify': True, 'timeout': self.timeout}
+        params = {
+            'verify': self.ssl_verify,
+            'timeout': self.timeout
+        }
+
+        if self.ssl_client_cert:
+            if self.ssl_client_key:
+                params['cert'] = (self.ssl_client_cert, self.ssl_client_key)
+            else:
+                params['cert'] = self.ssl_client_cert
+
         params[payload_key] = {'query': query}
+
         resources = requests.request(verb, self.url + self.endpoint, **params)
         resources.raise_for_status()
         return resources.json()
