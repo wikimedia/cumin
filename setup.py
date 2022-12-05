@@ -44,7 +44,8 @@ extras_require = {
         'types-requests',
     ],
     'prospector': [
-        'prospector[with_everything]>=1.3.1',
+        'prospector[with_everything]>=1.3.1,<=1.7.7',  # Temporary upper limit for an upstream regression
+        'pylint<2.15.7',  # Temporary upper limit for a change that breaks prospector that can't be upgraded
         'pytest>=3.10.1',
         'requests-mock>=1.5.2',
     ],
@@ -107,6 +108,7 @@ setup(
     name='cumin',
     packages=find_packages(exclude=['*.tests', '*.tests.*']),
     platforms=['GNU/Linux', 'BSD', 'MacOSX'],
+    python_requires='>=3.7',
     setup_requires=setup_requires,
     url='https://github.com/wikimedia/cumin',
     use_scm_version=True,
