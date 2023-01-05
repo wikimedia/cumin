@@ -10,8 +10,8 @@ with open('README.rst', 'r') as readme:
 
 # Required dependencies
 install_requires = [
-    'clustershell>=1.8.1,<=1.9',
-    'pyparsing>=2.2.0,<=2.99.0',  # Prevent version 3 that is about to be released
+    'clustershell>=1.8.1,<=1.9.99',
+    'pyparsing>=2.2.0,<=3.99.0',
     'pyyaml>=3.13',
     'requests>=2.21.0',
     'tqdm>=4.19.4',
@@ -86,6 +86,7 @@ setup(
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.10',
         'Programming Language :: Python :: 3 :: Only',
         'Topic :: Software Development :: Libraries :: Python Modules',
         'Topic :: System :: Clustering',
