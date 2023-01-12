@@ -53,8 +53,9 @@ class Query(BaseQueryAggregator):
             try:  # No default backend set, using directly the global grammar
                 return super().execute(query_string)
             except ParseException as e:
-                raise InvalidQueryError(("Unable to parse the query '{query}' with the global grammar and no "
-                                         "default backend is set:\n{error}").format(query=query_string, error=e))
+                raise InvalidQueryError(
+                    ("Unable to parse the query '{query}' with the global grammar and no "
+                     "default backend is set:\n{error}").format(query=query_string, error=e)) from e
 
         try:  # Default backend set, trying it first
             hosts = self._query_default_backend(query_string)
@@ -65,7 +66,8 @@ class Query(BaseQueryAggregator):
                 raise InvalidQueryError(
                     ("Unable to parse the query '{query}' neither with the default backend '{name}' nor with the "
                      "global grammar:\n{name}: {e_def}\nglobal: {e_glob}").format(
-                        query=query_string, name=self.config['default_backend'], e_def=e_default, e_glob=e_global))
+                        query=query_string, name=self.config['default_backend'], e_def=e_default, e_glob=e_global)
+                ) from e_global
 
         return hosts
 

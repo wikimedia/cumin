@@ -1,5 +1,4 @@
 """PuppetDB backend tests."""
-# pylint: disable=invalid-name
 from unittest import mock
 
 import pytest

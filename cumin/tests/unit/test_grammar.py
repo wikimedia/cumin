@@ -47,7 +47,8 @@ def test_backend_import_error(mocked_import_modules):
     """If an internal backend raises ImportError because of missing dependencies, it should be skipped."""
     mocked_import_modules.side_effect = ImportError
     backends = grammar.get_registered_backends()
-    assert backends == {}
+    assert not backends
+    assert isinstance(backends, dict)
 
 
 @mock.patch('cumin.grammar.importlib.import_module')

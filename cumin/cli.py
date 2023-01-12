@@ -9,7 +9,7 @@ import pkgutil
 import signal
 import sys
 
-from logging.handlers import RotatingFileHandler  # pylint: disable=ungrouped-imports
+from logging.handlers import RotatingFileHandler
 
 from tqdm import tqdm
 
@@ -20,7 +20,7 @@ from cumin.color import Colored
 from cumin.transports.clustershell import TqdmQuietReporter
 
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 """logging.Logger: The logging instance."""
 OUTPUT_FORMATS = ('txt', 'json')
 """tuple: A tuple with the possible output formats."""
@@ -254,7 +254,7 @@ def sigint_handler(*args):  # pylint: disable=unused-argument
         signum: the signal number
         frame: the current stack frame
     """
-    if not sys.stdout.isatty():  # pylint: disable=no-member
+    if not sys.stdout.isatty():
         logger.warning('Execution interrupted by Ctrl+c/SIGINT')
         raise KeyboardInterruptError
 
@@ -327,14 +327,14 @@ def get_hosts(args, config):
         stderr('FORCE mode enabled, continuing without confirmation')
         return hosts
 
-    if not sys.stdout.isatty():  # pylint: disable=no-member
+    if not sys.stdout.isatty():
         message = 'Not in a TTY but neither DRY-RUN nor FORCE mode were specified.'
         stderr(message)
         raise cumin.CuminError(message)
 
     for i in range(10):
-        stderr(('Ok to proceed on {num} hosts? Enter the number of affected hosts to confirm '
-                'or "q" to quit'.format(num=len(hosts))), end=' ')
+        stderr(('OK to proceed on {num} hosts? Enter the number of affected hosts to confirm '
+                'or "q" to quit:'.format(num=len(hosts))), end=' ')
         answer = input()  # nosec
         if not answer:
             continue

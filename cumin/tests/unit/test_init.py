@@ -1,5 +1,4 @@
 """Cumin package tests."""
-# pylint: disable=invalid-name
 import importlib
 import logging
 import os
@@ -28,7 +27,8 @@ def test_config_class_valid():
 def test_config_class_empty():
     """An empty dictionary is returned if the configuration is empty."""
     config = cumin.Config(config=get_fixture_path(os.path.join('config', 'empty', 'config.yaml')))
-    assert config == {}
+    assert not config
+    assert isinstance(config, dict)
 
 
 def test_config_class_invalid():

@@ -1,7 +1,7 @@
 Cumin - An automation and orchestration framework
 -------------------------------------------------
 
-|GitHub Release| |PyPI Release| |Build Status| |Coveralls Coverage| |Codcov Coverage| |Codacy| |License|
+|GitHub Release| |PyPI Release| |License|
 
 Cumin provides a flexible and scalable automation framework to execute multiple commands on multiple hosts in parallel.
 
@@ -24,14 +24,6 @@ at the Wikimedia Foundation are available on `Wikitech`_.
    :target: https://github.com/wikimedia/cumin/releases
 .. |PyPI Release| image:: https://img.shields.io/pypi/v/cumin.svg
    :target: https://pypi.org/project/cumin/
-.. |Build Status| image:: https://travis-ci.org/wikimedia/cumin.svg?branch=master
-   :target: https://travis-ci.org/wikimedia/cumin
-.. |Coveralls Coverage| image:: https://coveralls.io/repos/github/wikimedia/cumin/badge.svg?branch=master
-   :target: https://coveralls.io/github/wikimedia/cumin
-.. |Codcov Coverage| image:: https://codecov.io/github/wikimedia/cumin/coverage.svg?branch=master
-   :target: https://codecov.io/github/wikimedia/cumin
-.. |Codacy| image:: https://api.codacy.com/project/badge/Grade/73d9a429dc7343eb935471bf05826fc0
-   :target: https://www.codacy.com/app/volans-/cumin
 .. |License| image:: https://img.shields.io/badge/license-GPLv3%2B-blue.svg
    :target: https://github.com/wikimedia/cumin/blob/master/LICENSE
 .. |Cumin GIF| image:: https://people.wikimedia.org/~volans/cumin.gif

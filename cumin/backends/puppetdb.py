@@ -5,8 +5,7 @@ from string import capwords
 
 import pyparsing as pp
 import requests
-
-from requests.packages import urllib3
+import urllib3
 
 from cumin import nodeset, nodeset_fromlist
 from cumin.backends import BaseQuery, InvalidQueryError
@@ -231,6 +230,11 @@ class PuppetDBQuery(BaseQuery):
             host=puppetdb_config.get('host', 'localhost'),
             port=puppetdb_config.get('port', 443))
 
+        self.timeout = puppetdb_config.get('timeout', 30)
+        self.ssl_verify = puppetdb_config.get('ssl_verify', True)
+        self.ssl_client_cert = puppetdb_config.get('ssl_client_cert', '')
+        self.ssl_client_key = puppetdb_config.get('ssl_client_key', '')
+
         self.api_version = puppetdb_config.get('api_version', 4)
         if self.api_version == 3:
             self.url = base_url + '/v3/'
@@ -428,7 +432,7 @@ class PuppetDBQuery(BaseQuery):
             raise InvalidQueryError(
                 "No valid key found in token, one of bool|hosts|category expected: {token}".format(token=token_dict))
 
-    def _get_resource_query(self, key, value=None, operator='='):  # pylint: disable=no-self-use
+    def _get_resource_query(self, key, value=None, operator='='):
         """Build a resource query based on the parameters, resolving the special cases for ``%params`` and ``@field``.
 
         Arguments:
@@ -575,10 +579,26 @@ class PuppetDBQuery(BaseQuery):
 
         """
         if self.api_version == 3:
-            resources = requests.get(self.url + self.endpoint, params={'query': query}, verify=True)
+            payload_key = 'params'
+            verb = 'GET'
         else:
-            resources = requests.post(self.url + self.endpoint, json={'query': query}, verify=True)
+            payload_key = 'json'
+            verb = 'POST'
 
+        params = {
+            'verify': self.ssl_verify,
+            'timeout': self.timeout
+        }
+
+        if self.ssl_client_cert:
+            if self.ssl_client_key:
+                params['cert'] = (self.ssl_client_cert, self.ssl_client_key)
+            else:
+                params['cert'] = self.ssl_client_cert
+
+        params[payload_key] = {'query': query}
+
+        resources = requests.request(verb, self.url + self.endpoint, **params)
         resources.raise_for_status()
         return resources.json()
 

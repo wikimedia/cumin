@@ -1,0 +1,11 @@
+[github]
+repository = cumin
+
+[pypi]
+name = cumin
+wheels_prefix = cumin
+
+[debian]
+distros = bullseye
+source_package = cumin
+binary_package = cumin

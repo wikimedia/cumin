@@ -33,7 +33,7 @@ def grammar():
 
     """
     # Boolean operators
-    boolean = (pp.CaselessKeyword('and not').leaveWhitespace() | pp.CaselessKeyword('and')
+    boolean = (pp.CaselessKeyword('and not') | pp.CaselessKeyword('and')
                | pp.CaselessKeyword('xor') | pp.CaselessKeyword('or'))('bool')
 
     # Parentheses
@@ -149,7 +149,7 @@ class KnownHostsQuery(BaseQueryAggregator):
 
         for filename in known_hosts_filenames:
             hosts = set()
-            with open(filename, 'r') as known_hosts_file:
+            with open(filename, 'r', encoding='utf8') as known_hosts_file:
                 for lineno, line in enumerate(known_hosts_file, 1):
                     try:
                         found, skipped = KnownHostsQuery.parse_known_hosts_line(line)

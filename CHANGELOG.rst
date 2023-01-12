@@ -1,6 +1,52 @@
 Cumin Changelog
 ---------------
 
+`v4.2.0`_ (2023-01-12)
+^^^^^^^^^^^^^^^^^^^^^^
+
+Minor improvements
+""""""""""""""""""
+
+* backends.puppetdb: add a timeout to all requests calls to PuppetDB APIs. Allow to set the timeout from the
+  configuration file, with a default of 30 seconds if not set.
+* backends.puppetdb: support using TLS client certificates when communicating with the PuppetDB server.
+* setup.py: support Python 3.10 and Pyparsing 3
+* cumin: set ``__version__`` during Debian build:
+
+  * In order to better support building in a pure Debian environment where the tests and the man page generation are
+    done without installing the package, add support for reading the ``setuptools_scm`` fake version when exported via
+    ``SETUPTOOLS_SCM_PRETEND_VERSION``.
+
+Bug fixes
+"""""""""
+
+* CLI: minor fix on confirmation message.
+* backends.puppetdb: fix ``urllib3`` import. More recent versions of ``requests`` don't ship ``urllib3`` embedded,
+  import that directly.
+* setup.py: add max version limit for ``Jinja2`` in the ``tests-min`` environment because it breaks the old Sphinx
+  version with more recent versions.
+* grammars: remove usage of ``leaveWhitespace``. The calls to pyparsing's ``leaveWhitespace`` in various grammars was
+  not really necessary and breaks with pyparsing 3+. Removing them in order to add support for pyparsing 3.
+
+Miscellanea
+"""""""""""
+
+* pylint: fix newly reported pylint issues and removed unnecessary disable comments.
+* tests: fix typo in test name
+* prospector: disable pylint's ``consider-using-f-string`` error as the code still uses ``format()``. To be converted
+  to f-string in the future.
+* doc: set the default language. Latest Sphinx 5.0 release requires language to not be ``None``, it raises a warning
+  otherwise, and we fail on warnings.
+* Add configuration for the release script. This adds a WMF-specific configuration file to be used by the release
+  script to make new releases (git tag, debian package, release to apt.w.o, PyPI release).
+* mypy: remove unnecessary ignores now that the upstream bug has been fixed.
+* doc: remove broken badges from the README.
+* setup.py: temporary fix for test dependencies
+* setup.py: add ``python_requires`` metadata.
+* setup.py: set a temporary upper limit for pylint and prospector.
+* Refactor tox to simplify the testing matrix testing the minimum version of dependencies only with the oldest
+  supported Python version (3.7).
+
 `v4.1.1`_ (2021-06-23)
 ^^^^^^^^^^^^^^^^^^^^^^
 
@@ -773,3 +819,4 @@ Bug Fixes
 .. _`v4.0.0`: https://github.com/wikimedia/cumin/releases/tag/v4.0.0
 .. _`v4.1.0`: https://github.com/wikimedia/cumin/releases/tag/v4.1.0
 .. _`v4.1.1`: https://github.com/wikimedia/cumin/releases/tag/v4.1.1
+.. _`v4.2.0`: https://github.com/wikimedia/cumin/releases/tag/v4.2.0

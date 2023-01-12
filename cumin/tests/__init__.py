@@ -15,7 +15,7 @@ def get_fixture(path, as_string=False):
         as_string: return the content as a multiline string instead of a list of lines [optional, default: False]
 
     """
-    with open(get_fixture_path(path)) as f:
+    with open(get_fixture_path(path), encoding='utf8') as f:
         if as_string:
             content = f.read()
         else:

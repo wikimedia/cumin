@@ -81,7 +81,7 @@ def grammar(backend_keys):
 
     """
     # Boolean operators
-    boolean = (pp.CaselessKeyword('and not').leaveWhitespace() | pp.CaselessKeyword('and')
+    boolean = (pp.CaselessKeyword('and not') | pp.CaselessKeyword('and')
                | pp.CaselessKeyword('xor') | pp.CaselessKeyword('or'))('bool')
 
     # Parentheses
@@ -123,7 +123,7 @@ def _import_backend(module, available_backends):
         backend = importlib.import_module(module)
     except ImportError as e:
         if not module.startswith(INTERNAL_BACKEND_PREFIX):
-            raise CuminError("Unable to import backend '{module}': {e}".format(module=module, e=e))
+            raise CuminError("Unable to import backend '{module}': {e}".format(module=module, e=e)) from e
 
         return (None, None)  # Internal backend not available, are all the dependencies installed?
 
@@ -131,8 +131,8 @@ def _import_backend(module, available_backends):
     message = "Unable to register backend '{name}' in module '{module}'".format(name=name, module=module)
     try:
         keyword = backend.GRAMMAR_PREFIX
-    except AttributeError:
-        raise CuminError('{message}: GRAMMAR_PREFIX module attribute not found'.format(message=message))
+    except AttributeError as e:
+        raise CuminError('{message}: GRAMMAR_PREFIX module attribute not found'.format(message=message)) from e
 
     if keyword in available_backends:
         raise CuminError(("{message}: keyword '{key}' already registered: {backends}").format(
@@ -140,8 +140,8 @@ def _import_backend(module, available_backends):
 
     try:
         class_obj = backend.query_class
-    except AttributeError:
-        raise CuminError('{message}: query_class module attribute not found'.format(message=message))
+    except AttributeError as e:
+        raise CuminError('{message}: query_class module attribute not found'.format(message=message)) from e
 
     if not issubclass(class_obj, backends.BaseQuery):
         raise CuminError('{message}: query_class module attribute is not a subclass of cumin.backends.BaseQuery')
