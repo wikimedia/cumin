@@ -21,11 +21,12 @@ install Cumin with the support of an optional backend run for example:
 Debian package
 --------------
 
-The Debian package for each release is available for download on the `Release page`_ on GitHub, along with its GPG
-signature. To build the Debian package from the source code use ``gbp buildpackage`` in the ``debian`` branch. See the
-`Source code`_ section on how to get the source code. The dependencies of the optional backends are listed as
-``Suggested`` packages.
+Cumin is included in Debian (and derived distributions based on it) starting with version 12 (bookworm) and can
+be installed via the ``cumin`` package.
 
+To build the Debian package from the source code you can get it from the `Debian package repository`_ (Salsa),
+it can be build using ``gbp buildpackage``. The dependencies for the optional OpenStack backend are listed
+as ``Suggested`` packages, i.e. you need to deploy them by yourself if you want to use the OpenStack backend.
 
 Source code
 -----------
@@ -43,3 +44,4 @@ on `GitHub`_. To install it, from the ``master`` branch run:
 .. _`Wikimedia's Gerrit`: https://gerrit.wikimedia.org/r/#/admin/projects/operations/software/cumin
 .. _`GitHub`: https://github.com/wikimedia/cumin
 .. _`Release page`: https://github.com/wikimedia/cumin/releases
+.. _`Debian package repository`: https://salsa.debian.org/python-team/packages/cumin
