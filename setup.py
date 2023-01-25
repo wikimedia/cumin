@@ -36,7 +36,7 @@ extras_require = {
         'pytest-xdist>=1.26.1',
         'pytest>=3.10.1',
         'requests-mock>=1.5.2',
-        'sphinx_rtd_theme>=0.4.3',
+        'sphinx_rtd_theme>=1.0',
         'sphinx-argparse>=0.2.2',
         'Sphinx>=1.8.4',
         'types-pkg_resources',
