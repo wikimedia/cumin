@@ -36,7 +36,7 @@ puppetdb:
     ssl_client_key: /path/to/key.pem
 
     urllib3_disable_warnings:  # List of Python urllib3 exceptions to ignore
-        - SubjectAltNameWarning
+        - SomeWarning  # See the urllib3.exceptions module for available warnings
 
 openstack:
     auth_url: http://keystone.local:5000

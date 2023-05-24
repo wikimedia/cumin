@@ -26,8 +26,7 @@ def mocked_requests():
 def query_requests(request, mocked_requests):  # pylint: disable=redefined-outer-name
     """Set the requests library mock for each test and PuppetDB API version."""
     if request.param == 3:  # PuppetDB API v3
-        query = puppetdb.PuppetDBQuery(
-            {'puppetdb': {'api_version': 3, 'urllib3_disable_warnings': ['SubjectAltNameWarning']}})
+        query = puppetdb.PuppetDBQuery({'puppetdb': {'api_version': 3}})
         for endpoint, key in query.hosts_keys.items():
             mocked_requests.register_uri(
                 'GET',

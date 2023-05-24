@@ -8,8 +8,6 @@ environment:
 puppetdb:
     host: puppetdb.local
     port: 443
-    urllib3_disable_warnings:
-        - SubjectAltNameWarning
 
 clustershell:
     ssh_options:
