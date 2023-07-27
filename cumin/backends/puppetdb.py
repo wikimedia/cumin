@@ -314,7 +314,7 @@ class PuppetDBQuery(BaseQuery):
 
         return unique_hosts
 
-    def _add_category(self, category, key, value=None, operator='=', neg=False):
+    def _add_category(self, *, category, key, value=None, operator='=', neg=False):
         """Add a category token to the query 'F:key = value'.
 
         Arguments:
@@ -502,6 +502,7 @@ class PuppetDBQuery(BaseQuery):
         query = self._get_resource_query('Class', title, '=')
 
         if special is not None:
+            # pylint: disable-next=possibly-used-before-assignment
             param_query = self._get_resource_query(''.join(('Class', special, param)), value, operator)
             query = '["and", {query}, {param_query}]'.format(query=query, param_query=param_query)
 
