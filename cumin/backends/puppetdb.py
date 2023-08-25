@@ -308,11 +308,10 @@ class PuppetDBQuery(BaseQuery):
 
         """
         query = self._get_query_string(group=self.grouped_tokens)
-        hosts = self._api_call(query)
-        unique_hosts = nodeset_fromlist([host['certname'] for host in hosts])
-        self.logger.debug("Queried puppetdb for '%s', got '%d' results.", query, len(unique_hosts))
-
-        return unique_hosts
+        full_query = f'["extract", ["certname"], {query}, ["group_by", "certname"]]'
+        hosts = nodeset_fromlist([host['certname'] for host in self._api_call(full_query)])
+        self.logger.debug("Queried puppetdb for '%s', got '%d' results.", query, len(hosts))
+        return hosts
 
     def _add_category(self, *, category, key, value=None, operator='=', neg=False):
         """Add a category token to the query 'F:key = value'.

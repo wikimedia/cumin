@@ -108,6 +108,7 @@ class TestPuppetDBQueryBuildV4:
     ))
     def test_add_category_fact(self, mocked_api_call, query, expected):
         """A fact query should add the proper query token to the current_group."""
+        expected = f'["extract", ["certname"], {expected}, ["group_by", "certname"]]'
         self.query.execute(query)
         mocked_api_call.assert_called_with(expected)
 
@@ -190,6 +191,7 @@ class TestPuppetDBQueryBuildV4:
     ))
     def test_add_category_resource(self, mocked_api_call, query, expected):
         """A resource query should add the proper query token to the current_group."""
+        expected = f'["extract", ["certname"], {expected}, ["group_by", "certname"]]'
         self.query.execute(query)
         mocked_api_call.assert_called_with(expected)
 
@@ -253,6 +255,7 @@ class TestPuppetDBQueryBuildV4:
     ))
     def test_add_hosts(self, mocked_api_call, query, expected):
         """A host query should add the proper query token to the current_group."""
+        expected = f'["extract", ["certname"], {expected}, ["group_by", "certname"]]'
         self.query.execute(query)
         mocked_api_call.assert_called_with(expected)
 
@@ -274,6 +277,7 @@ class TestPuppetDBQueryBuildV4:
     ))
     def test_operator(self, mocked_api_call, query, operator, expected):
         """A query with boolean operators should set the boolean property to the current group."""
+        expected = f'["extract", ["certname"], {expected}, ["group_by", "certname"]]'
         self.query.execute(query)
         assert self.query.current_group['bool'] == operator
         mocked_api_call.assert_called_with(expected)
