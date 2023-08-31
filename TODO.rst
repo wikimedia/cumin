@@ -49,7 +49,6 @@ New Features
   parameter. Needs a new local transport with ExecWorker to shell out in parallel.
 * backends: generalize backends to allow to return other data too, not only the host certnames.
 * backends: add a new backend to support conftool.
-* puppetdb backend: add support for API v4.
 * CLI: when ``-i/--interactive`` is used and no command or query is specified, drop into a REPL session allowing to
   easily setup them.
 

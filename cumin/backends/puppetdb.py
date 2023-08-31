@@ -136,8 +136,7 @@ class PuppetDBQuery(BaseQuery):
     """PuppetDB query builder.
 
     The `puppetdb` backend allow to use an existing PuppetDB instance for the hosts selection.
-    The supported PuppetDB API versions are 3 and 4. It can be specified via the api_version configuration key, if
-    not configured, the v4 will be used.
+    The supported PuppetDB API version is 4.
 
     * Each query part can be composed with the others using boolean operators (``and``, ``or``, ``not``)
     * Multiple query parts can be grouped together with parentheses (``(``, ``)``).
@@ -199,7 +198,7 @@ class PuppetDBQuery(BaseQuery):
       ``host10[10-42].*.domain or (not F:key1 = value1 and host10*) or (F:key2 > value2 and F:key3 ~ '^value[0-9]+')``
     """
 
-    base_url_template = '{scheme}://{host}:{port}'
+    base_url_template = '{scheme}://{host}:{port}/pdb/query/v4/'
     """:py:class:`str`: string template in the :py:meth:`str.format` style used to generate the base URL of the
     PuppetDB server."""
 
@@ -225,7 +224,7 @@ class PuppetDBQuery(BaseQuery):
         self.current_group = self.grouped_tokens
         self._endpoint = None
         puppetdb_config = self.config.get('puppetdb', {})
-        base_url = self.base_url_template.format(
+        self.url = self.base_url_template.format(
             scheme=puppetdb_config.get('scheme', 'https'),
             host=puppetdb_config.get('host', 'localhost'),
             port=puppetdb_config.get('port', 443))
@@ -234,16 +233,6 @@ class PuppetDBQuery(BaseQuery):
         self.ssl_verify = puppetdb_config.get('ssl_verify', True)
         self.ssl_client_cert = puppetdb_config.get('ssl_client_cert', '')
         self.ssl_client_key = puppetdb_config.get('ssl_client_key', '')
-
-        self.api_version = puppetdb_config.get('api_version', 4)
-        if self.api_version == 3:
-            self.url = base_url + '/v3/'
-            self.hosts_keys = {'nodes': 'name', 'resources': 'certname'}
-        elif self.api_version == 4:
-            self.url = base_url + '/pdb/query/v4/'
-            self.hosts_keys = {'nodes': 'certname', 'resources': 'certname'}
-        else:
-            raise InvalidQueryError('Unsupported PuppetDB API version {ver}'.format(ver=self.api_version))
 
         for exception in puppetdb_config.get('urllib3_disable_warnings', []):
             urllib3.disable_warnings(category=getattr(urllib3.exceptions, exception))
@@ -318,9 +307,9 @@ class PuppetDBQuery(BaseQuery):
             ClusterShell.NodeSet.NodeSet: with the FQDNs of the matching hosts.
 
         """
-        query = self._get_query_string(group=self.grouped_tokens).format(host_key=self.hosts_keys[self.endpoint])
+        query = self._get_query_string(group=self.grouped_tokens)
         hosts = self._api_call(query)
-        unique_hosts = nodeset_fromlist([host[self.hosts_keys[self.endpoint]] for host in hosts])
+        unique_hosts = nodeset_fromlist([host['certname'] for host in hosts])
         self.logger.debug("Queried puppetdb for '%s', got '%d' results.", query, len(unique_hosts))
 
         return unique_hosts
@@ -376,7 +365,7 @@ class PuppetDBQuery(BaseQuery):
                     operator = '~'
                     host = r'^' + host.replace('.', r'\\.').replace('*', '.*') + r'$'
 
-                hosts_tokens.append('["{op}", "{{host_key}}", "{host}"]'.format(op=operator, host=host))
+                hosts_tokens.append('["{op}", "certname", "{host}"]'.format(op=operator, host=host))
 
         if not hosts_tokens:
             return
@@ -453,8 +442,6 @@ class PuppetDBQuery(BaseQuery):
 
         if '%' in key:
             # Querying a specific parameter of the resource
-            if operator == '~' and self.api_version == 3:
-                raise InvalidQueryError('Regex operations are not supported in PuppetDB API v3 for resource parameters')
             key, param = key.split('%', 1)
             query_part = ', ["{op}", ["parameter", "{param}"], {value}]'.format(op=operator, param=param, value=value)
 
@@ -578,13 +565,6 @@ class PuppetDBQuery(BaseQuery):
             requests.HTTPError: if the PuppetDB API call fails.
 
         """
-        if self.api_version == 3:
-            payload_key = 'params'
-            verb = 'GET'
-        else:
-            payload_key = 'json'
-            verb = 'POST'
-
         params = {
             'verify': self.ssl_verify,
             'timeout': self.timeout
@@ -596,9 +576,9 @@ class PuppetDBQuery(BaseQuery):
             else:
                 params['cert'] = self.ssl_client_cert
 
-        params[payload_key] = {'query': query}
+        params['json'] = {'query': query}
 
-        resources = requests.request(verb, self.url + self.endpoint, **params)
+        resources = requests.post(self.url + self.endpoint, **params)  # nosec
         resources.raise_for_status()
         return resources.json()
 
