@@ -22,19 +22,20 @@ EOF
     for index in {1..5}; do
         HOST_NAME="${CUMIN_IDENTIFIER}-${index}"
         # TODO: use a custom-generated image
-        docker run -d -p "222${index}:22" -v "/${CUMIN_TMPDIR}/id_${SSH_KEY_ALGO}.pub:/root/.ssh/authorized_keys" -e SSH_ENABLE_ROOT=true \
-            --hostname "${HOST_NAME}" --name "${HOST_NAME}" "panubo/sshd" > /dev/null
+        docker run -d -p "222${index}:2222" -e PUBLIC_KEY="$(cat ${CUMIN_TMPDIR}/id_${SSH_KEY_ALGO}.pub)" \
+            -e USER_NAME=cumin -e SUDO_ACCESS=true --hostname "${HOST_NAME}" --name "${HOST_NAME}" \
+            "linuxserver/openssh-server:latest" > /dev/null
         DOCKER_INSTANCES="${DOCKER_INSTANCES} ${HOST_NAME}"
         SSH_ALIASES="${SSH_ALIASES}
 Host ${HOST_NAME}
-    Hostname localhost
     Port 222${index}
 "
     done
 
     cat <<EOF > "${CUMIN_TMPDIR}/ssh_config"
 Host *
-    User root
+    User cumin
+    Hostname localhost
     IdentityFile ${CUMIN_TMPDIR}/id_${SSH_KEY_ALGO}
     IdentitiesOnly yes
     LogLevel QUIET
