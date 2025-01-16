@@ -20,9 +20,10 @@
 import os
 import sys
 
+from importlib.metadata import version as meta_version
+
 import sphinx_rtd_theme
 
-from pkg_resources import get_distribution
 from sphinx import __version__ as sphinx_version
 
 # Adjust path
@@ -72,7 +73,7 @@ author = u'Riccardo Coccioli'
 # built documents.
 #
 # The full version, including alpha/beta/rc tags.
-release = get_distribution('cumin').version
+release = meta_version('cumin')
 # The short X.Y version.
 version = release
 

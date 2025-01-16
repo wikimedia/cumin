@@ -128,7 +128,7 @@ def get_parser():
     parser.add_argument('--no-progress', action='store_true', help='Do not show the progress bars during execution.')
     parser.add_argument('--version', action='version', version='%(prog)s {version}'.format(version=cumin.__version__))
     parser.add_argument('-d', '--debug', action='store_true',
-                        help=('Set log level to DEBUG. See also log_file in the configuration. [default: False]'))
+                        help='Set log level to DEBUG. See also log_file in the configuration. [default: False]')
     parser.add_argument('--trace', action='store_true',
                         help=('Set log level to TRACE, a custom logging level intended for development debugging. See '
                               'also log_file in the configuration. [default: False]'))
@@ -254,6 +254,7 @@ def sigint_handler(*args):  # pylint: disable=unused-argument
         signum: the signal number
         frame: the current stack frame
     """
+    # pylint: disable-next=no-member; https://github.com/prospector-dev/prospector/issues/677
     if not sys.stdout.isatty():
         logger.warning('Execution interrupted by Ctrl+c/SIGINT')
         raise KeyboardInterruptError

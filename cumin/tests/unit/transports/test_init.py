@@ -81,7 +81,7 @@ class TestCommandParametrized:
         if r'\ ' in command_repr:
             return  # Skip tests with bash-escaped spaces are they will trigger DeprecationWarning
 
-        command_instance = eval(command_repr)  # nosec pylint: disable=eval-used
+        command_instance = eval(command_repr)  # nosec # pylint: disable=eval-used
         assert isinstance(command_instance, transports.Command)
         assert repr(command_instance) == repr(command['obj'])
         assert command_instance.command == command['obj'].command

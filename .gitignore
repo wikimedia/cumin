@@ -1,8 +1,7 @@
 /build/
 /doc/build/
 /.cache/
-/.coverage
-/.coverage-integration-clustershell
+/.coverage*
 /.eggs/
 /.pytest_cache/
 /.tox/
