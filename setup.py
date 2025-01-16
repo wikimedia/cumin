@@ -64,6 +64,12 @@ extras_require['tests-min'] = [dep.split(',')[0].replace('>=', '==') if dep.lowe
                                for dep in extras_require['tests']]
 # Add Jinja2 upper limit for min-tests, it breaks with more recent versions
 extras_require['tests-min'].append('jinja2<3.1.0')
+# Add Sphinx-related packates limit for min-tests, they are not pinned in Sphinx and break if too recent
+extras_require['tests-min'].append('sphinxcontrib-applehelp<1.0.6')
+extras_require['tests-min'].append('sphinxcontrib-devhelp<1.0.4')
+extras_require['tests-min'].append('sphinxcontrib-htmlhelp<2.0.3')
+extras_require['tests-min'].append('sphinxcontrib-serializinghtml<1.1.7')
+extras_require['tests-min'].append('sphinxcontrib-qthelp<1.0.4')
 # Add optional dependencies to the tests ones
 extras_require['tests'].extend(extras_require['with-openstack'])
 extras_require['tests-min'].extend(dep.replace('>=', '==') for dep in extras_require['with-openstack'])

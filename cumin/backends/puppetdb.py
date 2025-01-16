@@ -481,6 +481,7 @@ class PuppetDBQuery(BaseQuery):
         if all(char in key for char in ('%', '@')):
             raise InvalidQueryError(("Resource key cannot contain both '%' (query a resource's parameter) and '@' "
                                      "(query a  resource's field)"))
+        param = None
         if '%' in key:
             special = '%'
             key, param = key.split('%')
