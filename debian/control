@@ -2,11 +2,11 @@ Source: cumin
 Section: utils
 Priority: optional
 Maintainer: Riccardo Coccioli <rcoccioli@wikimedia.org>
-Standards-Version: 4.5.0
+Standards-Version: 4.7.0
 Build-Depends:
   debhelper (>= 12),
   dh-python (>= 3.20190308~),
-  python3-all (>= 3.7),
+  python3-all (>= 3.9),
   python3-clustershell,
   python3-keystoneauth1,
   python3-keystoneclient,
@@ -25,7 +25,7 @@ Build-Depends:
   python3-tqdm,
   python3-yaml
 Homepage: https://github.com/wikimedia/cumin
-X-Python3-Version: >= 3.7
+X-Python3-Version: >= 3.9
 
 Package: cumin
 Architecture: any
