@@ -1,6 +1,55 @@
 Cumin Changelog
 ---------------
 
+`v5.0.0`_ (2025-01-16)
+^^^^^^^^^^^^^^^^^^^^^^
+
+Dependencies breaking changes
+"""""""""""""""""""""""""""""
+
+* Drop Python support for 3.7, 3.8, add suppoert for 3.11, 3.12 and 3.13.
+
+  * Drop support for Python 3.7 and 3.8 (up to Debian Buster).
+  * Add support for Python 3.11, 3.12 and 3.13.
+  * Drop testing on Python 3.10 to speed up CI as that's a version not present in any Debian release.
+  * Update minimum dependencies to the version in Debian Bullseye (apart few exceptions).
+  * Move the tests for minimum version from Python 3.7 to 3.9.
+  * Fix .gitignore matching for .coverage* files.
+  * Add temporary pinning of some sphinx-contrib packages to make it work both on bullseye and sid.
+
+API breaking changes
+""""""""""""""""""""
+
+* puppetdb: drop support for deprecated API v3. As PuppetDB have since long time deprecated version 3 of the API in
+  favor of version 4 and there is no plan of a version 5, cleaning also the multi-version support and stop reading the
+  version from the configuration file.
+
+Minor improvements
+""""""""""""""""""
+
+* puppetdb backend: updated the query so that we only select the certname, which is all cumin needs, it also uses
+  group by to only return unique results.
+
+Bug fixes
+"""""""""
+
+* setup.py: force a newer sphinx_rtd_theme.
+* tests: make it compatible with urllib3 v2.0+.
+* tox.ini: make it compatible with tox 4.0+.
+* tox.ini: add compatibility with newer Sphinx 7.1+ using ``sphinx-build`` instead of ``setup.py build_sphinx.``.
+* doc: update .readthedocs.yml configuration to be compatible with their version 2 of the configuration file schema.
+* doc: don't fail on warning on readthedocs, we currently have a warning to keep the compatibility between bullseye
+  and sid when generating the documentation.
+
+Miscellanea
+"""""""""""
+
+* doc: mention inclusion into Debian upstream.
+* Use importlib.metadata instead of pkg_resources now that Python 3.7 support has been dropped, remove the need for the
+  pkg_resource library and use importlib.metadata instead.
+* integration tests: use linuxserver/openssh-server and adapt config to use a dedicated user and not the root user to
+  the container.
+
 `v4.2.0`_ (2023-01-12)
 ^^^^^^^^^^^^^^^^^^^^^^
 
@@ -820,3 +869,4 @@ Bug Fixes
 .. _`v4.1.0`: https://github.com/wikimedia/cumin/releases/tag/v4.1.0
 .. _`v4.1.1`: https://github.com/wikimedia/cumin/releases/tag/v4.1.1
 .. _`v4.2.0`: https://github.com/wikimedia/cumin/releases/tag/v4.2.0
+.. _`v5.0.0`: https://github.com/wikimedia/cumin/releases/tag/v5.0.0
