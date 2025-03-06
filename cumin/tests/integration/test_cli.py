@@ -450,3 +450,27 @@ class TestCLI:
         assert _EXPECTED_LINES['failed'] not in err, _EXPECTED_LINES['failed']
         assert _EXPECTED_LINES['global_timeout'] not in err, _EXPECTED_LINES['global_timeout']
         assert rc == 0
+
+
+def test_cli_exception_no_trace(capsys):
+    """When --trace is not set and an exception is raised it should not be printed to stderr."""
+    config = os.path.join(os.getenv('CUMIN_TMPDIR', ''), 'config.yaml')
+    params = ['--force', '-c', config, 'Z{invalid query}']
+    rc = cli.main(argv=params)
+    out, err = capsys.readouterr()
+    assert not out
+    assert 'Traceback' not in err
+    assert 'Caught InvalidQueryError exception' in err
+    assert rc == 99
+
+
+def test_cli_exception_trace(capsys):
+    """When --trace is set and an exception is raised it should be printed to stderr."""
+    config = os.path.join(os.getenv('CUMIN_TMPDIR', ''), 'config.yaml')
+    params = ['--force', '--trace', '-c', config, 'Z{invalid query}']
+    rc = cli.main(argv=params)
+    out, err = capsys.readouterr()
+    assert not out
+    assert 'Traceback' in err
+    assert 'cumin.backends.InvalidQueryError' in err
+    assert rc == 99
