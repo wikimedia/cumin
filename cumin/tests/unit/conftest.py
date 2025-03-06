@@ -28,7 +28,7 @@ def mocked_requests():
 def query_requests(mocked_requests):  # pylint: disable=redefined-outer-name
     """Set the requests library mock for each test."""
     query = puppetdb.PuppetDBQuery({})
-    for endpoint in ('nodes', 'resources'):
+    for endpoint in ('nodes', 'resources', 'inventory'):
         mocked_requests.register_uri(
             'POST', query.url + endpoint, status_code=200, complete_qs=True,
             json=[

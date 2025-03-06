@@ -11,11 +11,13 @@ from cumin import nodeset, nodeset_fromlist
 from cumin.backends import BaseQuery, InvalidQueryError
 
 
-CATEGORIES = ('C', 'F', 'O', 'P', 'R')
+CATEGORIES = ('C', 'F', 'I', 'O', 'P', 'R')
 """:py:func:`tuple`: available categories in the grammar.
 
 * ``C``: shortcut for querying resources of type ``Class``, equivalent of `R:Class = class_path``.
-* ``F``: for querying facts.
+* ``F``: for querying legacy facts.
+* ``I``: for querying structured facts and other supported entities using the PuppetDB's dot notation through the
+  inventory API endpoint.
 * ``O``: shortcut for querying resources of type ``Class`` that starts with ``Role::``.
 * ``P``: shortcut for querying resources of type ``Class`` that starts with ``Profile::``.
 * ``R``: for querying generic resources.
@@ -102,9 +104,14 @@ def grammar():  # pylint: disable=too-many-locals
 
     # Key-value token for allowed categories using the available comparison operators
     # i.e. F:key = value
-    category = pp.oneOf(CATEGORIES, caseless=True)('category')
+    category = pp.oneOf(tuple(c for c in CATEGORIES if c != 'I'), caseless=True)('category')
     key = pp.Word(pp.alphanums + '-_.%@:')('key')
-    selector = pp.Combine(category + ':' + key)  # i.e. F:key
+    # Key-value token for the inventory category using the available comparison operators
+    # i.e. I:facts.key[0]."sub.key" = value
+    inventory_category = pp.oneOf(('I',), caseless=True)('category')
+    inventory_key = pp.Word(pp.alphanums + '-_.%@:"[]')('key')
+    # Category and key selector
+    selector = (pp.Combine(category + ':' + key) | pp.Combine(inventory_category + ':' + inventory_key))
     # All printables characters except the parentheses that are part of this or the global grammar
     all_but_par = ''.join([c for c in pp.printables if c not in ('(', ')', '{', '}')])
 
@@ -190,10 +197,15 @@ class PuppetDBQuery(BaseQuery):
         and ``field`` selectors described above can be used directly without the need to add another condition.
       * ``F:FactName = value``: query all the hosts that have a fact ``FactName``, as reported by facter, with the
         value ``value``.
-      * Mixed facts/resources queries are not supported, but the same result can be achieved using the main grammar
+      * ``I:facts.factname.key.subkey = value``: query all the hosts that have the structured fact value represented
+        in PuppetDB's dot notation with the value ``value`` using PuppetDB's inventory endpoint. The ``facts.`` prefix
+        is required to query facts. It also allows to query other entities returned by the ``inventory`` endpoint. See
+        also: https://www.puppet.com/docs/puppetdb/latest/api/query/v4/ast#dot-notation
+      * Mixed facts/resources queries are not supported, but the same result can be achieved using the global grammar
         with multiple subqueries for the PuppetDB backend.
 
-    * All hosts with physicalcorecount fact greater than 2: ``F:physicalcorecount > 2``
+    * All hosts with physicalcorecount fact greater than 2: ``F:physicalcorecount > 2`` or
+      ``I:facts.processors.cores > 2``
     * A complex selection for facts:
       ``host10[10-42].*.domain or (not F:key1 = value1 and host10*) or (F:key2 > value2 and F:key3 ~ '^value[0-9]+')``
     """
@@ -202,7 +214,7 @@ class PuppetDBQuery(BaseQuery):
     """:py:class:`str`: string template in the :py:meth:`str.format` style used to generate the base URL of the
     PuppetDB server."""
 
-    endpoints = {'C': 'resources', 'F': 'nodes', 'O': 'resources', 'P': 'resources', 'R': 'resources'}
+    endpoints = {'C': 'resources', 'F': 'nodes', 'I': 'inventory', 'O': 'resources', 'P': 'resources', 'R': 'resources'}
     """:py:class:`dict`: dictionary with the mapping of the available categories in the grammar to the PuppetDB API
     endpoints."""
 
@@ -332,12 +344,15 @@ class PuppetDBQuery(BaseQuery):
             # PuppetDB API requires to escape every backslash
             # See: https://puppet.com/docs/puppetdb/4.4/api/query/v4/ast.html#regexp-match
             value = value.replace('\\', '\\\\')
+
         if category in ('C', 'O', 'P'):
             query = self._get_special_resource_query(category, key, value, operator)
         elif category == 'R':
             query = self._get_resource_query(key, value, operator)
         elif category == 'F':
             query = '["{op}", ["fact", "{key}"], {val}]'.format(op=operator, key=key, val=value)
+        elif category == 'I':
+            query = '["{op}", "{key}", {val}]'.format(op=operator, key=key, val=value)
         else:  # pragma: no cover - this should never happen
             raise InvalidQueryError(
                 "Got invalid category '{category}', one of F|O|P|R expected".format(category=category))

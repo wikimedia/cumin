@@ -113,6 +113,38 @@ class TestPuppetDBQueryBuildV4:
         mocked_api_call.assert_called_with(expected)
 
     @pytest.mark.parametrize('query, expected', (
+        (  # Base fact
+            'I:facts.key=value',
+            '["=", "facts.key", "value"]'),
+        (  # Negated
+            'not I:facts.key = value',
+            '["not", ["=", "facts.key", "value"]]'),
+        (  # Different operator
+            'I:facts.key >= value',
+            '[">=", "facts.key", "value"]'),
+        (  # Regex with backslash escaped
+            r'I:facts.key ~ value\\escaped',
+            r'["~", "facts.key", "value\\\\escaped"]'),
+        (  # Regex with dot escaped
+            r'I:facts.key ~ value\.escaped',
+            r'["~", "facts.key", "value\\.escaped"]'),
+        (  # Fact path with array
+            'I:facts.key[0].subkey = value',
+            '["=", "facts.key[0].subkey", "value"]'),
+        (  # Fact path with dot in the name
+            'I:facts.key."sub.key" = value',
+            '["=", "facts.key.\"sub.key\"", "value"]'),
+        (  # Multiple query fact and trusted
+            'I:facts.key1 = 1 and I:trusted.key2 = 2',
+            '["and", ["=", "facts.key1", 1], ["=", "trusted.key2", 2]]'),
+    ))
+    def test_add_category_inventory(self, mocked_api_call, query, expected):
+        """An inventory query should add the proper query token to the current_group."""
+        expected = f'["extract", ["certname"], {expected}, ["group_by", "certname"]]'
+        self.query.execute(query)
+        mocked_api_call.assert_called_with(expected)
+
+    @pytest.mark.parametrize('query, expected', (
         (  # Base resource equality
             'R:key = value',
             '["and", ["=", "type", "Key"], ["=", "title", "value"]]'),
@@ -292,12 +324,13 @@ class TestPuppetDBQueryBuildV4:
 @pytest.mark.parametrize('query, expected', (
     ('nodes_host[1-2]', 'nodes_host[1-2]'),  # Nodes
     ('R:Class = value', 'resources_host[1-2]'),  # Resources
+    ('I:facts.structured.property = value', 'inventory_host[1-2]'),  # Inventory
     ('nodes_host1 or nodes_host2', 'nodes_host[1-2]'),  # Nodes with AND
     ('(nodes_host1 or nodes_host2)', 'nodes_host[1-2]'),  # Nodes with subgroup
     ('non_existent_host', None),  # No match
 ))
 def test_endpoints(query_requests, query, expected):
-    """Calling execute() with a query that goes to the nodes endpoint should return the list of hosts."""
+    """Calling execute() with a query should go to the proper endpoint and return the list of hosts."""
     hosts = query_requests[0].execute(query)
     assert hosts == nodeset(expected)
     assert query_requests[1].call_count == 1
@@ -311,7 +344,7 @@ def test_error(query_requests):
 
 
 def test_complex_query(query_requests):
-    """Calling execute() with a complex query should return the exptected structure."""
+    """Calling execute() with a complex query should return the expected structure."""
     category = 'R'
     endpoint = query_requests[0].endpoints[category]
     query_requests[1].register_uri('POST', query_requests[0].url + endpoint + '?query=', status_code=200, json=[
