@@ -474,3 +474,14 @@ def test_cli_exception_trace(capsys):
     assert 'Traceback' in err
     assert 'cumin.backends.InvalidQueryError' in err
     assert rc == 99
+
+
+def test_cli_no_hosts_found(capsys):
+    """If the query returns no hosts it should print that and exit with 0."""
+    config = os.path.join(os.getenv('CUMIN_TMPDIR', ''), 'config.yaml')
+    params = ['--force', '-c', config, '(D{host1} and D{host2}) and D{host[1-5]}']
+    rc = cli.main(argv=params)
+    out, err = capsys.readouterr()
+    assert not out
+    assert 'No hosts found that matches the query' in err
+    assert rc == 0

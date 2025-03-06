@@ -125,3 +125,10 @@ def test_execute_complex_global():
     hosts = query.execute(
         '(D{(host1 or host2) and host[1-5]}) or ((D{host[100-150]} and not D{host1[20-30]}) and D{host1[01,15,30]})')
     assert hosts == nodeset('host[1-2,101,115]')
+
+
+def test_execute_complex_empty_first_result():
+    """If the first block of a multi-part query returns no hosts it should not fail and return hosts accordingly."""
+    query = Query({})
+    hosts = query.execute('(D{host1} and D{host2}) and D{host[1-5]}')
+    assert hosts == nodeset()
