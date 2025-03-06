@@ -22,8 +22,6 @@ import sys
 
 from importlib.metadata import version as meta_version
 
-import sphinx_rtd_theme
-
 from sphinx import __version__ as sphinx_version
 
 # Adjust path
@@ -100,7 +98,6 @@ todo_include_todos = True
 # -- Options for HTML output ----------------------------------------------
 
 html_theme = 'sphinx_rtd_theme'
-html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
 sphinx_version_parts = [int(i) for i in sphinx_version.split('.')]
 if sphinx_version_parts[0] == 1 and sphinx_version_parts[1] < 6:
     html_use_smartypants = False
