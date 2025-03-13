@@ -352,7 +352,8 @@ class PuppetDBQuery(BaseQuery):
         elif category == 'F':
             query = '["{op}", ["fact", "{key}"], {val}]'.format(op=operator, key=key, val=value)
         elif category == 'I':
-            query = '["{op}", "{key}", {val}]'.format(op=operator, key=key, val=value)
+            # In dot-notation if a part of a key has dots they need to be double-quoted, escaping for the JSON
+            query = '["{op}", "{key}", {val}]'.format(op=operator, key=key.replace('"', r'\"'), val=value)
         else:  # pragma: no cover - this should never happen
             raise InvalidQueryError(
                 "Got invalid category '{category}', one of F|O|P|R expected".format(category=category))
