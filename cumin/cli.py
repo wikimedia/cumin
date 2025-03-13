@@ -439,7 +439,7 @@ def validate_config(config):
             config=config))
 
 
-def main(argv=None):
+def main(argv=None):  # noqa: MC0001
     """CLI entry point. Execute commands on hosts according to arguments.
 
     Arguments:
@@ -482,6 +482,8 @@ def main(argv=None):
         exit_code = 98
     except Exception as e:  # pylint: disable=broad-except
         stderr('Caught {name} exception: {msg}'.format(name=e.__class__.__name__, msg=e))
+        if args.trace:
+            logger.addHandler(logging.lastResort)  # Add a stream handler to log to stderr the exception
         logger.exception('Failed to execute')
         exit_code = 99
 

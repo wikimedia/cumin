@@ -1,6 +1,33 @@
 Cumin Changelog
 ---------------
 
+`v5.1.0`_ (2025-03-13)
+^^^^^^^^^^^^^^^^^^^^^^
+
+New features
+""""""""""""
+
+* puppetdb: add support for structured facts and more querying the inventory endpoint of PuppetDB, that allows to
+  query structured facts and other resources exposed by this endpoint with the PuppetDB's dot notation.
+
+Minor improvements
+""""""""""""""""""
+
+* cli: log an eventual exception to stderr when ``--trace`` is set in addition to the log entry in the
+  logs on file for better visibility (`T384539`_).
+
+Bug fixes
+"""""""""
+
+* query: do not error on no match in first subquery. When running queries that have subqueries and the first
+  subquery is empty, cumin is currently raising an ``InvalidQueryError`` while that's still a valid result for
+  the first subquery and should not raise.
+
+Miscellanea
+"""""""""""
+
+* docs: removed deprecated call to ``sphinx_rtd_theme``.
+
 `v5.0.0`_ (2025-01-16)
 ^^^^^^^^^^^^^^^^^^^^^^
 
@@ -851,6 +878,7 @@ Bug Fixes
 .. _`T218441`: https://phabricator.wikimedia.org/T218441
 .. _`T244840`: https://phabricator.wikimedia.org/T244840
 .. _`T270795`: https://phabricator.wikimedia.org/T270795
+.. _`T384539`: https://phabricator.wikimedia.org/T384539
 
 .. _`v0.0.1`: https://github.com/wikimedia/cumin/releases/tag/v0.0.1
 .. _`v0.0.2`: https://github.com/wikimedia/cumin/releases/tag/v0.0.2
@@ -870,3 +898,4 @@ Bug Fixes
 .. _`v4.1.1`: https://github.com/wikimedia/cumin/releases/tag/v4.1.1
 .. _`v4.2.0`: https://github.com/wikimedia/cumin/releases/tag/v4.2.0
 .. _`v5.0.0`: https://github.com/wikimedia/cumin/releases/tag/v5.0.0
+.. _`v5.1.0`: https://github.com/wikimedia/cumin/releases/tag/v5.1.0

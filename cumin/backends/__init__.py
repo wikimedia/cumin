@@ -185,7 +185,7 @@ class BaseQueryAggregator(BaseQuery):
         self.logger.trace("Aggregating: %s | %s | %s", hosts, bool_operator, element_hosts)
 
         # This should never happen
-        if (bool_operator is None and hosts) or (bool_operator is not None and not hosts):  # pragma: no cover
+        if (bool_operator is None and hosts) or (bool_operator is not None and hosts is None):  # pragma: no cover
             raise InvalidQueryError("Unexpected boolean operator '{boolean}' with hosts '{hosts}'".format(
                 boolean=bool_operator, hosts=hosts))
 
@@ -198,5 +198,6 @@ class BaseQueryAggregator(BaseQuery):
         elif bool_operator == 'xor':
             hosts ^= element_hosts
         else:  # pragma: no cover - this should never happen
-            raise InvalidQueryError("Invalid bool operator '{boolean}' found, one of and|and not|or expected".format(
-                boolean=bool_operator))
+            raise InvalidQueryError(
+                "Invalid bool operator '{boolean}' found, one of or|and|and not|xor expected".format(
+                    boolean=bool_operator))

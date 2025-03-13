@@ -15,6 +15,9 @@ whitelist_logging.raiseExceptions
 whitelist_cli = Whitelist()
 whitelist_cli.run.h
 
+whitelist_color = Whitelist()
+whitelist_color.ColoredType.__getattr__
+
 whitelist_Config = Whitelist()  # noqa: N816
 whitelist_Config.__new__
 
