@@ -1,6 +1,14 @@
 Cumin Changelog
 ---------------
 
+`v5.1.1`_ (2025-03-14)
+^^^^^^^^^^^^^^^^^^^^^^
+
+Bug fixes
+"""""""""
+
+* puppetdb: fix inventory query with quoted part in dot-notation for the ``/inventory`` endpoint.
+
 `v5.1.0`_ (2025-03-13)
 ^^^^^^^^^^^^^^^^^^^^^^
 
@@ -899,3 +907,4 @@ Bug Fixes
 .. _`v4.2.0`: https://github.com/wikimedia/cumin/releases/tag/v4.2.0
 .. _`v5.0.0`: https://github.com/wikimedia/cumin/releases/tag/v5.0.0
 .. _`v5.1.0`: https://github.com/wikimedia/cumin/releases/tag/v5.1.0
+.. _`v5.1.1`: https://github.com/wikimedia/cumin/releases/tag/v5.1.1

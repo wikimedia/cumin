@@ -133,7 +133,7 @@ class TestPuppetDBQueryBuildV4:
             '["=", "facts.key[0].subkey", "value"]'),
         (  # Fact path with dot in the name
             'I:facts.key."sub.key" = value',
-            '["=", "facts.key.\"sub.key\"", "value"]'),
+            r'["=", "facts.key.\"sub.key\"", "value"]'),
         (  # Multiple query fact and trusted
             'I:facts.key1 = 1 and I:trusted.key2 = 2',
             '["and", ["=", "facts.key1", 1], ["=", "trusted.key2", 2]]'),
