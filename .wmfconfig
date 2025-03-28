@@ -6,6 +6,6 @@ name = cumin
 wheels_prefix = cumin
 
 [debian]
-distros = bullseye
+distros = bullseye,bookworm
 source_package = cumin
 binary_package = cumin
