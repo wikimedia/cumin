@@ -118,7 +118,7 @@ def test_get_running_user():
 def test_setup_logging(mocked_get_logger, mocked_file_handler, mocked_os_makedirs, mocked_os_path_exists):
     """Calling setup_logging() should properly setup the logger."""
     mocked_os_path_exists.return_value = False
-    cli.setup_logging('/path/to/filename.yaml')
+    cli.setup_logging('/path/to/filename.yaml', 'user')
     assert mock.call().setLevel(INFO) in mocked_get_logger.mock_calls
     assert mocked_file_handler.called
     assert mocked_os_makedirs.called
@@ -129,18 +129,18 @@ def test_setup_logging(mocked_get_logger, mocked_file_handler, mocked_os_makedir
     mocked_os_path_exists.reset_mock()
 
     mocked_os_path_exists.side_effect = FileNotFoundError
-    cli.setup_logging('filename.yaml')
+    cli.setup_logging('filename.yaml', 'user')
     assert mock.call().setLevel(INFO) in mocked_get_logger.mock_calls
     assert mocked_file_handler.called
     assert not mocked_os_makedirs.called
     assert not mocked_os_path_exists.called
 
     mocked_os_path_exists.return_value = True
-    cli.setup_logging('filename.yaml', debug=True)
+    cli.setup_logging('filename.yaml', 'user', debug=True)
     assert mock.call().setLevel(DEBUG) in mocked_get_logger.mock_calls
 
     mocked_os_path_exists.return_value = True
-    cli.setup_logging('filename.yaml', trace=True)
+    cli.setup_logging('filename.yaml', 'user', trace=True)
     assert mock.call().setLevel(LOGGING_TRACE_LEVEL_NUMBER) in mocked_get_logger.mock_calls
 
 

@@ -123,8 +123,9 @@ def make_method(name, commands_set):
     params = copy.deepcopy(commands_set)  # Needed to have a different one for each method
 
     @pytest.mark.variant_params(params)
-    def test_variant(self, capsys):
+    def test_variant(self, capsys, caplog, monkeypatch):
         """Test variant generated function."""
+        monkeypatch.setenv('USER', 'test-user')
         argv = self.default_params + params['params'] + [self.all_nodes] + params['commands']
         rc = cli.main(argv=argv)
         out, err = capsys.readouterr()
@@ -135,6 +136,7 @@ def make_method(name, commands_set):
             params['rc'] = get_rc(params)
 
         assert rc == params['rc']
+        assert f'Cumin execution completed (exit_code={params["rc"]})' in caplog.text
         assert _EXPECTED_LINES['all_targeted'] in err, _EXPECTED_LINES['all_targeted']
 
         labels = params.get('assert_true', [])
