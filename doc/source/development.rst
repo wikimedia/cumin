@@ -66,4 +66,4 @@ To run them:
 .. code-block:: bash
 
     tox -e py311-integration
-    tox -e py39-integration-min
+    tox -e py311-integration-min
