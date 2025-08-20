@@ -5,7 +5,7 @@ import threading
 
 from abc import ABCMeta, abstractmethod
 from collections import Counter, defaultdict
-from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
+from typing import Any, Callable, Optional, Type, Union
 
 from ClusterShell import Event, Task
 from ClusterShell.MsgTree import MsgTreeElem
@@ -183,7 +183,7 @@ class Node:
 
     """
 
-    def __init__(self, name: str, commands: List[Command]):
+    def __init__(self, name: str, commands: list[Command]):
         """Node class constructor with default values.
 
         Arguments:
@@ -205,11 +205,11 @@ class BaseReporter(metaclass=ABCMeta):
         self.logger = logging.getLogger('.'.join((self.__module__, self.__class__.__name__)))
 
     @abstractmethod
-    def global_timeout_nodes(self, nodes: Dict[str, Node], num_hosts: int) -> None:
+    def global_timeout_nodes(self, nodes: dict[str, Node], num_hosts: int) -> None:
         """Print the nodes that were caught by the global timeout in a colored and tqdm-friendly way."""
 
     @abstractmethod
-    def failed_nodes(self, nodes: Dict[str, Node], num_hosts: int, commands: List[Command],
+    def failed_nodes(self, nodes: dict[str, Node], num_hosts: int, commands: list[Command],
                      filter_command_index: int = -1) -> None:
         """Print the nodes that failed to execute commands in a colored and tqdm-friendly way.
 
@@ -226,7 +226,7 @@ class BaseReporter(metaclass=ABCMeta):
     @abstractmethod
     def success_nodes(self, command: Optional[Command],  # pylint: disable=too-many-arguments
                       num_successfull_nodes: int, success_ratio: float, tot: int,
-                      num_hosts: int, success_threshold: float, nodes: Dict[str, Node]) -> None:
+                      num_hosts: int, success_threshold: float, nodes: dict[str, Node]) -> None:
         """Print how many nodes successfully executed all commands in a colored and tqdm-friendly way.
 
         Arguments:
@@ -310,7 +310,7 @@ class TqdmQuietReporter(NullReporter):  # pylint: disable=abstract-method some a
         tqdm.write(color_func(message) + Colored.cyan(nodes_string), file=sys.stderr)
 
     def _get_log_message(self, num: int, num_hosts: int, message: str,  # pylint: disable=no-self-use
-                         nodes: Optional[List[str]] = None) -> Tuple[str, str]:
+                         nodes: Optional[list[str]] = None) -> tuple[str, str]:
         """Get a pre-formatted message suitable for logging or printing.
 
         Arguments:
@@ -350,7 +350,7 @@ class TqdmQuietReporter(NullReporter):  # pylint: disable=abstract-method some a
         sublen = (self.short_command_length - 3) // 2  # The -3 is for the ellipsis
         return (cmd[:sublen] + '...' + cmd[-sublen:]) if len(cmd) > self.short_command_length else cmd
 
-    def global_timeout_nodes(self, nodes: Dict[str, Node], num_hosts: int) -> None:
+    def global_timeout_nodes(self, nodes: dict[str, Node], num_hosts: int) -> None:
         """Print the nodes that were caught by the global timeout in a colored and tqdm-friendly way.
 
         :Parameters:
@@ -371,7 +371,7 @@ class TqdmQuietReporter(NullReporter):  # pylint: disable=abstract-method some a
         self.logger.error('%s%s', not_run_message, not_run_nodes)
         self._report_line(not_run_message, nodes_string=not_run_nodes)
 
-    def failed_nodes(self, nodes: Dict[str, Node], num_hosts: int, commands: List[Command],
+    def failed_nodes(self, nodes: dict[str, Node], num_hosts: int, commands: list[Command],
                      filter_command_index: int = -1) -> None:  # pylint: disable=no-self-use
         """Print the nodes that failed to execute commands in a colored and tqdm-friendly way.
 
@@ -400,7 +400,7 @@ class TqdmQuietReporter(NullReporter):  # pylint: disable=abstract-method some a
 
     def success_nodes(self, command: Optional[Command],  # pylint: disable=too-many-arguments,too-many-locals
                       num_successfull_nodes: int, success_ratio: float, tot: int,
-                      num_hosts: int, success_threshold: float, nodes: Dict[str, Node]) -> None:
+                      num_hosts: int, success_threshold: float, nodes: dict[str, Node]) -> None:
         """Print how many nodes successfully executed all commands in a colored and tqdm-friendly way.
 
         :Parameters:
@@ -504,7 +504,7 @@ class BaseEventHandler(Event.EventHandler):
     """
 
     # FIXME: not sure what the type of **kwargs should be
-    def __init__(self, target: Target, commands: List[Command], reporter: BaseReporter,
+    def __init__(self, target: Target, commands: list[Command], reporter: BaseReporter,
                  progress_bars: BaseExecutionProgress, success_threshold: float = 1.0, **kwargs: Any) -> None:
         """Event handler ClusterShell extension constructor.
 
@@ -528,7 +528,7 @@ class BaseEventHandler(Event.EventHandler):
         self.return_value: Optional[int] = None
         self.commands = commands
         self.kwargs = kwargs  # Allow to store custom parameters from subclasses without changing the signature
-        self.counters: Dict[str, int] = Counter()
+        self.counters: dict[str, int] = Counter()
         self.counters['total'] = len(target.hosts)
         self.deduplicate_output = self.counters['total'] > 1
         self.global_timedout = False
@@ -677,7 +677,7 @@ class SyncEventHandler(BaseEventHandler):
     enough nodes before proceeding with the next one.
     """
 
-    def __init__(self, target: Target, commands: List[Command], reporter: BaseReporter,
+    def __init__(self, target: Target, commands: list[Command], reporter: BaseReporter,
                  progress_bars: BaseExecutionProgress, success_threshold: float = 1.0, **kwargs: Any) -> None:
         """Define a custom ClusterShell event handler to execute commands synchronously.
 
@@ -888,7 +888,7 @@ class AsyncEventHandler(BaseEventHandler):
     orchestration between the nodes.
     """
 
-    def __init__(self, target: Target, commands: List[Command], reporter: BaseReporter,
+    def __init__(self, target: Target, commands: list[Command], reporter: BaseReporter,
                  progress_bars: BaseExecutionProgress, success_threshold: float = 1.0, **kwargs: Any) -> None:
         """Define a custom ClusterShell event handler to execute commands asynchronously between nodes.
 
@@ -1002,5 +1002,5 @@ class AsyncEventHandler(BaseEventHandler):
 worker_class: Type[BaseWorker] = ClusterShellWorker  # pylint: disable=invalid-name
 """Required by the transport auto-loader in :py:meth:`cumin.transport.Transport.new`."""
 
-DEFAULT_HANDLERS: Dict[str, Type[Event.EventHandler]] = {'sync': SyncEventHandler, 'async': AsyncEventHandler}
+DEFAULT_HANDLERS: dict[str, Type[Event.EventHandler]] = {'sync': SyncEventHandler, 'async': AsyncEventHandler}
 """dict: mapping of available default event handlers for :py:class:`ClusterShellWorker`."""
