@@ -5,7 +5,8 @@ import sys
 from pathlib import Path
 
 import cumin
-from cumin import query, transport, transports
+from cumin import nodeset, query, transport, transports
+from cumin.transports import Command, CommandOutputResult, ExecutionStatus, HostsOutputResult, MsgTreeElem
 from cumin.transports.clustershell import NullReporter
 
 
@@ -63,3 +64,38 @@ class TestClustershellTransport:
         sys.stderr.write(err)
         for host in self.hosts:
             assert _HOSTNAME_BLOCK_OUTPUT.format(hostname=host) not in out
+
+    def test_run(self):
+        """It should execute the command on the target hosts and return the results object."""
+        self.worker.handler = 'sync'
+        self.worker.reporter = NullReporter
+        results = self.worker.run()
+
+        all_nodeset = nodeset(self.all_nodes)
+        assert results.return_code == 0
+        assert results.status == ExecutionStatus.SUCCEEDED
+        target_hosts = results.commands_results[0].targets.hosts
+        assert target_hosts.all == all_nodeset
+        assert target_hosts.by_state == {transports.HostState.SUCCESS: all_nodeset}
+        assert target_hosts.by_return_code == {0: all_nodeset}
+        assert not results.commands_results[0].has_single_output
+        expected_outputs = [
+            HostsOutputResult(hosts=nodeset(host), output=CommandOutputResult(
+                splitted_stderr=False, command=self.worker.commands[0], command_index=0,
+                _stdout=MsgTreeElem(host.encode(), parent=MsgTreeElem())))
+            for host in all_nodeset
+        ]
+        outputs = results.commands_results[0].outputs
+        assert len(outputs) == len(expected_outputs)
+        for result in expected_outputs:
+            assert result in outputs
+
+        hostname = f'{self.nodes_prefix}1'
+        host_result = results.hosts_results[hostname]
+        assert host_result.name == hostname
+        assert host_result.commands == (Command('hostname'),)
+        assert host_result.state == transports.HostState.SUCCESS
+        assert host_result.last_executed_command_index == 0
+        assert host_result.return_codes == (0,)
+        assert host_result.outputs[0].stdout() == hostname
+        assert host_result.completed

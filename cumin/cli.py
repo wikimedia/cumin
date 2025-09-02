@@ -412,7 +412,8 @@ def run(args, config):
     if args.output is not None:  # TODO: set the reporter to tqdm when releasing v5.0.0
         worker.reporter = TqdmQuietReporter
     worker.success_threshold = args.success_percentage / 100
-    exit_code = worker.execute()
+    results = worker.run()
+    exit_code = results.return_code
 
     if args.interactive:
         # Define a help function h() that will be available in the interactive shell to print the help message.

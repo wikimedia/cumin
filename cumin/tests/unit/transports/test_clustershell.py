@@ -7,13 +7,13 @@ import pytest
 from cumin import CuminError, nodeset
 from cumin.transports import (BaseExecutionProgress, BaseWorker, clustershell, Command, HostState, State, Target,
                               TqdmProgressBars, WorkerError)
-from cumin.transports.clustershell import Node, NullReporter, TqdmReporter
+from cumin.transports.clustershell import ExecutionRun, HostRun, NullReporter, TqdmReporter
 
 
 def test_node_class_instantiation():
     """Default values should be set when a Node instance is created."""
-    node = clustershell.Node('name', [Command('command1'), Command('command2')])
-    assert node.running_command_index == -1
+    node = clustershell.HostRun(name='name', commands=[Command('command1'), Command('command2')])
+    assert node.last_executed_command_index == -1
     assert isinstance(node.state, State)
 
 
@@ -32,17 +32,17 @@ def test_null_reporter_does_nothing(capsys):
     message = "a message"
     command = "a command"
     commands = [Command("first command"), Command("second command")]
-    node1 = Node("node1", commands)
-    node2 = Node("node2", commands)
+    node1 = HostRun(name="node1", commands=commands)
+    node2 = HostRun(name="node2", commands=commands)
     nodes = [node1, node2]
 
     reporter.command_completed()
-    reporter.command_output(iter(["node1", "node2"]), command)
+    reporter.command_output(iter(["node1", "node2"]))
     reporter.command_header(command)
     reporter.message_element(message)
-    reporter.global_timeout_nodes(nodes, 2)
+    reporter.global_timeout_nodes(nodes)
     reporter.failed_nodes(nodes, 2, commands)
-    reporter.success_nodes(command, 2, 1.0, 2, 2, 1.0, nodes)
+    reporter.success_nodes(command, 2, 1.0, 2, 1.0, nodes)
     out, err = capsys.readouterr()
     assert out == ''
     assert err == ''
@@ -159,9 +159,13 @@ class TestClusterShellWorker:
 
     def test_get_results(self):
         """Calling get_results() should call ClusterShell iter_buffers with the right parameters."""
-        self.worker.task.iter_buffers = TestClusterShellWorker.iter_buffers
+        outputs = mock.Mock()
+        outputs.walk = TestClusterShellWorker.iter_buffers
+        results = mock.Mock()
+        results.outputs = {'stdout': outputs}
         self.worker.handler = 'async'
         self.worker.execute()
+        self.worker._handler_instance.run_report.commands_results = [results, results]
         nodes = None
         output = None
         for nodes, output in self.worker.get_results():
@@ -243,7 +247,7 @@ class TestBaseEventHandler:
         self.worker = mock.MagicMock()
         self.worker.current_node = 'node1'
         self.worker.command = 'command1'
-        self.worker.nodes = self.target.hosts
+        self.worker.run_report = ExecutionRun(commands=self.commands, hosts=self.target.hosts)
         self.handler = None
         self.args = args
         self.progress_bars = mock.MagicMock(spec_set=BaseExecutionProgress)
@@ -266,6 +270,14 @@ class ConcreteBaseEventHandler(clustershell.BaseEventHandler):
 
     def close(self, task):
         """Required by the BaseEventHandler class."""
+        # Set the return codes of commands
+        last_command_index = len(self.commands) - 1
+        self.run_report.last_executed_command_index = last_command_index
+        for node in self.target.hosts:
+            host = self.run_report.hosts[node]
+            host.last_executed_command_index = last_command_index
+            for _ in self.commands:
+                host.return_codes.append(0)
 
 
 class TestConcreteBaseEventHandler(TestBaseEventHandler):
@@ -282,7 +294,7 @@ class TestConcreteBaseEventHandler(TestBaseEventHandler):
 
     def test_instantiation(self):
         """An instance of ConcreteBaseEventHandler should be an instance of BaseEventHandler."""
-        assert sorted(self.handler.nodes.keys()) == list(self.target.hosts)
+        assert sorted(self.handler.run_report.hosts.keys()) == list(self.target.hosts)
 
     @mock.patch('cumin.transports.clustershell.tqdm')
     def test_on_timeout(self, tqdm):
@@ -304,14 +316,14 @@ class TestConcreteBaseEventHandler(TestBaseEventHandler):
         """Calling ev_pickup() should set the state of the current node to running."""
         for node in self.target.hosts:
             self.handler.ev_pickup(self.worker, node)
-        running_nodes = [node for node in self.worker.eh.nodes.values() if node.state.is_running]
-        assert running_nodes == list(self.worker.eh.nodes.values())
+        running_nodes = [node for node in self.worker.eh.run_report.hosts.values() if node.state.is_running]
+        assert running_nodes == list(self.worker.eh.run_report.hosts.values())
 
     @mock.patch('cumin.transports.clustershell.tqdm')
     def test_ev_read_many_hosts(self, tqdm):
         """Calling ev_read() should not print the worker message if matching multiple hosts."""
         for node in self.target.hosts:
-            self.handler.ev_read(self.worker, node, self.worker.SNAME_STDOUT, 'Node output')
+            self.handler.ev_read(self.worker, node, 'stdout', 'Node output')
         assert not tqdm.write.called
 
     @mock.patch('cumin.transports.clustershell.tqdm')
@@ -323,7 +335,7 @@ class TestConcreteBaseEventHandler(TestBaseEventHandler):
 
         output = b'node1 output'
         self.worker.nodes = self.target.hosts
-        self.handler.ev_read(self.worker, self.target.hosts[0], self.worker.SNAME_STDOUT, output)
+        self.handler.ev_read(self.worker, self.target.hosts[0], 'stdout', output)
         assert tqdm.write.call_args[0][0] == output.decode()
 
     def test_ev_close(self):
@@ -331,10 +343,11 @@ class TestConcreteBaseEventHandler(TestBaseEventHandler):
         for node in self.target.hosts:
             self.handler.ev_pickup(self.worker, node)
 
-        assert self.handler.counters['timeout'] == 0
+        assert self.handler.run_report.get_counter()[HostState.TIMEOUT] == 0
         self.worker.task.num_timeout.return_value = 2
+        self.worker.task.iter_keys_timeout.return_value = self.target.hosts
         self.handler.ev_close(self.worker, True)
-        assert self.handler.counters['timeout'] == 2
+        assert self.handler.run_report.get_counter()[HostState.TIMEOUT] == 2
 
 
 class TestSyncEventHandler(TestBaseEventHandler):
@@ -359,21 +372,22 @@ class TestSyncEventHandler(TestBaseEventHandler):
         """Calling start_command() should reset the success counter and initialize the progress bars."""
         self.handler.start_command()
         assert self.handler.progress.init.called
-        assert self.handler.counters['success'] == 0
+        assert self.handler.run_report.get_counter()[HostState.SUCCESS] == 0
 
     @mock.patch('cumin.transports.clustershell.Task.task_self')
     def test_start_command_schedule(self, task_self):
         """Calling start_command() with schedule should also change the state of the first batch nodes."""
         # Reset the state of nodes to pending
-        for node in self.handler.nodes.values():
+        for node in self.handler.run_report.hosts.values():
             node.state.update(HostState.RUNNING)
             node.state.update(HostState.SUCCESS)
             node.state.update(HostState.PENDING)
 
         self.handler.start_command(schedule=True)
         assert self.handler.progress.init.called
-        assert self.handler.counters['success'] == 0
-        scheduled_nodes = sorted(node.name for node in self.handler.nodes.values() if node.state.is_scheduled)
+        assert self.handler.run_report.get_counter()[HostState.SUCCESS] == 0
+        scheduled_nodes = sorted(
+            node.name for node in self.handler.run_report.hosts.values() if node.state.is_scheduled)
         assert scheduled_nodes == sorted(['node1', 'node2'])
         assert task_self.called
 
@@ -381,10 +395,15 @@ class TestSyncEventHandler(TestBaseEventHandler):
     def test_end_command(self, tqdm):
         """Calling end_command() should wrap up the command execution."""
         assert not self.handler.end_command()
-        self.handler.counters['success'] = 2
+        for host in self.handler.run_report.hosts.values():
+            host.state.update(HostState.RUNNING)
+            host.state.update(HostState.SUCCESS)
         assert self.handler.end_command()
         self.handler.success_threshold = 0.5
-        self.handler.counters['success'] = 1
+        self.handler.run_report.hosts['node1'].state.update(HostState.PENDING)
+        self.handler.run_report.hosts['node1'].state.update(HostState.SCHEDULED)
+        self.handler.run_report.hosts['node1'].state.update(HostState.RUNNING)
+        self.handler.run_report.hosts['node1'].state.update(HostState.FAILED)
         assert self.handler.end_command()
         self.handler.current_command_index = 1
         assert not self.handler.end_command()
@@ -410,7 +429,7 @@ class TestSyncEventHandler(TestBaseEventHandler):
         self.handler.ev_hup(self.worker, self.worker.current_node, 100)
         assert self.handler.progress.update_success.called
         assert not timer.called
-        assert self.handler.nodes[self.worker.current_node].state.is_success
+        assert self.handler.run_report.hosts[self.worker.current_node].state.is_success
 
     @mock.patch('cumin.transports.clustershell.Task.Task.timer')
     def test_ev_hup_ko(self, timer):
@@ -419,7 +438,7 @@ class TestSyncEventHandler(TestBaseEventHandler):
         self.handler.ev_hup(self.worker, self.worker.current_node, 1)
         assert self.handler.progress.update_failed.called
         assert not timer.called
-        assert self.handler.nodes[self.worker.current_node].state.is_failed
+        assert self.handler.run_report.hosts[self.worker.current_node].state.is_failed
 
     @mock.patch('cumin.transports.clustershell.tqdm')
     def test_close(self, tqdm):  # pylint: disable=arguments-differ
@@ -459,7 +478,7 @@ class TestAsyncEventHandler(TestBaseEventHandler):
         self.worker.command = 'command2'
         self.handler.ev_pickup(self.worker, self.worker.current_node)
         self.handler.ev_hup(self.worker, self.worker.current_node, 0)
-        assert self.handler.counters['success'] == 1
+        assert self.handler.run_report.get_counter()[HostState.SUCCESS] == 1
         assert self.handler.progress.update_success.called
 
     def test_ev_hup_ko(self):
@@ -476,7 +495,11 @@ class TestAsyncEventHandler(TestBaseEventHandler):
     @mock.patch('cumin.transports.clustershell.tqdm')
     def test_close(self, tqdm):  # pylint: disable=arguments-differ
         """Calling close with a worker should close progress bars."""
-        self.worker.task.iter_buffers = TestClusterShellWorker.iter_buffers
+        outputs = mock.Mock()
+        outputs.walk = TestClusterShellWorker.iter_buffers
+        results = mock.Mock()
+        results.outputs = {'stdout': outputs}
+        self.worker._handler_instance.run_report.commands_results = [results, results]
         self.worker.num_timeout.return_value = 0
         self.handler.close(self.worker)
         assert self.handler.progress.close.called

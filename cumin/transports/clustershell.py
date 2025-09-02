@@ -5,19 +5,22 @@ import threading
 
 from abc import ABCMeta, abstractmethod
 from collections import Counter, defaultdict
+from dataclasses import dataclass, field
+from types import SimpleNamespace
 from typing import Any, Callable, Optional, Type, Union
 
 from ClusterShell import Event, Task
-from ClusterShell.MsgTree import MsgTreeElem
+from ClusterShell.Engine.Engine import EngineTimer
+from ClusterShell.MsgTree import MsgTree, MsgTreeElem
+from ClusterShell.NodeSet import NodeSet
 from tqdm import tqdm
 
-from cumin import nodeset, nodeset_fromlist
+from cumin import nodeset, nodeset_fromlist, transports
 from cumin.color import Colored
-from cumin.transports import (BaseExecutionProgress, BaseWorker, Command, HostState, NoProgress, raise_error, State,
-                              Target, TqdmProgressBars, WorkerError)
+from cumin.transports import HostState  # Direct import to be DRY as it's used many times
 
 
-class ClusterShellWorker(BaseWorker):
+class ClusterShellWorker(transports.BaseWorker):
     """It provides a Cumin worker for SSH using the ClusterShell library.
 
     This transport uses the :py:mod:`ClusterShell` Python library to connect to the selected hosts and execute a
@@ -34,7 +37,7 @@ class ClusterShellWorker(BaseWorker):
       object the handler to the transport.
     """
 
-    def __init__(self, config: dict, target: Target) -> None:
+    def __init__(self, config: dict, target: transports.Target) -> None:
         """Worker ClusterShell constructor.
 
         :Parameters:
@@ -42,7 +45,7 @@ class ClusterShellWorker(BaseWorker):
         """
         super().__init__(config, target)
         self.task = Task.task_self()  # Initialize a ClusterShell task
-        self._handler_instance: Optional[Event.EventHandler] = None
+        self._handler_instance: Optional['BaseEventHandler'] = None
         self._reporter: Type[BaseReporter] = TqdmReporter  # TODO: change this to NullReporter when releasing v5.0.0
         self._progress_bars: bool = True  # TODO: change this to False when releasing v5.0.0
 
@@ -53,20 +56,21 @@ class ClusterShellWorker(BaseWorker):
             else:
                 self.task.set_info(key, value)
 
-    def run(self):
-        """Execute the commands on all the targets using the handler.
-
-        Concrete implementation of parent abstract method.
-
-        :Parameters:
-            according to parent :py:meth:`cumin.transports.BaseWorker.run`.
-
-        """
-        raise NotImplementedError('Not yet implemented')
+        # Disable ClusterShell's default MsgTree instances. Those are managed by the custom EventHandlers.
+        self.task.set_default('stdout_msgtree', False)
+        self.task.set_default('stderr_msgtree', False)
 
     @property
-    def results(self):
-        raise NotImplementedError('Not yet implemented')
+    def results(self) -> transports.ExecutionResults:
+        """Property to access the results instance after having executed the commands.
+
+        Concrete implementation of parent abstract property.
+
+        """
+        if self._handler_instance is None:
+            raise transports.WorkerError('Execution has not started yet, no results available')
+
+        return self._handler_instance.run_report.get_results()
 
     def execute(self) -> int:
         """Execute the commands on all the targets using the handler.
@@ -77,16 +81,27 @@ class ClusterShellWorker(BaseWorker):
             according to parent :py:meth:`cumin.transports.BaseWorker.execute`.
 
         """
+        results = self.run()
+        return results.return_code
+
+    def run(self) -> transports.ExecutionResults:
+        """Execute the commands on all the targets using the handler.
+
+        Concrete implementation of parent abstract method.
+
+        :Parameters:
+            according to parent :py:meth:`cumin.transports.BaseWorker.execute`.
+        """
         if not self.commands:
-            raise WorkerError('No commands provided.')
+            raise transports.WorkerError('No commands provided.')
 
         if self.handler is None:
-            raise WorkerError('An EventHandler is mandatory.')
+            raise transports.WorkerError('An EventHandler is mandatory.')
 
         # Instantiate handler
         # Schedule only the first command for the first batch, the following ones must be handled by the EventHandler
         reporter = self._reporter()  # Instantiate a new Reporter at each execution
-        progress_bars_instance = TqdmProgressBars() if self._progress_bars else NoProgress()
+        progress_bars_instance = transports.TqdmProgressBars() if self._progress_bars else transports.NoProgress()
         self._handler_instance = self.handler(  # pylint: disable=not-callable
             self.target, self.commands, reporter=reporter, success_threshold=self.success_threshold,
             progress_bars=progress_bars_instance)
@@ -96,22 +111,22 @@ class ClusterShellWorker(BaseWorker):
         self.task.shell(self.commands[0].command, nodes=self.target.first_batch, handler=self._handler_instance,
                         timeout=self.commands[0].timeout, stdin=False)
 
-        # FIXME: return_value should not be optional
-        return_value: Optional[int] = 0
         try:
             self.task.run(timeout=self.timeout, stdin=False)
             self.task.join()
         except Task.TimeoutError:
             if self._handler_instance is not None:
+                self._handler_instance.run_report.status = transports.ExecutionStatus.TIMEDOUT
                 self._handler_instance.on_timeout(self.task)
+        except KeyboardInterrupt:
+            if self._handler_instance is not None:
+                self._handler_instance.run_report.status = transports.ExecutionStatus.INTERRUPTED
+            raise
         finally:
             if self._handler_instance is not None:
                 self._handler_instance.close(self.task)
-                return_value = self._handler_instance.return_value
-                if return_value is None:
-                    return_value = 3  # The handler did not set a return value
 
-        return return_value
+        return self.results
 
     def get_results(self):
         """Get the results of the last task execution.
@@ -121,8 +136,9 @@ class ClusterShellWorker(BaseWorker):
         :Parameters:
             according to parent :py:meth:`cumin.transports.BaseWorker.get_results`.
         """
-        for output, nodelist in self.task.iter_buffers():
-            yield nodeset_fromlist(nodelist), output
+        for command_results in self._handler_instance.run_report.commands_results:
+            for output, nodelist in command_results.outputs['stdout'].walk():
+                yield nodeset_fromlist(nodelist), output
 
     @property
     def handler(self) -> Optional[Type['BaseEventHandler']]:
@@ -147,7 +163,7 @@ class ClusterShellWorker(BaseWorker):
         elif value in DEFAULT_HANDLERS:
             self._handler = DEFAULT_HANDLERS[value]
         else:
-            raise_error(
+            transports.raise_error(
                 'handler',
                 'must be one of ({default}, a class object derived from BaseEventHandler)'.format(
                     default=', '.join(DEFAULT_HANDLERS.keys())),
@@ -166,7 +182,8 @@ class ClusterShellWorker(BaseWorker):
     def reporter(self, value: Type['BaseReporter']) -> None:
         """Setter for the `reporter` property. The relative documentation is in the getter."""
         if not issubclass(value, BaseReporter):
-            raise_error('reporter', 'must be a subclass of cumin.transports.clustershell.BaseReporter', value)
+            transports.raise_error(
+                'reporter', 'must be a subclass of cumin.transports.clustershell.BaseReporter', value)
 
         self._reporter = value
 
@@ -179,38 +196,217 @@ class ClusterShellWorker(BaseWorker):
     def progress_bars(self, value: bool) -> None:
         """Setter for the `progress_bars` property. The relative documentation is in the getter."""
         if not isinstance(value, bool):
-            raise_error('progress_bars', 'must be a boolean', value)
-
+            transports.raise_error('progress_bars', 'must be a boolean', value)
         self._progress_bars = value
 
 
-class Node:
-    """Node class to represent each target node.
+@dataclass(kw_only=True)
+class HostRun:
+    """Class to keep track of the execution run for a single host.
 
-    Additional attributes available are:
-
-    .. attribute:: state
-
-       :py:class:`cumin.transports.State`: the state of the node.
-
-    .. attribute:: running_command_index
-
-       :py:class:`int`: the index of the current running command in the list of commands.
+    Arguments:
+        name (str): the hostname used to connect to it, usually the FQDN.
+        commands (list): the list of commands instances to execute.
+        return_codes (list): the list of return codes for each executed command.
+        last_executed_command_index (int): the index of the last executed command from the ``commands`` list on this
+            host.
+        state (cumin.transports.State): the current state of the host.
 
     """
+    name: str
+    commands: list[transports.Command]
+    return_codes: list[int] = field(default_factory=list)
+    last_executed_command_index: int = -1
+    state: transports.State = field(default_factory=transports.State)
 
-    def __init__(self, name: str, commands: list[Command]):
-        """Node class constructor with default values.
+    @property
+    def has_completed(self) -> bool:
+        """Whether the host has executed all commands.
 
-        Arguments:
-            name (str): the hostname of the node.
-            commands (list): a list of :py:class:`cumin.transports.Command` objects to be executed on the node.
+        Returns:
+            bool: :py:data:`True` if the host has executed all commands, :py:data:`False` otherwise.
 
         """
-        self.name = name
-        self.commands = commands
-        self.state = State()  # Initialize the state machine for this node.
-        self.running_command_index = -1  # Pointer to the current running command in self.commands
+        return self.last_executed_command_index == (len(self.commands) - 1)
+
+
+class ExecutionRun:
+    """Class to keep track of the whole execution progress."""
+
+    def __init__(self, *, commands: list[transports.Command], hosts: NodeSet):
+        """Initialize the instance.
+
+        Arguments:
+            commands (list): the list of commands instances to execute.
+            hosts (ClusterShell.NodeSet.NodeSet): the set of hosts to target.
+
+        """
+        self.last_executed_command_index: int = -1
+        self.commands = list(commands)  # Make a copy
+        self.initial_hosts = nodeset(hosts)  # Make a copy
+        self.total = len(hosts)
+
+        self.status = transports.ExecutionStatus.UNKNOWN
+        self.commands_results: list[SimpleNamespace] = [self.init_command_results(i) for i in range(len(self.commands))]
+        self.hosts = {name: HostRun(name=name, commands=self.commands) for name in self.initial_hosts}
+
+    def next_host(self, state: HostState) -> Optional[HostRun]:
+        """Get the next available host in a given state.
+
+        Arguments:
+            state (cumin.transports.HostState): the state a host must be to be selected.
+
+        Returns:
+            None: if no host was found with the given state.
+            cumin.transports.clustershell.HostRun: the host instance if one is found.
+
+        """
+        for host in self.hosts.values():
+            if host.state.current is state:
+                return host
+
+        return None
+
+    def get_counter(self) -> Counter:
+        """Helper method to get a Counter instance with all the hosts by state.
+
+        Returns:
+            Counter: the counter instance with keys that are :py:class:`cumin.transports.HostState` instances.
+
+        """
+        counter: Counter[HostState] = Counter()
+        for host in self.hosts.values():
+            counter[host.state.current] += 1
+
+        return counter
+
+    def init_command_results(self, index: int) -> SimpleNamespace:
+        """Initialize a simple object to keep track of the execution of a given command.
+
+        Arguments:
+            index (int): the index of the command from the ``commands`` list on this host to track.
+
+        Returns:
+            types.SimpleNamespace: the simple object.
+
+        """
+        command = SimpleNamespace()
+        command.command = self.commands[index]
+        command.command_index = index
+        command.outputs = {'stdout': MsgTree(), 'stderr': MsgTree()}
+        return command
+
+    def get_targets(self) -> list[transports.TargetedHosts]:
+        """Helper method to get the TargetedHosts instances when returning the final results.
+
+        Returns:
+            list: a list of :py:class:`cumin.transports.TargetedHosts` instances, one for each executed command.
+
+        """
+        targets: list[SimpleNamespace] = []
+        for index in range(len(self.commands)):
+            target = SimpleNamespace()
+            target.all = nodeset()
+            target.by_state = defaultdict(nodeset)
+            target.by_return_code = defaultdict(nodeset)
+            targets.append(target)
+
+        for host in self.hosts.values():
+            for ok_index in range(host.last_executed_command_index):
+                target = targets[ok_index]
+                target.all.add(host.name)
+                target.by_state[HostState.SUCCESS].add(host.name)
+                target.by_return_code[host.return_codes[ok_index]].add(host.name)
+
+            index = host.last_executed_command_index if host.last_executed_command_index > -1 else 0
+            target = targets[index]
+            target.all.add(host.name)
+            target.by_state[host.state.current].add(host.name)
+            if len(host.return_codes) >= index + 1:
+                target.by_return_code[host.return_codes[host.last_executed_command_index]].add(host.name)
+
+        return [
+            transports.get_targeted_hosts(
+                all_hosts=target.all,
+                by_state=dict(target.by_state),
+                by_return_code=dict(target.by_return_code),
+            ) for target in targets
+        ]
+
+    def get_command_outputs(self, index: int) -> tuple[transports.HostsOutputResult, ...]:
+        """Get the command outputs for a given command index.
+
+        Arguments:
+            index (int): the index of the command from the ``commands`` list on this host to track.
+
+        Returns:
+            list: the list of command outputs.
+
+        """
+        command_outputs = []
+        command_results = self.commands_results[index]
+        for stdout, nodelist in command_results.outputs['stdout'].walk():
+            command_outputs.append(
+                transports.HostsOutputResult(
+                    hosts=nodeset_fromlist(nodelist),
+                    output=transports.CommandOutputResult(
+                        splitted_stderr=False,
+                        command=command_results.command,
+                        command_index=command_results.command_index,
+                        _stdout=stdout,
+                    ),
+                )
+            )
+
+        return tuple(command_outputs)
+
+    def get_results(self) -> transports.ExecutionResults:
+        """Get the final results in the cumin's API representation.
+
+        Returns:
+            cumin.transports.ExecutionResults: the results instance.
+
+        """
+        targets = self.get_targets()
+        commands_results = []
+        for index, command_results in enumerate(self.commands_results):
+            commands_results.append(
+                transports.CommandResults(
+                    command=command_results.command,
+                    command_index=command_results.command_index,
+                    targets=targets[index],
+                    outputs=self.get_command_outputs(index),
+                )
+            )
+
+        hosts_results = {}
+        for name, host in self.hosts.items():
+            host_outputs = []
+            for index in range(host.last_executed_command_index + 1):
+                host_outputs.append(
+                    transports.CommandOutputResult(
+                        splitted_stderr=False,
+                        command=host.commands[index],
+                        command_index=index,
+                        _stdout=self.commands_results[index].outputs['stdout'].get(name, MsgTreeElem()),
+                    )
+                )
+
+            hosts_results[name] = transports.HostResults(
+                name=name,
+                state=host.state.current,
+                commands=tuple(host.commands),
+                last_executed_command_index=host.last_executed_command_index,
+                return_codes=tuple(host.return_codes),
+                outputs=tuple(host_outputs),
+            )
+
+        return transports.ExecutionResults(
+            status=self.status,
+            last_executed_command_index=self.last_executed_command_index,
+            commands_results=tuple(commands_results),
+            hosts_results=hosts_results,
+        )
 
 
 class BaseReporter(metaclass=ABCMeta):
@@ -221,12 +417,17 @@ class BaseReporter(metaclass=ABCMeta):
         self.logger = logging.getLogger('.'.join((self.__module__, self.__class__.__name__)))
 
     @abstractmethod
-    def global_timeout_nodes(self, nodes: dict[str, Node], num_hosts: int) -> None:
-        """Print the nodes that were caught by the global timeout in a colored and tqdm-friendly way."""
+    def global_timeout_nodes(self, nodes: dict[str, HostRun]) -> None:
+        """Print the nodes that were caught by the global timeout in a colored and tqdm-friendly way.
+
+        Arguments:
+            nodes (dict): the mapping of the nodes processed.
+
+        """
 
     @abstractmethod
-    def failed_nodes(self, nodes: dict[str, Node], num_hosts: int, commands: list[Command],
-                     filter_command_index: int = -1) -> None:
+    def failed_nodes(self, nodes: dict[str, HostRun], num_hosts: int,
+                     commands: list[transports.Command], filter_command_index: int = -1) -> None:
         """Print the nodes that failed to execute commands in a colored and tqdm-friendly way.
 
         Arguments:
@@ -240,13 +441,13 @@ class BaseReporter(metaclass=ABCMeta):
 
     # FIXME: refactor this to reduce number of arguments and pass a more structured execution context
     @abstractmethod
-    def success_nodes(self, command: Optional[Command],  # pylint: disable=too-many-arguments
-                      num_successfull_nodes: int, success_ratio: float, tot: int,
-                      num_hosts: int, success_threshold: float, nodes: dict[str, Node]) -> None:
+    def success_nodes(self, command: Optional[transports.Command],  # pylint: disable=too-many-arguments
+                      num_successfull_nodes: int, success_ratio: float, num_hosts: int, success_threshold: float,
+                      nodes: dict[str, HostRun]) -> None:
         """Print how many nodes successfully executed all commands in a colored and tqdm-friendly way.
 
         Arguments:
-            command (Command): the command that was executed
+            command (cumin.transports.Command): the command that was executed
             num_successfull_nodes (int): the number of nodes on which the execution was successful
             success_ratio (float): the ratio of successful nodes
             tot (int): total number of successful executions
@@ -261,20 +462,17 @@ class BaseReporter(metaclass=ABCMeta):
     def command_completed(self) -> None:
         """To be called on completion of processing, when no command specific output is required."""
 
-    # FIXME: buffer_iterator should have a more specific type annotation
     @abstractmethod
-    def command_output(self, buffer_iterator: Any, command: Optional[Command] = None) -> None:
+    def command_output(self, command_outputs: tuple[transports.HostsOutputResult, ...]) -> None:
         """Print the command output in a colored and tqdm-friendly way.
 
         Arguments:
-            buffer_iterator (mixed): any `ClusterShell` object that implements ``iter_buffers()`` like
-                :py:class:`ClusterShell.Task.Task` and all the `Worker` objects.
-            command (Command, optional): the command the output is referring to.
+            command_outputs (list): the list of command outputs instances.
 
         """
 
     @abstractmethod
-    def command_header(self, command: Command) -> None:
+    def command_header(self, command: transports.Command) -> None:
         """Reports a single command execution.
 
         Arguments:
@@ -352,13 +550,14 @@ class TqdmQuietReporter(NullReporter):  # pylint: disable=abstract-method some a
 
         return log_message, nodes_string
 
-    def global_timeout_nodes(self, nodes: dict[str, Node], num_hosts: int) -> None:
+    def global_timeout_nodes(self, nodes: dict[str, HostRun]) -> None:
         """Print the nodes that were caught by the global timeout in a colored and tqdm-friendly way.
 
         :Parameters:
             according to parent :py:meth:`BaseReporter.global_timeout_nodes`.
 
         """
+        num_hosts = len(nodes)
         timeout = [node.name for node in nodes.values() if node.state.is_timeout]
         timeout_desc = 'of nodes were executing a command when the global timeout occurred'
         timeout_message, timeout_nodes = self._get_log_message(len(timeout), num_hosts=num_hosts,
@@ -373,8 +572,10 @@ class TqdmQuietReporter(NullReporter):  # pylint: disable=abstract-method some a
         self.logger.error('%s%s', not_run_message, not_run_nodes)
         self._report_line(not_run_message, nodes_string=not_run_nodes)
 
-    def failed_nodes(self, nodes: dict[str, Node], num_hosts: int, commands: list[Command],
-                     filter_command_index: int = -1) -> None:  # pylint: disable=no-self-use
+    def failed_nodes(
+        self, nodes: dict[str, HostRun], num_hosts: int,
+        commands: list[transports.Command], filter_command_index: int = -1,
+    ) -> None:  # pylint: disable=no-self-use
         """Print the nodes that failed to execute commands in a colored and tqdm-friendly way.
 
         :Parameters:
@@ -383,8 +584,8 @@ class TqdmQuietReporter(NullReporter):  # pylint: disable=abstract-method some a
         """
         for state in (HostState.FAILED, HostState.TIMEOUT):
             failed_commands = defaultdict(list)
-            for node in [node for node in nodes.values() if node.state == state]:
-                failed_commands[node.running_command_index].append(node.name)
+            for node in [node for node in nodes.values() if node.state.current is state]:
+                failed_commands[node.last_executed_command_index].append(node.name)
 
             for index, failed_nodes in failed_commands.items():
                 command = commands[index]
@@ -400,9 +601,9 @@ class TqdmQuietReporter(NullReporter):  # pylint: disable=abstract-method some a
                 self.logger.error('%s%s', log_message, nodes_string)
                 self._report_line(log_message, nodes_string=nodes_string)
 
-    def success_nodes(self, command: Optional[Command],  # pylint: disable=too-many-arguments,too-many-locals
-                      num_successfull_nodes: int, success_ratio: float, tot: int,
-                      num_hosts: int, success_threshold: float, nodes: dict[str, Node]) -> None:
+    def success_nodes(self, command: Optional[transports.Command],  # pylint: disable=too-many-arguments,too-many-locals
+                      num_successfull_nodes: int, success_ratio: float, num_hosts: int, success_threshold: float,
+                      nodes: dict[str, HostRun]) -> None:
         """Print how many nodes successfully executed all commands in a colored and tqdm-friendly way.
 
         :Parameters:
@@ -419,13 +620,13 @@ class TqdmQuietReporter(NullReporter):  # pylint: disable=abstract-method some a
         if command is not None:
             message_string = " for command: '{command}'".format(command=command.shortened())
         nodes_to_log = None
-        if num_successfull_nodes not in (0, tot):
+        if num_successfull_nodes not in (0, num_hosts):
             nodes_to_log = [node.name for node in nodes.values() if node.state.is_success]
         message = "success ratio ({comp} {perc:.1%} threshold){message_string}{post}".format(
             comp=comp, perc=success_threshold, message_string=message_string, post=post)
         log_message, nodes_string = self._get_log_message(num_successfull_nodes, num_hosts=num_hosts,
                                                           message=message, nodes=nodes_to_log)
-        if num_successfull_nodes == tot:
+        if num_successfull_nodes == num_hosts:
             color_func = Colored.green
             level = logging.INFO
         elif success_ratio >= success_threshold:
@@ -450,34 +651,28 @@ class TqdmReporter(TqdmQuietReporter):
         """
         tqdm.write(Colored.blue('================'), file=sys.stdout)
 
-    def command_output(self, buffer_iterator: Any, command: Optional[Command] = None) -> None:
+    def command_output(self, command_outputs: tuple[transports.HostsOutputResult, ...]) -> None:
         """Print the command output in a colored and tqdm-friendly way.
 
         :Parameters:
             according to parent :py:meth:`BaseReporter.command_output`.
 
         """
-        nodelist = None
-        if command is not None:
-            output_message = "----- OUTPUT of '{command}' -----".format(command=command.shortened())
-        else:
-            output_message = '----- OUTPUT -----'
-
-        for output, nodelist in buffer_iterator.iter_buffers():
+        for command_output in command_outputs:
             tqdm.write(Colored.blue('===== NODE GROUP ====='), file=sys.stdout)
-            tqdm.write(Colored.cyan('({num}) {nodes}'.format(num=len(nodelist), nodes=nodeset_fromlist(nodelist))),
-                       file=sys.stdout)
-            tqdm.write(Colored.blue(output_message), file=sys.stdout)
-            tqdm.write(output.message().decode(), file=sys.stdout)
+            tqdm.write(
+                Colored.cyan('({num}) {nodes}'.format(num=len(command_output.hosts), nodes=command_output.hosts)),
+                file=sys.stdout)
+            tqdm.write(command_output.output.format(colored=True), file=sys.stdout)
 
-        if nodelist is None:
-            message = '===== NO OUTPUT ====='
-        else:
+        if command_outputs:
             message = '================'
+        else:
+            message = '===== NO OUTPUT ====='
 
         tqdm.write(Colored.blue(message), file=sys.stdout)
 
-    def command_header(self, command: Command) -> None:
+    def command_header(self, command: transports.Command) -> None:
         """Reports a single command execution.
 
         :Parameters:
@@ -505,16 +700,17 @@ class BaseEventHandler(Event.EventHandler):
     functionalities.
     """
 
-    # FIXME: not sure what the type of **kwargs should be
-    def __init__(self, target: Target, commands: list[Command], reporter: BaseReporter,
-                 progress_bars: BaseExecutionProgress, success_threshold: float = 1.0, **kwargs: Any) -> None:
+    def __init__(
+        self, target: transports.Target, commands: list[transports.Command], reporter: BaseReporter,
+        progress_bars: transports.BaseExecutionProgress, success_threshold: float = 1.0, **kwargs: Any,
+    ) -> None:
         """Event handler ClusterShell extension constructor.
 
         Arguments:
             target (cumin.transports.Target): a Target instance.
             commands (list): the list of Command objects that has to be executed on the nodes.
             reporter (cumin.transports.clustershell.BaseReporter): reporter used to output progress.
-            progress_bars (BaseExecutionProgress): the progress bars instance.
+            progress_bars (cumin.transports.BaseExecutionProgress): the progress bars instance.
             success_threshold (float, optional): the success threshold, a :py:class:`float` between ``0`` and ``1``,
                 to consider the execution successful.
             **kwargs (optional): additional keyword arguments that might be used by derived classes.
@@ -527,22 +723,18 @@ class BaseEventHandler(Event.EventHandler):
         self.lock = threading.Lock()  # Used to update instance variables coherently from within callbacks
 
         # Execution management variables
-        self.return_value: Optional[int] = None
         self.commands = commands
         self.kwargs = kwargs  # Allow to store custom parameters from subclasses without changing the signature
-        self.counters: dict[str, int] = Counter()
-        self.counters['total'] = len(target.hosts)
-        self.deduplicate_output = self.counters['total'] > 1
+        self.deduplicate_output = len(target.hosts) > 1
         self.global_timedout = False
-        # Instantiate all the node instances, slicing the commands list to get a copy
-        self.nodes = {node: Node(node, commands[:]) for node in target.hosts}
-        # Move already all the nodes in the first_batch to the scheduled state, it means that ClusterShell was
-        # already instructed to execute a command on those nodes
-        for node_name in target.first_batch:
-            self.nodes[node_name].state.update(HostState.SCHEDULED)
 
         self.progress = progress_bars
         self.reporter = reporter
+        self.run_report = ExecutionRun(commands=self.commands, hosts=self.target.hosts)
+        # Move already all the nodes in the first_batch to the scheduled state, it means that ClusterShell was
+        # already instructed to execute a command on those nodes
+        for node_name in target.first_batch:
+            self.run_report.hosts[node_name].state.update(HostState.SCHEDULED)
 
     def close(self, task):
         """Additional method called at the end of the whole execution, useful for reporting and final actions.
@@ -568,18 +760,27 @@ class BaseEventHandler(Event.EventHandler):
 
         with self.lock:  # Avoid modifications of the same data from other callbacks triggered by ClusterShell
             self.global_timedout = True
+            self.run_report.status = transports.ExecutionStatus.TIMEDOUT
             # Considering timed out also the nodes that were pending the execution (for example when executing in
             # batches) and those that were already scheduled (for example when the # of nodes is greater than
             # ClusterShell fanout)
             pending_or_scheduled = sum(
-                (node.state.is_pending or node.state.is_scheduled
-                 or (node.state.is_success and node.running_command_index < (len(node.commands) - 1))
-                 ) for node in self.nodes.values())
+                host.state.is_pending or host.state.is_scheduled or (host.state.is_success and not host.has_completed)
+                for host in self.run_report.hosts.values())
             if pending_or_scheduled > 0:
                 self.progress.update_failed(num_timeout + pending_or_scheduled)
 
-        if self.global_timedout:
-            self.reporter.global_timeout_nodes(self.nodes, self.counters['total'])
+        self.reporter.global_timeout_nodes(self.run_report.hosts)
+
+    def ev_hup(self, worker, node, rc):
+        """Command execution completed on a node.
+
+        This callback is triggered by ClusterShell for each node when it completes the execution of a command.
+
+        :Parameters:
+            according to parent :py:meth:`ClusterShell.Event.EventHandler.ev_hup`.
+        """
+        self.logger.debug("node=%s, rc=%d, command='%s'", node, rc, worker.command)
 
     def ev_pickup(self, worker, node):
         """Command execution started on a node, remove the command from the node's queue.
@@ -592,20 +793,24 @@ class BaseEventHandler(Event.EventHandler):
         self.logger.debug("node=%s, command='%s'", node, worker.command)
 
         with self.lock:  # Avoid modifications of the same data from other callbacks triggered by ClusterShell
-            curr_node = self.nodes[node]
-            curr_node.state.update(HostState.RUNNING)  # Update the node's state to running
+            host = self.run_report.hosts[node]
 
-            command = curr_node.commands[curr_node.running_command_index + 1]
+            command = host.commands[host.last_executed_command_index + 1]
             # Security check, it should never be triggered
             if command.command != worker.command:
-                raise WorkerError("ev_pickup: got unexpected command '{command}', expected '{expected}'".format(
-                    command=command.command, expected=worker.command))
-            curr_node.running_command_index += 1  # Move the pointer of the current command
+                raise transports.WorkerError(
+                    "ev_pickup: got unexpected command '{command}', expected '{expected}'".format(
+                        command=command.command, expected=worker.command))
+
+            host.state.update(HostState.RUNNING)  # Update the node's state to running
+            host.last_executed_command_index += 1  # Move the pointer of the current command
+            if self.run_report.last_executed_command_index < host.last_executed_command_index:
+                self.run_report.last_executed_command_index = host.last_executed_command_index
 
         if not self.deduplicate_output:
             self.reporter.command_header(command)
 
-    def ev_read(self, worker, node, _, msg):
+    def ev_read(self, worker, node, sname, msg):
         """Worker has data to read from a specific node. Print it if running on a single host.
 
         This callback is triggered by ClusterShell for each node when output is available.
@@ -613,6 +818,8 @@ class BaseEventHandler(Event.EventHandler):
         :Parameters:
             according to parent :py:meth:`ClusterShell.Event.EventHandler.ev_read`.
         """
+        host = self.run_report.hosts[node]
+        self.run_report.commands_results[host.last_executed_command_index].outputs[sname].add(node, msg)
         if self.deduplicate_output:
             return
 
@@ -630,37 +837,55 @@ class BaseEventHandler(Event.EventHandler):
         if not timedout:
             return
 
-        delta_timeout = worker.task.num_timeout() - self.counters['timeout']
-        self.logger.debug("command='%s', delta_timeout=%d", worker.command, delta_timeout)
+        self.logger.debug("command='%s', total_timedout=%d", worker.command, worker.task.num_timeout())
 
         with self.lock:  # Avoid modifications of the same data from other callbacks triggered by ClusterShell
-            self.progress.update_failed(delta_timeout)
-            self.counters['timeout'] = worker.task.num_timeout()
-            for node in worker.task.iter_keys_timeout():
-                if not self.nodes[node].state.is_timeout:
-                    self.nodes[node].state.update(HostState.TIMEOUT)
+            new_timedout = 0
+            for name in worker.task.iter_keys_timeout():
+                host = self.run_report.hosts[name]
+                if host.state.is_timeout:
+                    continue
+
+                new_timedout += 1
+                host.state.update(HostState.TIMEOUT)
+
+            self.progress.update_failed(new_timedout)
 
         # Schedule a timer to run the current command on the next node or start the next command
         worker.task.timer(self.target.batch_sleep, worker.eh)
 
-    def _success_nodes_report(self, command: Optional[Command] = None) -> None:
+    def _success_nodes_report(self, current_command_index: int = -1) -> None:
         """Print how many nodes successfully executed all commands in a colored and tqdm-friendly way.
 
         Arguments:
-            command (Command, optional): the command the report is referring to.
+            current_command_index (int, optional): the command index the success is referring to, if any.
 
         """
-        if self.global_timedout and command is None:
-            num = sum(1 for node in self.nodes.values() if node.state.is_success
-                      and node.running_command_index == (len(self.commands) - 1))
+        if current_command_index == -1:  # called at the end of all executions
+            command = None
+            num = sum(host.state.is_success and host.has_completed for host in self.run_report.hosts.values())
         else:
-            num = self.counters['success']
+            command = self.commands[current_command_index]
+            num = sum(host.state.is_success and host.last_executed_command_index == current_command_index
+                      for host in self.run_report.hosts.values())
 
-        tot = self.counters['total']
+        tot = self.run_report.total
         success_ratio = num / tot
+        self.reporter.success_nodes(command, num, success_ratio, tot, self.success_threshold, self.run_report.hosts)
 
-        self.reporter.success_nodes(command, num, success_ratio, tot, self.counters['total'],
-                                    self.success_threshold, self.nodes)
+    @property
+    def is_above_threshold(self) -> bool:
+        """Whether the success threshold is still met.
+
+        Returns:
+            bool: :py:data:`True` if the success ratio is still above or equal the success threshold.
+
+        """
+        counter = self.run_report.get_counter()
+        failed = counter[HostState.FAILED]
+        timeout = counter[HostState.TIMEOUT]
+        success_ratio = 1 - ((failed + timeout) / self.run_report.total)
+        return success_ratio >= self.success_threshold
 
 
 class SyncEventHandler(BaseEventHandler):
@@ -679,8 +904,10 @@ class SyncEventHandler(BaseEventHandler):
     enough nodes before proceeding with the next one.
     """
 
-    def __init__(self, target: Target, commands: list[Command], reporter: BaseReporter,
-                 progress_bars: BaseExecutionProgress, success_threshold: float = 1.0, **kwargs: Any) -> None:
+    def __init__(
+        self, target: transports.Target, commands: list[transports.Command], reporter: BaseReporter,
+        progress_bars: transports.BaseExecutionProgress, success_threshold: float = 1.0, **kwargs: Any,
+    ) -> None:
         """Define a custom ClusterShell event handler to execute commands synchronously.
 
         :Parameters:
@@ -702,27 +929,27 @@ class SyncEventHandler(BaseEventHandler):
             schedule (bool, optional): whether the next command should be sent to ClusterShell for execution or not.
 
         """
-        self.counters['success'] = 0
-
-        self.progress.init(self.counters['total'])
+        self.progress.init(self.run_report.total)
 
         # Schedule the next command, the first was already scheduled by ClusterShellWorker.execute()
-        if schedule:
-            with self.lock:  # Avoid modifications of the same data from other callbacks triggered by ClusterShell
-                # Available nodes for the next command execution were already update back to the pending state
-                remaining_nodes = [node.name for node in self.nodes.values() if node.state.is_pending]
-                first_batch = remaining_nodes[:self.target.batch_size]
-                first_batch_set = nodeset_fromlist(first_batch)
-                for node_name in first_batch:
-                    self.nodes[node_name].state.update(HostState.SCHEDULED)
+        if not schedule:
+            return
 
-            command = self.commands[self.current_command_index]
-            self.logger.debug(
-                "command='%s', timeout=%s, first_batch=%s", command.command, command.timeout, first_batch_set)
+        with self.lock:  # Avoid modifications of the same data from other callbacks triggered by ClusterShell
+            # Available nodes for the next command execution were already update back to the pending state
+            remaining_nodes = [
+                host.name for host in self.run_report.hosts.values() if host.state.is_pending]
+            first_batch = remaining_nodes[:self.target.batch_size]
+            first_batch_set = nodeset_fromlist(first_batch)
+            for node_name in first_batch:
+                self.run_report.hosts[node_name].state.update(HostState.SCHEDULED)
 
-            # Schedule the command for execution in ClusterShell
-            Task.task_self().flush_buffers()
-            Task.task_self().shell(command.command, nodes=first_batch_set, handler=self, timeout=command.timeout)
+        command = self.commands[self.current_command_index]
+        self.logger.debug(
+            "command='%s', timeout=%s, first_batch=%s", command.command, command.timeout, first_batch_set)
+
+        # Schedule the command for execution in ClusterShell
+        Task.task_self().shell(command.command, nodes=first_batch_set, handler=self, timeout=command.timeout)
 
     def end_command(self) -> bool:
         """Command terminated, print the result and schedule the next command if criteria are met.
@@ -734,32 +961,33 @@ class SyncEventHandler(BaseEventHandler):
 
         """
         if self.deduplicate_output:
-            self.reporter.command_output(Task.task_self(), command=self.commands[self.current_command_index])
+            self.reporter.command_output(self.run_report.get_command_outputs(self.current_command_index))
         else:
             self.reporter.command_completed()
 
         self.progress.close()
 
-        self.reporter.failed_nodes(nodes=self.nodes, num_hosts=self.counters['total'], commands=self.commands,
-                                   filter_command_index=self.current_command_index)
-        self._success_nodes_report(command=self.commands[self.current_command_index])
+        self.reporter.failed_nodes(
+            nodes=self.run_report.hosts, num_hosts=self.run_report.total,
+            commands=self.commands, filter_command_index=self.current_command_index)
+        self._success_nodes_report(current_command_index=self.current_command_index)
 
-        success_ratio = self.counters['success'] / self.counters['total']
+        success_ratio = self.run_report.get_counter()[HostState.SUCCESS] / self.run_report.total
 
         # Abort on failure
         if success_ratio < self.success_threshold:
-            self.return_value = 2
+            self.run_report.status = transports.ExecutionStatus.FAILED
             self.aborted = True  # Tells other timers that might trigger after that the abort is already in progress
             return False
 
         if success_ratio == 1:
-            self.return_value = 0
+            self.run_report.status = transports.ExecutionStatus.SUCCEEDED
         else:
-            self.return_value = 1
+            self.run_report.status = transports.ExecutionStatus.COMPLETED_WITH_FAILURES
 
         if self.current_command_index == (len(self.commands) - 1):
             self.logger.debug('This was the last command')
-            return False  # This was the last command
+            return False
 
         return True
 
@@ -782,27 +1010,26 @@ class SyncEventHandler(BaseEventHandler):
         :Parameters:
             according to parent :py:meth:`ClusterShell.Event.EventHandler.ev_hup`.
         """
-        self.logger.debug("node=%s, rc=%d, command='%s'", node, rc, worker.command)
+        super().ev_hup(worker, node, rc)
 
         with self.lock:  # Avoid modifications of the same data from other callbacks triggered by ClusterShell
-            curr_node = self.nodes[node]
+            host = self.run_report.hosts[node]
+            host.return_codes.append(rc)
 
-            ok_codes = curr_node.commands[curr_node.running_command_index].ok_codes
+            ok_codes = host.commands[host.last_executed_command_index].ok_codes
             if rc in ok_codes or not ok_codes:
                 self.progress.update_success()
-                self.counters['success'] += 1
                 new_state = HostState.SUCCESS
             else:
                 self.progress.update_failed()
-                self.counters['failed'] += 1
                 new_state = HostState.FAILED
 
-            curr_node.state.update(new_state)
+            host.state.update(new_state)
 
         # Schedule a timer to run the current command on the next node or start the next command
         worker.task.timer(self.target.batch_sleep, worker.eh)
 
-    def ev_timer(self, timer):  # noqa, mccabe: MC0001 too complex (15) FIXME
+    def ev_timer(self, timer: EngineTimer) -> None:  # noqa, mccabe: MC0001 too complex (15) FIXME
         """Schedule the current command on the next node or the next command on the first batch of nodes.
 
         This callback is triggered by `ClusterShell` when a scheduled `Task.timer()` goes off.
@@ -810,24 +1037,21 @@ class SyncEventHandler(BaseEventHandler):
         :Parameters:
             according to parent :py:meth:`ClusterShell.Event.EventHandler.ev_timer`.
         """
-        success_ratio = 1 - ((self.counters['failed'] + self.counters['timeout']) / self.counters['total'])
-
-        node = None
-        if success_ratio >= self.success_threshold:
+        next_host = None
+        if self.is_above_threshold:
             # Success ratio is still good, looking for the next node
             with self.lock:  # Avoid modifications of the same data from other callbacks triggered by ClusterShell
-                for new_node in self.nodes.values():
-                    if new_node.state.is_pending:
-                        # Found the next node where to execute the command
-                        node = new_node
-                        node.state.update(HostState.SCHEDULED)
-                        break
+                next_host = self.run_report.next_host(HostState.PENDING)
+                if next_host is not None:  # Found the next node where to execute the command
+                    next_host.state.update(HostState.SCHEDULED)
 
-        if node is not None:
+        if next_host is not None:
             # Schedule the execution with ClusterShell of the current command to the next node found above
-            command = self.nodes[node.name].commands[self.nodes[node.name].running_command_index + 1]
-            self.logger.debug("next_node=%s, timeout=%s, command='%s'", node.name, command.command, command.timeout)
-            Task.task_self().shell(command.command, handler=timer.eh, timeout=command.timeout, nodes=nodeset(node.name))
+            next_command = next_host.commands[next_host.last_executed_command_index + 1]
+            self.logger.debug(
+                "next_node=%s, timeout=%s, command='%s'", next_host.name, next_command.command, next_command.timeout)
+            Task.task_self().shell(
+                next_command.command, handler=timer.eh, timeout=next_command.timeout, nodes=nodeset(next_host.name))
             return
 
         # No more nodes were left for the execution of the current command
@@ -835,16 +1059,18 @@ class SyncEventHandler(BaseEventHandler):
             try:
                 command: Optional[str] = self.commands[self.current_command_index].command
             except IndexError:
-                command: Optional[str] = None  # Last command reached
+                command = None  # Last command reached
 
             # Get a list of the nodes still in pending state
-            pending = [pending_node.name for pending_node in self.nodes.values() if pending_node.state.is_pending]
+            pending = [host.name for host in self.run_report.hosts.values() if host.state.is_pending]
             # Nodes in running are still running the command and nodes in scheduled state will execute the command
             # anyway, they were already offloaded to ClusterShell
-            accounted = len(pending) + self.counters['failed'] + self.counters['success'] + self.counters['timeout']
+            counter = self.run_report.get_counter()
+            accounted = (len(pending) + counter[HostState.FAILED] + counter[HostState.SUCCESS]
+                         + counter[HostState.TIMEOUT])
 
             # Avoid race conditions
-            if self.aborted or accounted != self.counters['total'] or command is None or self.global_timedout:
+            if self.aborted or accounted != self.run_report.total or command is None or self.global_timedout:
                 self.logger.debug("Skipped timer")
                 return
 
@@ -857,10 +1083,10 @@ class SyncEventHandler(BaseEventHandler):
             self.current_command_index += 1  # Move the global pointer of the command in execution
 
             if restart:
-                for node in self.nodes.values():
-                    if node.state.is_success:
+                for host in self.run_report.hosts.values():
+                    if host.state.is_success:
                         # Only nodes in pending state will be scheduled for the next command
-                        node.state.update(HostState.PENDING)
+                        host.state.update(HostState.PENDING)
 
         if restart:
             self.start_command(schedule=True)
@@ -890,8 +1116,10 @@ class AsyncEventHandler(BaseEventHandler):
     orchestration between the nodes.
     """
 
-    def __init__(self, target: Target, commands: list[Command], reporter: BaseReporter,
-                 progress_bars: BaseExecutionProgress, success_threshold: float = 1.0, **kwargs: Any) -> None:
+    def __init__(
+        self, target: transports.Target, commands: list[transports.Command], reporter: BaseReporter,
+        progress_bars: transports.BaseExecutionProgress, success_threshold: float = 1.0, **kwargs: Any,
+    ) -> None:
         """Define a custom ClusterShell event handler to execute commands asynchronously between nodes.
 
         :Parameters:
@@ -900,7 +1128,7 @@ class AsyncEventHandler(BaseEventHandler):
         super().__init__(target, commands, reporter, success_threshold=success_threshold,
                          progress_bars=progress_bars, **kwargs)
 
-        self.progress.init(self.counters['total'])
+        self.progress.init(self.run_report.total)
 
     def ev_hup(self, worker, node, rc):
         """Command execution completed on a node.
@@ -912,38 +1140,37 @@ class AsyncEventHandler(BaseEventHandler):
         :Parameters:
             according to parent :py:meth:`ClusterShell.Event.EventHandler.ev_hup`.
         """
-        self.logger.debug("node=%s, rc=%d, command='%s'", node, rc, worker.command)
+        super().ev_hup(worker, node, rc)
 
         schedule_next = False
         schedule_timer = False
         with self.lock:  # Avoid modifications of the same data from other callbacks triggered by ClusterShell
-            curr_node = self.nodes[node]
+            host = self.run_report.hosts[node]
+            host.return_codes.append(rc)
 
-            ok_codes = curr_node.commands[curr_node.running_command_index].ok_codes
+            ok_codes = host.commands[host.last_executed_command_index].ok_codes
             if rc in ok_codes or not ok_codes:
-                if curr_node.running_command_index == (len(curr_node.commands) - 1):
+                if host.has_completed:
                     self.progress.update_success()
-                    self.counters['success'] += 1
-                    curr_node.state.update(HostState.SUCCESS)
+                    host.state.update(HostState.SUCCESS)
                     schedule_timer = True  # Continue the execution on other nodes if criteria are met
                 else:
                     schedule_next = True  # Continue the execution in the current node with the next command
             else:
                 self.progress.update_failed()
-                self.counters['failed'] += 1
-                curr_node.state.update(HostState.FAILED)
+                host.state.update(HostState.FAILED)
                 schedule_timer = True  # Continue the execution on other nodes if criteria are met
 
         if schedule_next:
             # Schedule the execution of the next command on this node with ClusterShell
-            command = curr_node.commands[curr_node.running_command_index + 1]
+            command = host.commands[host.last_executed_command_index + 1]
             worker.task.shell(
                 command.command, nodes=nodeset(node), handler=worker.eh, timeout=command.timeout, stdin=False)
         elif schedule_timer:
             # Schedule a timer to allow to run all the commands in the next available node
             worker.task.timer(self.target.batch_sleep, worker.eh)
 
-    def ev_timer(self, timer):
+    def ev_timer(self, timer: EngineTimer) -> None:
         """Schedule the current command on the next node or the next command on the first batch of nodes.
 
         This callback is triggered by `ClusterShell` when a scheduled `Task.timer()` goes off.
@@ -951,25 +1178,21 @@ class AsyncEventHandler(BaseEventHandler):
         :Parameters:
             according to parent :py:meth:`ClusterShell.Event.EventHandler.ev_timer`.
         """
-        success_ratio = 1 - ((self.counters['failed'] + self.counters['timeout']) / self.counters['total'])
-
-        node = None
-        if success_ratio >= self.success_threshold:
+        next_host = None
+        if self.is_above_threshold:
             # Success ratio is still good, looking for the next node
             with self.lock:  # Avoid modifications of the same data from other callbacks triggered by ClusterShell
-                for new_node in self.nodes.values():
-                    if new_node.state.is_pending:
-                        # Found the next node where to execute all the commands
-                        node = new_node
-                        node.state.update(HostState.SCHEDULED)
-                        break
+                next_host = self.run_report.next_host(HostState.PENDING)
+                if next_host is not None:  # Found the next node where to execute all the commands
+                    next_host.state.update(HostState.SCHEDULED)
 
-        if node is not None:
+        if next_host is not None:
             # Schedule the execution of the first command to the next node with ClusterShell
-            command = node.commands[0]
-            self.logger.debug("next_node=%s, timeout=%s, command='%s'", node.name, command.command, command.timeout)
+            command = next_host.commands[0]
+            self.logger.debug(
+                "next_node=%s, timeout=%s, command='%s'", next_host.name, command.command, command.timeout)
             Task.task_self().shell(
-                command.command, handler=timer.eh, timeout=command.timeout, nodes=nodeset(node.name))
+                command.command, handler=timer.eh, timeout=command.timeout, nodes=nodeset(next_host.name))
         else:
             self.logger.debug('No more nodes left')
 
@@ -980,28 +1203,31 @@ class AsyncEventHandler(BaseEventHandler):
             according to parent :py:meth:`cumin.transports.BaseEventHandler.close`.
         """
         if self.deduplicate_output:
-            self.reporter.command_output(task)
+            for index in range(len(self.run_report.commands)):
+                outputs = self.run_report.get_command_outputs(index)
+                if outputs:
+                    self.reporter.command_output(self.run_report.get_command_outputs(index))
         else:
             self.reporter.command_completed()
 
         self.progress.close()
 
-        self.reporter.failed_nodes(nodes=self.nodes, num_hosts=self.counters['total'], commands=self.commands)
+        self.reporter.failed_nodes(
+            nodes=self.run_report.hosts, num_hosts=self.run_report.total, commands=self.commands)
         self._success_nodes_report()
 
-        num = self.counters['success']
-        tot = self.counters['total']
-        success_ratio = num / tot
+        counter = self.run_report.get_counter()
+        success_ratio = counter[HostState.SUCCESS] / self.run_report.total
 
         if success_ratio == 1:
-            self.return_value = 0
+            self.run_report.status = transports.ExecutionStatus.SUCCEEDED
         elif success_ratio < self.success_threshold:
-            self.return_value = 2
+            self.run_report.status = transports.ExecutionStatus.FAILED
         else:
-            self.return_value = 1
+            self.run_report.status = transports.ExecutionStatus.COMPLETED_WITH_FAILURES
 
 
-worker_class: Type[BaseWorker] = ClusterShellWorker  # pylint: disable=invalid-name
+worker_class: Type[transports.BaseWorker] = ClusterShellWorker  # pylint: disable=invalid-name
 """Required by the transport auto-loader in :py:meth:`cumin.transport.Transport.new`."""
 
 DEFAULT_HANDLERS: dict[str, Type[Event.EventHandler]] = {'sync': SyncEventHandler, 'async': AsyncEventHandler}
