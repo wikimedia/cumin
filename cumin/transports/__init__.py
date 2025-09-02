@@ -1,17 +1,24 @@
 """Abstract transport and state machine for hosts state."""
+# pylint: disable=too-many-lines
 import logging
 import os
 import shlex
 import sys
 
 from abc import ABCMeta, abstractmethod
-from enum import auto, StrEnum
+from collections import Counter, defaultdict
+from collections.abc import Mapping
+from dataclasses import dataclass, field
+from enum import auto, IntEnum, StrEnum
+from itertools import combinations
+from types import MappingProxyType
 from typing import Callable, Optional
 
+from ClusterShell.MsgTree import MsgTreeElem
 from ClusterShell.NodeSet import NodeSet
 from tqdm import tqdm
 
-from cumin import CuminError, nodeset_fromlist
+from cumin import CuminError, nodeset, nodeset_fromlist
 from cumin.color import Colored
 
 
@@ -25,6 +32,22 @@ class StateTransitionError(CuminError):
 
 class InvalidStateError(CuminError):
     """Exception raised when an invalid transition for a node's State was attempted."""
+
+
+class OutputsMismatchError(CuminError):
+    """Exception raised when attempting to get a single output result but there isn't a single unique output."""
+
+
+class SingleOutputMissingHostsError(CuminError):
+    """Exception raised when attempting to get a single output result but the output doesn't cover all hosts."""
+
+
+class HostNotFoundError(CuminError):
+    """Exception raised when attempting to get results for a host that is not part of the execution."""
+
+
+class SingleCommandOnlyError(CuminError):
+    """Exception raised by methods reserved for a single command execution when there are multiple commands."""
 
 
 class Command:
@@ -62,10 +85,10 @@ class Command:
         """
         params = ["'{command}'".format(command=self.command.replace("'", r'\''))]
 
-        for field in ('_timeout', '_ok_codes'):
-            value = getattr(self, field)
+        for field_name in ('_timeout', '_ok_codes'):
+            value = getattr(self, field_name)
             if value is not None:
-                params.append('{key}={value}'.format(key=field[1:], value=value))
+                params.append('{key}={value}'.format(key=field_name[1:], value=value))
 
         return 'cumin.transports.Command({params})'.format(params=', '.join(params))
 
@@ -534,6 +557,59 @@ class BaseWorker(metaclass=ABCMeta):
         for key, value in config.get('environment', {}).items():
             os.environ[key] = value
 
+    def run_one(self) -> 'CommandResults':
+        """Execute a single command on all the targets using the handler.
+
+        This method should be used when there is only one command to execute as it returns directly a
+        :py:class:`cumin.transports.CommandResults` that is easier to manage for the single command use case
+        than a :py:class:`cumin.transports.ExecutionResults` one as returned by the
+        :py:meth:`cumin.transports.BaseWorker.run` method.
+
+        Returns:
+            cumin.transports.CommandResults: the results instance for the single command execution.
+
+        Raises:
+            cumin.transports.SingleCommandOnlyError: if there is more than one command set for the execution.
+
+        """
+        n_commands = len(self.commands)
+        if n_commands != 1:
+            raise SingleCommandOnlyError(
+                f'The run_single() method can execute only a single command, {n_commands} were provided.')
+
+        results = self.run()
+        return results.commands_results[0]
+
+    @abstractmethod
+    def run(self) -> 'ExecutionResults':
+        """Execute all the configured commands on all the targets using the handler.
+
+        When there is only one command to execute, the :py:meth:`cumin.transports.BaseWorker.run_one` method can be
+        used instead for an easier access to the results.
+
+        Returns:
+            cumin.transports.ExecutionResults: the results instance for all the commands executed.
+
+        """
+
+    @property
+    @abstractmethod
+    def results(self) -> 'ExecutionResults':
+        """Property to access the results instance after having executed the commands.
+
+        Although both :py:meth:`cumin.transports.BaseWorker.run_one` and :py:meth:`cumin.transports.BaseWorker.run`
+        methods returns already their results, this property can be convient in some cases when in need to access the
+        results at a later point or to get the partial results in case of a catched exception.
+
+        Returns:
+            cumin.transports.ExecutionResults: the execution results instance if the execution is completed.
+
+        Raises:
+            cumin.transports.WorkerError: if unable to return results, for example because the execution has not
+                started yet.
+
+        """
+
     @abstractmethod
     def execute(self):
         """Execute the task as configured.
@@ -853,3 +929,542 @@ class NoProgress(BaseExecutionProgress):
 
     def update_failed(self, num_hosts: int = 1) -> None:
         """Does nothing."""
+
+
+class ExecutionStatus(IntEnum):
+    """Enum to define the possible execution statuses."""
+
+    SUCCEEDED = 0
+    """The execution completed successfully on all hosts."""
+    COMPLETED_WITH_FAILURES = 1
+    """The execution completed for some hosts, but there were some failures."""
+    FAILED = 2
+    """The execution failed, no host executed all commands successfully."""
+    UNKNOWN = 3
+    """The execution status is unknown, this is the initial status."""
+    TIMEDOUT = 4
+    """The execution timed out due to the global timeout."""
+    INTERRUPTED = 5
+    """The execution has been interrupted."""
+
+    def __str__(self):
+        """String representation of the value."""
+        return self.name.replace('_', ' ')
+
+
+@dataclass(frozen=True, kw_only=True)
+class CommandOutputResult:
+    """Dataclass to represent a single result output.
+
+    Notes:
+        The instances of this class are read-only.
+
+    Arguments:
+        splitted_stderr (bool): whether the capture of ``stdout`` and ``stderr`` was done separately or all the output
+            is gathered in the ``output`` property.
+        command (cumin.transports.Command): the command that generated this output.
+        command_index (int): the index of the command that generated this output in the list of commands.
+        _stdout (ClusterShell.MsgTree.MsgTreeElem): the data structure that recorded the output. Client's code should
+            call the :py:meth:`cumin.transports.CommandOutputResult.stdout` method to get the command's standard
+            output.
+        _stderr (ClusterShell.MsgTree.MsgTreeElem, optional): the data structure that recorded the output. Client's
+            code should call the :py:meth:`cumin.transports.CommandOutputResult.stderr` method to get the command's
+            standard error output.
+
+    """
+
+    splitted_stderr: bool
+    command: Command
+    command_index: int
+    _stdout: MsgTreeElem
+    _stderr: MsgTreeElem = field(default_factory=MsgTreeElem)
+
+    def __post_init__(self) -> None:
+        """Ensure data consistency at instantiation time.
+
+        Raises:
+            cumin.transports.WorkerError: if _stderr is set but splitted_stderr is :py:data:`False`.
+
+        """
+        if not self.splitted_stderr and len(self._stderr):
+            raise WorkerError('Invalid arguments: "splitted_stderr" is set to False but "stderr" is not empty')
+
+    def stdout(self, *, encoding: str = 'utf-8') -> str:
+        """Get the standard output of the executed command.
+
+        It contains both ``stdout`` and ``stderr`` when the
+        :py:attr:`cumin.transports.CommandOutputResult.splitted_stderr` property is :py:data:`False` or just
+        ``stdout`` when is :py:data:`True`.
+
+        Arguments:
+            encoding (str, optional): the encoding to use to convert the output from binary to string.
+
+        Returns:
+            str: the caputred output string.
+
+        """
+        return self._stdout.message().decode(encoding)
+
+    def stderr(self, *, encoding: str = 'utf-8') -> str:
+        """Get the standard error of the executed command.
+
+        Arguments:
+            encoding (str, optional): the encoding to use to convert the output from binary to string.
+
+        Returns:
+            str: the output string.
+
+        Raises:
+            cumin.transports.WorkerError: when the :py:attr:`cumin.transports.CommandOutputResult.splitted_stderr`
+                property is set to :py:data:`False`.
+
+        """
+        if not self.splitted_stderr:
+            raise WorkerError('The output was not split between stdout and stderr, call `stdout()` instead.')
+        return self._stderr.message().decode(encoding)
+
+    def format(self, *, encoding: str = 'utf-8', colored: bool = False) -> str:
+        """String representation of the command outputs.
+
+        Arguments:
+            encoding (str, optional): the encoding to use to convert the output from binary to string.
+            colored (bool, optional): whether to return a color-encoded output with the same colors of the CLI.
+
+        Returns:
+            str: a pre-formatted output with all the command captured output, splitting standard output and error
+            if they where recorded separately.
+
+        """
+        command = self.command.shortened()
+        parts = []
+        negation = 'NO '
+        prefix = '' if len(self._stdout) else negation
+        name = 'STDOUT' if self.splitted_stderr else 'OUTPUT'
+        output_line = f"----- {prefix}{name} of '{command}' -----"
+        if colored:
+            output_line = Colored.blue(output_line)
+
+        parts.append(output_line)
+
+        if len(self._stdout):
+            parts.append(self._stdout.message().decode(encoding))
+
+        if self.splitted_stderr:
+            stderr_prefix = '' if len(self._stderr) else negation
+            error_line = f"----- {stderr_prefix}STDERR of '{command}' -----"
+            if colored:
+                error_line = Colored.blue(error_line)
+
+            parts.append(error_line)
+
+            if len(self._stderr):
+                parts.append(self._stderr.message().decode(encoding))
+
+        return '\n'.join(parts)
+
+
+@dataclass(frozen=True, kw_only=True)
+class HostsOutputResult:
+    """Dataclass to represent a single result output for a group of hosts.
+
+    Notes:
+        The instances of this class are read-only.
+
+    Arguments:
+        hosts (ClusterShell.NodeSet.NodeSet): the hosts that generated the output.
+        output (cumin.transports.CommandOutputResult): the command result.
+
+    """
+
+    hosts: NodeSet
+    output: CommandOutputResult
+
+
+@dataclass(frozen=True, kw_only=True)
+class HostResults:
+    """Dataclass to represent all the output of all the executed commands for a given host.
+
+    Notes:
+        The instances of this class are read-only.
+
+    Arguments:
+        name (str): the hostname used to connect to it, usually the FQDN.
+        state (cumin.transports.HostState): the final execution state of the host.
+        commands (tuple): the list of :py:class:`cumin.transports.Command` instances, one for each executed command.
+        last_executed_command_index (int): the index of the last executed command from the ``commands`` tuple on this
+            host. Has the value of ``-1`` if no commands were executed on this host.
+        return_codes (tuple): a tuple of :py:class:`int` objects with the return code of each executed commands. It can
+            be shorter than the ``commands`` tuple if some commands were not executed.
+        outputs (tuple): a tuple of :py:class:`cumin.transports.CommandOutputResult` instances with the results of the
+            commands execution. Each position in this tuple represent the output of the command with the same index
+            in the commands tuple. It can be shorter than the ``commands`` tuple if some commands were not executed.
+
+    """
+
+    name: str
+    state: HostState
+    commands: tuple[Command, ...]
+    last_executed_command_index: int
+    return_codes: tuple[int, ...]
+    outputs: tuple[CommandOutputResult, ...]
+
+    def __post_init__(self) -> None:
+        """Ensure data consistency at instantiation time.
+
+        Raises:
+            cumin.transports.WorkerError: if there is any inconsistency in the arguments.
+
+        """
+        num_commands = len(self.commands)
+        if self.last_executed_command_index < 0 and (self.return_codes or self.outputs):
+            raise WorkerError(f'Invalid negative last_executed_command_index ({self.last_executed_command_index}) '
+                              f'with return codes or outputs set.')
+        if self.last_executed_command_index > (num_commands - 1):
+            raise WorkerError(
+                f'Invalid last_executed_command_index {self.last_executed_command_index} greater than the available '
+                f'commands {num_commands - 1}')
+        if len(self.return_codes) > num_commands:
+            raise WorkerError(f'Expected at most {num_commands} return_codes, got {len(self.return_codes)} instead')
+        if len(self.outputs) > num_commands:
+            raise WorkerError(f'Expected at most {num_commands} outputs, got {len(self.outputs)} instead')
+
+    @property
+    def completed(self) -> bool:
+        """Whether all commands were executed and completed execution.
+
+        Returns:
+            bool: if the host has completed the execution of all commands.
+
+        """
+        return (self.last_executed_command_index == len(self.commands) - 1
+                and len(self.return_codes) == len(self.commands))
+
+
+@dataclass(frozen=True, kw_only=True)
+class TargetedHostsMembers:
+    """Class to represent the targeted hosts based on their state and return code after the execution.
+
+    Each instance of this class is meant to be directly related to a specific command executed.
+
+    Notes:
+        The instances of this class are read-only.
+
+    Arguments:
+        all (ClusterShell.NodeSet.NodeSet): the set of all targeted hosts.
+        by_state (Mapping): a mapping that for each :py:class:`cumin.transports.HostState` member returns the set of
+            targeted hosts that ended up in that state after the execution of the command.
+        by_return_code (Mapping): a mapping that for each return code returns the set of targeted hosts that returned
+            that return code after the execution of the command.
+
+    """
+
+    all: NodeSet
+    by_state: Mapping[HostState, NodeSet]
+    by_return_code: Mapping[int, NodeSet]
+
+    def __post_init__(self) -> None:
+        """Ensure data consistency at instantiation time and make the mapping properties read-only.
+
+        Raises:
+            cumin.transports.WorkerError: if there is any inconsistency in the arguments.
+
+        """
+        object.__setattr__(self, 'by_state', MappingProxyType(self.by_state))
+        object.__setattr__(self, 'by_return_code', MappingProxyType(self.by_return_code))
+
+        for group_name in ('by_state', 'by_return_code'):
+            group_nodeset = nodeset()
+            for hosts in getattr(self, group_name).values():
+                group_nodeset |= hosts
+
+            if (
+                (group_name == 'by_state' and group_nodeset != self.all)
+                or (group_name == 'by_return_code' and not self.all.issuperset(group_nodeset))
+            ):
+                missing = self.all - group_nodeset
+                unknown = group_nodeset - self.all
+                raise WorkerError(
+                    f'Invalid {group_name}, is missing {len(missing)} nodes and has {len(unknown)} unknown nodes:'
+                    f'\nmissing: {missing}\nunknown: {unknown}'
+                )
+
+
+@dataclass(frozen=True, kw_only=True)
+class TargetedHostsCounters:
+    """Class to represent the targeted hosts count based on their state and return code after the execution.
+
+    Each instance of this class is meant to be directly related to a specific command executed.
+
+    Notes:
+        The instances of this class are read-only.
+
+    Arguments:
+        total (int): the total number of hosts that were scheduled to execute this command.
+        by_state (Mapping): a mapping that for each :py:class:`cumin.transports.HostState` member returns the number
+            of targeted hosts that ended up in that state after the execution of the command.
+        by_return_code (Mapping): a mapping that for each return code returns the number of targeted hosts that
+            returned that return code after the execution of the command.
+
+    """
+
+    total: int
+    by_state: Mapping[HostState, int]
+    by_return_code: Mapping[int, int]
+
+    def __post_init__(self) -> None:
+        """Ensure data consistency at instantiation time and make the mapping properties read-only.
+
+        Raises:
+            cumin.transports.WorkerError: if there is any inconsistency in the arguments.
+
+        """
+        object.__setattr__(self, 'by_state', MappingProxyType(self.by_state))
+        object.__setattr__(self, 'by_return_code', MappingProxyType(self.by_return_code))
+
+        total_by_state = sum(num_hosts for num_hosts in self.by_state.values())
+        if total_by_state != self.total:
+            raise WorkerError(
+                f'Expected sum of all by_state hosts ({total_by_state}) to match the total ({self.total})')
+
+        total_by_return_code = sum(num_hosts for num_hosts in self.by_return_code.values())
+        if total_by_return_code > self.total:
+            raise WorkerError(
+                f'Expected sum of all by_return_code hosts ({total_by_return_code}) to not exceed the total '
+                f'({self.total})')
+
+
+@dataclass(frozen=True, kw_only=True)
+class TargetedHosts:
+    """Class to represent the targeted hosts based on their state and return code after the execution.
+
+    Each instance of this class is meant to be directly related to a specific command executed.
+
+    Notes:
+        The instances of this class are read-only.
+
+    Arguments:
+        hosts (cumin.transports.TargetedHostsMembers): the targeted hosts with their name.
+        counter (cumin.transports.TargetedHostsCounters): the targeted hosts counters.
+
+    """
+
+    hosts: TargetedHostsMembers
+    counters: TargetedHostsCounters
+
+
+def get_targeted_hosts(
+    *,
+    all_hosts: NodeSet,
+    by_state: Mapping[HostState, NodeSet],
+    by_return_code: Mapping[int, NodeSet]
+) -> TargetedHosts:
+    """Helper function to get a :py:class:`cumin.transports.TargetedHosts` instance.
+
+    Arguments:
+        all_hosts (ClusterShell.NodeSet.NodeSet): the set of all targeted hosts.
+        by_state (Mapping): a mapping that for each :py:class:`cumin.transports.HostState` member returns the set of
+            targeted hosts that ended up in that state after the execution of the command.
+        by_return_code (Mapping): a mapping that for each return code returns the set of targeted hosts that returned
+            that return code after the execution of the command.
+
+    Returns:
+        cumin.transports.TargetedHosts: the targeted hosts instance with members and counters.
+
+    """
+    return TargetedHosts(
+        hosts=TargetedHostsMembers(
+            all=all_hosts.copy(),
+            by_state={key: value.copy() for key, value in by_state.items()},
+            by_return_code={key: value.copy() for key, value in by_return_code.items()},
+        ),
+        counters=TargetedHostsCounters(
+            total=len(all_hosts),
+            by_state=Counter({state: len(hosts) for state, hosts in by_state.items()}),
+            by_return_code=Counter({return_code: len(hosts) for return_code, hosts in by_return_code.items()}),
+        ),
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class CommandResults:
+    """Class to expose the results of the execution of a single command.
+
+    Notes:
+        The instances of this class are read-only.
+
+    Arguments:
+        command (cumin.transports.Command): the command executed.
+        command_index (int): the index of this command in the list of commands executed.
+        targets (cumin.transports.TargetedHosts): the targeted hosts instance with members and counters.
+        outputs (tuple): a tuple of :py:class:`cumin.transports.HostsOutputResult` instances with the recorded outputs.
+            If all hosts had no output for this command the tuple will be empty.
+
+    """
+
+    command: Command
+    command_index: int
+    targets: TargetedHosts
+    outputs: tuple[HostsOutputResult, ...]
+
+    def __post_init__(self) -> None:
+        """Ensure data consistency."""
+        # Ensure that each host is included in only one output
+        for output_a, output_b in combinations(self.outputs, 2):
+            duplicated = output_a.hosts & output_b.hosts
+            if duplicated:
+                raise WorkerError(f'Some hosts are present in more than one output: {duplicated}')
+
+        matched = nodeset()
+        for output in self.outputs:
+            matched |= output.hosts
+
+        # Ensure that the outputs match only hosts targeted
+        if not self.targets.hosts.all.issuperset(matched):
+            unknowns = matched - self.targets.hosts.all
+            raise WorkerError(f'Some hosts referenced by outputs are not part of the targeted hosts: {unknowns}')
+
+    @property
+    def has_no_outputs(self) -> bool:
+        """Property that tells if the execution has produced no outputs.
+
+        Returns:
+            bool: :py:data:`True` if the execution has produced no outputs, :py:data:`False` otherwise.
+
+        """
+        return not self.outputs
+
+    @property
+    def has_single_output(self) -> bool:
+        """Property that tells if the execution has produced the same output across all targeted hosts.
+
+        Returns:
+            bool: :py:data:`True` if the execution has produced a single output that is the same for all targeted
+            hosts.
+
+        """
+        return len(self.outputs) == 1 and self.outputs[0].hosts == self.targets.hosts.all
+
+    def get_single_output(self) -> CommandOutputResult:
+        """Quicker access to get the output instance in case all hosts have produced the same output.
+
+        Returns:
+            cumin.transports.CommandOutputResult: the output instance.
+
+        Raises:
+            cumin.transports.OutputsMismatchError: when there are multiple outputs.
+            cumin.transports.SingleOutputMissingHostsError: when there is a single output but some hosts had no output.
+
+        """
+        n_outputs = len(self.outputs)
+        if n_outputs != 1:
+            raise OutputsMismatchError(f"Command '{self.command}' has {n_outputs} distinct outputs, expected 1")
+
+        n_matches = len(self.outputs[0].hosts)
+        if self.outputs[0].hosts != self.targets.hosts.all:
+            raise SingleOutputMissingHostsError(
+                f"Command '{self.command}' single output matches only {n_matches} hosts of the "
+                f"{self.targets.counters.total} targeted."
+            )
+
+        return self.outputs[0].output
+
+    def get_host_output(self, name: str) -> Optional[CommandOutputResult]:
+        """Get the output instance for a given host or :py:data:`None` if it had no output.
+
+        Arguments:
+            name (str): the hostname used to connect to it, usually the FQDN.
+
+        Returns:
+            None: when the host had no output.
+            cumin.transports.CommandOutputResult: the host output instance when there is any output.
+
+        """
+        if name not in self.targets.hosts.all:
+            raise HostNotFoundError(f"Host '{name}' was not targeted")
+
+        for output in self.outputs:
+            if name in output.hosts:
+                return output.output
+
+        return None  # Host has no output
+
+
+@dataclass(frozen=True, kw_only=True)
+class ExecutionResults:
+    """Class to expose to the final results of an execution run.
+
+    Notes:
+        The instances of this class are read-only.
+
+    Arguments:
+        status (cumin.transports.ExecutionStatus): the final status of the execution run.
+        last_executed_command_index (int): the index of the last executed command in the list of commands to be
+            executed.
+        commands_results(tuple): the tuple of :py:class:`cumin.transports.CommandResults` instances for each
+            command to be executed.
+        hosts_results (mapping): the mapping of hosts results with string keys (hostnames or FQDN) and instances
+            of :py:class:`cumin.transports.HostResults` as values.
+
+    """
+
+    status: ExecutionStatus
+    last_executed_command_index: int
+    commands_results: tuple[CommandResults, ...]
+    hosts_results: Mapping[str, HostResults]
+
+    def __post_init__(self):
+        """Sanity checks and make the mapping properties read-only."""
+        object.__setattr__(self, 'hosts_results', MappingProxyType(self.hosts_results))
+
+        grouped_num_commands = defaultdict(nodeset)
+        for hostname, host_results in self.hosts_results.items():
+            grouped_num_commands[len(host_results.commands)].add(hostname)
+
+        if len(grouped_num_commands) != 1:
+            grouped_num_commands_string = '\n'.join(
+                f'{group_num_commands} commands: {group_hosts}'
+                for group_num_commands, group_hosts
+                in grouped_num_commands.items()
+            )
+            raise WorkerError(
+                f'All hosts should have the same number of commands got {len(grouped_num_commands)} groups '
+                f'instead:\n{grouped_num_commands_string}')
+
+        num_commands = list(grouped_num_commands.keys())[0]
+
+        if self.last_executed_command_index < 0:
+            raise WorkerError('Invalid negative last_executed_command_index: {self.last_executed_command_index}')
+        if self.last_executed_command_index > (num_commands - 1):
+            raise WorkerError(
+                'Invalid last_executed_command_index greater than the commands index '
+                f'({self.last_executed_command_index} > {num_commands - 1})')
+        if len(self.commands_results) != num_commands:
+            raise WorkerError(
+                f'Invalid commands_results, expected to have {num_commands} results, got '
+                f'{len(self.commands_results)} instead')
+
+        for index, command_result in enumerate(self.commands_results):
+            if index != command_result.command_index:
+                raise WorkerError(
+                    f'Invalid commands_results[{index}], should have command_index {index}, has '
+                    f'{command_result.command_index} instead')
+
+    @property
+    def return_code(self):
+        """Property to easily access the return code of the whole execution run.
+
+        Returns:
+            int: the return code of the execution.
+
+        """
+        return self.status.value
+
+    @property
+    def has_no_outputs(self) -> bool:
+        """Property that tells if the execution has produced no outputs.
+
+        Returns:
+            bool: :py:data:`True` if the execution has produced no outputs, :py:data:`False` otherwise.
+
+        """
+        return all(command_results.has_no_outputs for command_results in self.commands_results)

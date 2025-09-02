@@ -1,9 +1,11 @@
 """Transport tests."""
 # pylint: disable=protected-access
+from dataclasses import FrozenInstanceError
 from unittest import mock
 
 import pytest
 
+from ClusterShell.MsgTree import MsgTreeElem
 from ClusterShell.NodeSet import NodeSet
 
 import cumin  # noqa: F401 (dynamically used in TestCommand)
@@ -14,6 +16,13 @@ from cumin.transports import TqdmProgressBars
 
 class ConcreteBaseWorker(transports.BaseWorker):
     """Concrete class for BaseWorker."""
+
+    def run(self):
+        """Required by BaseWorker."""
+
+    @property
+    def results(self):
+        """Required by BaseWorker."""
 
     def execute(self):
         """Required by BaseWorker."""
@@ -61,6 +70,16 @@ class Commands:
         for command in self.commands:
             command['obj'] = transports.Command(
                 command['command'], timeout=command.get('timeout', None), ok_codes=command.get('ok_codes', None))
+
+
+def get_single_output(command: transports.Command, command_index: int) -> transports.CommandOutputResult:
+    """Get a single output result object to be used in tests."""
+    return transports.CommandOutputResult(
+        splitted_stderr=False,
+        command=command,
+        command_index=command_index,
+        _stdout=MsgTreeElem(),
+    )
 
 
 @pytest.mark.parametrize('command', Commands().commands)
@@ -597,3 +616,336 @@ class TestProgressBars:
         progress.update_failed(3)
 
         assert tqdm.mock_calls[-1] == mock.call().update(3)
+
+
+def test_execution_status():
+    """The string representation of the status should add spaces."""
+    assert str(transports.ExecutionStatus.COMPLETED_WITH_FAILURES) == 'COMPLETED WITH FAILURES'
+    assert str(transports.ExecutionStatus.INTERRUPTED) == 'INTERRUPTED'
+    assert str(transports.ExecutionStatus.TIMEDOUT) == 'TIMEDOUT'
+    assert str(transports.ExecutionStatus.UNKNOWN) == 'UNKNOWN'
+
+
+class TestCommandOutputResult:
+    """Test class for the CommandOutputResult class."""
+
+    def setup_method(self):
+        """Initialize default properties and instances."""
+        # pylint: disable=attribute-defined-outside-init
+        self.command = transports.Command('command1')
+        self.stdout = {True: MsgTreeElem(b'output', parent=MsgTreeElem()),
+                       False: MsgTreeElem(b'output\nerror', parent=MsgTreeElem())}
+        self.stderr = {True: MsgTreeElem(b'error', parent=MsgTreeElem()), False: MsgTreeElem()}
+
+    def test_init_raise(self):
+        """If trying to instantiate with invalid data should raise a WorkerError."""
+        with pytest.raises(transports.WorkerError,
+                           match='Invalid arguments: "splitted_stderr" is set to False but "stderr" is not empty'):
+            transports.CommandOutputResult(splitted_stderr=False, command=self.command, command_index=0,
+                                           _stdout=self.stdout[False], _stderr=self.stderr[True])
+
+    @pytest.mark.parametrize('splitted_stderr', (False, True))
+    def test_output(self, splitted_stderr):
+        """It should instantiate an instance without errors and return its stdout/stderr."""
+        ret = transports.CommandOutputResult(
+            splitted_stderr=splitted_stderr, command=self.command, command_index=0,
+            _stdout=self.stdout[splitted_stderr], _stderr=self.stderr[splitted_stderr])
+        assert ret.command_index == 0
+        if splitted_stderr:
+            assert ret.stdout() == 'output'
+            assert ret.stdout(encoding='cp1252') == 'output'
+            assert ret.stderr() == 'error'
+            assert ret.stderr(encoding='ascii') == 'error'
+        else:
+            assert ret.stdout() == 'output\nerror'
+            assert ret.stdout(encoding='cp1252') == 'output\nerror'
+            with pytest.raises(transports.WorkerError, match='The output was not split between stdout and stderr'):
+                ret.stderr()
+
+    @pytest.mark.parametrize('splitted_stderr', (False, True))
+    def test_format_empty_output(self, splitted_stderr):
+        """It should be explicit on the fact that no output was produced."""
+        empty = self.stderr[False]
+        ret = transports.CommandOutputResult(
+            splitted_stderr=splitted_stderr, command=self.command, command_index=0, _stdout=empty, _stderr=empty)
+        lines = ret.format().splitlines()
+        if splitted_stderr:
+            assert len(lines) == 2
+            assert lines[0] == "----- NO STDOUT of 'command1' -----"
+            assert lines[1] == "----- NO STDERR of 'command1' -----"
+        else:
+            assert len(lines) == 1
+            assert lines[0] == "----- NO OUTPUT of 'command1' -----"
+
+    def test_format_unsplitted(self):
+        """It should return the command output (stdout+stderr united) in a formatted way."""
+        ret = transports.CommandOutputResult(
+            splitted_stderr=False, command=self.command, command_index=0, _stdout=self.stdout[False])
+        lines = ret.format().splitlines()
+        assert len(lines) == 3
+        assert lines[0] == "----- OUTPUT of 'command1' -----"
+        assert lines[1] == 'output'
+        assert lines[2] == 'error'
+
+    def test_format_splitted(self):
+        """It should return the command output (stdout and stderr separately) in a formatted way."""
+        ret = transports.CommandOutputResult(splitted_stderr=True, command=self.command, command_index=0,
+                                             _stdout=self.stdout[True], _stderr=self.stderr[True])
+        lines = ret.format().splitlines()
+        assert len(lines) == 4
+        assert lines[0] == "----- STDOUT of 'command1' -----"
+        assert lines[1] == 'output'
+        assert lines[2] == "----- STDERR of 'command1' -----"
+        assert lines[3] == 'error'
+
+
+class TestHostResults:
+    """Test class for the HostResults class."""
+
+    @pytest.mark.parametrize('last_executed_command_index, return_codes', (
+        (0, (0,)),
+        (1, (0, 0)),
+        (2, (0, 0, 0)),
+    ))
+    def test_completed_true(self, last_executed_command_index, return_codes):
+        """It should return true if the execution was completed."""
+        command = transports.Command('command1')
+        commands = tuple([command] * len(return_codes))
+        outputs = []
+        for command_index in range(len(return_codes)):
+            outputs.append(get_single_output(command, command_index))
+        ret = transports.HostResults(
+            name='node1', state=transports.HostState.SUCCESS, commands=commands,
+            last_executed_command_index=last_executed_command_index, return_codes=return_codes, outputs=tuple(outputs))
+        assert ret.completed
+
+    @pytest.mark.parametrize('last_executed_command_index, return_codes', (
+        (0, ()),
+        (1, (1,)),
+        (2, (0, 1)),
+    ))
+    def test_completed_false(self, last_executed_command_index, return_codes):
+        """It should return false if the execution was not completed."""
+        command = transports.Command('command1')
+        commands = tuple([command] * (last_executed_command_index + len(return_codes) + 1))
+        outputs = []
+        for command_index in range(len(return_codes)):
+            outputs.append(get_single_output(command, command_index))
+        ret = transports.HostResults(
+            name='node1', state=transports.HostState.FAILED, commands=commands,
+            last_executed_command_index=last_executed_command_index, return_codes=return_codes, outputs=tuple(outputs))
+        assert not ret.completed
+
+
+def test_targeted_hosts_members():
+    """The provided mapping should be RO and the dataclass frozen."""
+    by_state = {transports.HostState.SUCCESS: cumin.nodeset('node[1-3]'),
+                transports.HostState.FAILED: cumin.nodeset('node[4-5]')}
+    by_return_code = {0: cumin.nodeset('node[1-3]'), 2: cumin.nodeset('node[4-5]')}
+    targets = transports.TargetedHostsMembers(
+        all=cumin.nodeset('node[1-5]'), by_state=by_state, by_return_code=by_return_code)
+
+    # Ensure the instance is frozen
+    with pytest.raises(FrozenInstanceError):
+        targets.all = cumin.nodeset()
+
+    # Ensure the mappings are read-only
+    with pytest.raises(TypeError, match='mappingproxy'):
+        targets.by_return_code[9] = cumin.nodeset('node9')
+    with pytest.raises(TypeError, match='mappingproxy'):
+        targets.by_return_code[0] |= cumin.nodeset('node9')
+
+
+def test_targeted_hosts_counters():
+    """The provided mapping should be RO and the dataclass frozen."""
+    by_state = {transports.HostState.SUCCESS: 3, transports.HostState.FAILED: 2}
+    by_return_code = {0: 3, 2: 2}
+    targets = transports.TargetedHostsCounters(total=5, by_state=by_state, by_return_code=by_return_code)
+
+    # Ensure the instance is frozen
+    with pytest.raises(FrozenInstanceError):
+        targets.total = 0
+
+    # Ensure the mappings are read-only
+    with pytest.raises(TypeError, match='mappingproxy'):
+        targets.by_return_code[9] = 5
+    with pytest.raises(TypeError, match='mappingproxy'):
+        targets.by_return_code[0] += 5
+
+
+def test_get_targeted_hosts():
+    """It should return a TargetedHosts instance with copies of the nodesets."""
+    all_hosts = cumin.nodeset('node[1-5]')
+    by_state = {transports.HostState.SUCCESS: cumin.nodeset('node[1-3]'),
+                transports.HostState.FAILED: cumin.nodeset('node[4-5]')}
+    by_return_code = {0: cumin.nodeset('node[1-3]'), 2: cumin.nodeset('node[4-5]')}
+    targets = transports.get_targeted_hosts(all_hosts=all_hosts, by_state=by_state, by_return_code=by_return_code)
+
+    # Ensure the instance is frozen
+    with pytest.raises(FrozenInstanceError):
+        targets.hosts = targets.hosts
+
+    # Ensure the mappings are read-only
+    with pytest.raises(TypeError, match='mappingproxy'):
+        targets.hosts.by_return_code[9] = cumin.nodeset('node9')
+    with pytest.raises(TypeError, match='mappingproxy'):
+        targets.hosts.by_return_code[0] |= cumin.nodeset('node9')
+
+    # Alter the mappings nodesets and check that they are copies
+    targets.hosts.by_return_code[0].add('node9')
+    new_targets = transports.get_targeted_hosts(all_hosts=all_hosts, by_state=by_state, by_return_code=by_return_code)
+    assert new_targets.hosts.by_return_code[0] == cumin.nodeset('node[1-3]')
+    assert new_targets.counters.by_return_code[0] == 3
+
+
+class TestCommandResults:
+    """Test class for the CommandResults class."""
+
+    def setup_method(self):
+        """Initialize default properties and instances."""
+        # pylint: disable=attribute-defined-outside-init
+        all_hosts = cumin.nodeset('node[1-5]')
+        by_state = {transports.HostState.SUCCESS: cumin.nodeset('node[1-3]'),
+                    transports.HostState.FAILED: cumin.nodeset('node[4-5]')}
+        by_return_code = {0: cumin.nodeset('node[1-3]'), 2: cumin.nodeset('node[4-5]')}
+        self.targets = transports.get_targeted_hosts(
+            all_hosts=all_hosts, by_state=by_state, by_return_code=by_return_code)
+        self.command = transports.Command('command1')
+        self.empty_command_results = transports.CommandResults(
+            command=self.command, command_index=0, targets=self.targets, outputs=())
+
+        self.stdout = {True: MsgTreeElem(b'output', parent=MsgTreeElem()),
+                       False: MsgTreeElem(b'output\nerror', parent=MsgTreeElem())}
+        self.stderr = {True: MsgTreeElem(b'error', parent=MsgTreeElem()), False: MsgTreeElem()}
+        self.command_outputs = transports.CommandOutputResult(
+            splitted_stderr=False, command=self.command, command_index=0,
+            _stdout=MsgTreeElem(b'output', parent=MsgTreeElem()))
+        hosts_outputs = transports.HostsOutputResult(hosts=all_hosts, output=self.command_outputs)
+        partial1_outputs = transports.HostsOutputResult(
+            hosts=cumin.nodeset('node[1-3]'), output=self.command_outputs)
+        partial2_outputs = transports.HostsOutputResult(
+            hosts=cumin.nodeset('node4'), output=self.command_outputs)
+        self.command_results = transports.CommandResults(
+            command=self.command, command_index=0, targets=self.targets, outputs=(hosts_outputs,))
+        self.multi_command_results = transports.CommandResults(
+            command=self.command, command_index=0, targets=self.targets, outputs=(partial1_outputs, partial2_outputs))
+        self.single_missing_command_results = transports.CommandResults(
+            command=self.command, command_index=0, targets=self.targets, outputs=(partial1_outputs,))
+
+    def test_init_overlapping_outputs(self):
+        """It should raise WorkerError when multiple outputs match the same host."""
+        output1 = transports.HostsOutputResult(hosts=cumin.nodeset('node[1-3]'), output=self.command_outputs)
+        output2 = transports.HostsOutputResult(hosts=cumin.nodeset('node[3-5]'), output=self.command_outputs)
+        with pytest.raises(transports.WorkerError, match='Some hosts are present in more than one output: node3'):
+            transports.CommandResults(
+                command=self.command, command_index=0, targets=self.targets, outputs=(output1, output2))
+
+    def test_init_unknown_host(self):
+        """It should raise WorkerError when an output matches hosts not targeted."""
+        output = transports.HostsOutputResult(hosts=cumin.nodeset('node[1-6]'), output=self.command_outputs)
+        with pytest.raises(transports.WorkerError,
+                           match='Some hosts referenced by outputs are not part of the targeted hosts: node6'):
+            transports.CommandResults(
+                command=self.command, command_index=0, targets=self.targets, outputs=(output,))
+
+    def test_command_index(self):
+        """It should return the command index of the command execution."""
+        assert self.command_results.command_index == 0
+
+    def test_has_no_outputs(self):
+        """It should return True if there is any output."""
+        assert self.empty_command_results.has_no_outputs
+        assert not self.command_results.has_no_outputs
+
+    def test_has_single_output(self):
+        """If should return True if all the hosts have the same output."""
+        assert not self.empty_command_results.has_single_output
+        assert self.command_results.has_single_output
+
+    def test_get_single_output_ok(self):
+        """It should return the single output."""
+        assert self.command_results.get_single_output() is self.command_outputs
+
+    def test_get_single_output_no_outputs(self):
+        """It should raise OutputsMismatchError if there are no outputs."""
+        with pytest.raises(transports.OutputsMismatchError,
+                           match="Command 'command1' has 0 distinct outputs, expected 1"):
+            self.empty_command_results.get_single_output()
+
+    def test_get_single_output_too_many_outputs(self):
+        """It should raise OutputsMismatchError if there are too many outputs."""
+        with pytest.raises(transports.OutputsMismatchError,
+                           match="Command 'command1' has 2 distinct outputs, expected 1"):
+            self.multi_command_results.get_single_output()
+
+    def test_get_single_output_missing_hosts(self):
+        """It should raise SingleOutputMissingHostsError if the single output doesn't cover all hosts."""
+        with pytest.raises(transports.SingleOutputMissingHostsError,
+                           match="Command 'command1' single output matches only 3 hosts of the 5 targeted"):
+            self.single_missing_command_results.get_single_output()
+
+    def test_get_host_output_ok(self):
+        """It should return the output instance for the given host or None if didn't had any output."""
+        host_output = self.command_results.get_host_output('node1')
+        assert isinstance(host_output, transports.CommandOutputResult)
+        host_output = self.multi_command_results.get_host_output('node4')
+        assert isinstance(host_output, transports.CommandOutputResult)
+        assert self.multi_command_results.get_host_output('node5') is None
+
+    def test_get_host_output_not_found(self):
+        """It should raise HostNotFoundError if the host is not part of the targets."""
+        with pytest.raises(transports.HostNotFoundError, match="Host 'unknown' was not targeted"):
+            self.command_results.get_host_output('unknown')
+
+
+class TestExecutionResults:
+    """Test class for the ExecutionResults class."""
+
+    def setup_method(self):
+        """Initialize default properties and instances."""
+        # pylint: disable=attribute-defined-outside-init
+        all_hosts = cumin.nodeset('node[1-5]')
+        by_state = {transports.HostState.SUCCESS: cumin.nodeset('node[1-3]'),
+                    transports.HostState.FAILED: cumin.nodeset('node[4-5]')}
+        by_return_code = {0: cumin.nodeset('node[1-3]'), 2: cumin.nodeset('node[4-5]')}
+        self.targets = transports.get_targeted_hosts(
+            all_hosts=all_hosts, by_state=by_state, by_return_code=by_return_code)
+        self.command = transports.Command('command1')
+        self.empty_command_results = transports.CommandResults(
+            command=self.command, command_index=0, targets=self.targets, outputs=())
+        self.hosts_results = {}
+        for i in range(1, 6):
+            output = get_single_output(self.command, 0)
+            self.hosts_results[f'node{i}'] = transports.HostResults(
+                name=f'node{i}', state=transports.HostState.SUCCESS, commands=(self.command,),
+                last_executed_command_index=0, return_codes=(0,), outputs=(output,))
+
+        self.execution_results = transports.ExecutionResults(
+            status=transports.ExecutionStatus.SUCCEEDED, last_executed_command_index=0,
+            commands_results=(self.empty_command_results,), hosts_results=self.hosts_results)
+
+        command_outputs = transports.CommandOutputResult(
+            splitted_stderr=False, command=self.command, command_index=0,
+            _stdout=MsgTreeElem(b'output', parent=MsgTreeElem()))
+        hosts_outputs = transports.HostsOutputResult(hosts=all_hosts, output=command_outputs)
+        command_results = transports.CommandResults(
+            command=self.command, command_index=0, targets=self.targets, outputs=(hosts_outputs,))
+
+        self.execution_results_with_output = transports.ExecutionResults(
+            status=transports.ExecutionStatus.SUCCEEDED, last_executed_command_index=0,
+            commands_results=(command_results,), hosts_results=self.hosts_results)
+
+    def test_read_only(self):
+        """Ensure that the instance is frozen and the mapping read only."""
+        # Ensure the instance is frozen
+        with pytest.raises(FrozenInstanceError):
+            self.execution_results.status = transports.ExecutionStatus.FAILED
+
+        # Ensure the mappings are read-only
+        with pytest.raises(TypeError, match='mappingproxy'):
+            del self.execution_results.hosts_results['node1']
+
+    def test_has_no_outputs(self):
+        """It should return True if the execution produced no outputs."""
+        assert self.execution_results.has_no_outputs
+        assert not self.execution_results_with_output.has_no_outputs

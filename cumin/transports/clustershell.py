@@ -53,6 +53,21 @@ class ClusterShellWorker(BaseWorker):
             else:
                 self.task.set_info(key, value)
 
+    def run(self):
+        """Execute the commands on all the targets using the handler.
+
+        Concrete implementation of parent abstract method.
+
+        :Parameters:
+            according to parent :py:meth:`cumin.transports.BaseWorker.run`.
+
+        """
+        raise NotImplementedError('Not yet implemented')
+
+    @property
+    def results(self):
+        raise NotImplementedError('Not yet implemented')
+
     def execute(self) -> int:
         """Execute the commands on all the targets using the handler.
 
@@ -60,6 +75,7 @@ class ClusterShellWorker(BaseWorker):
 
         :Parameters:
             according to parent :py:meth:`cumin.transports.BaseWorker.execute`.
+
         """
         if not self.commands:
             raise WorkerError('No commands provided.')
