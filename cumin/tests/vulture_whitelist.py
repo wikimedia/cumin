@@ -33,3 +33,6 @@ whitelist_tests_integration_conftest.pytest_runtest_makereport
 
 whitelist_tests_integration_test_cli_TestCLI = Whitelist()  # noqa: N816
 whitelist_tests_integration_test_cli_TestCLI.setup_method
+
+whitelist_tests_integration_compare_cli = Whitelist()
+whitelist_tests_integration_compare_cli.fixture_run_cumin
