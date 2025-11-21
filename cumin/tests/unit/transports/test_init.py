@@ -671,11 +671,11 @@ class TestCommandOutputResult:
         lines = ret.format().splitlines()
         if splitted_stderr:
             assert len(lines) == 2
-            assert lines[0] == "----- NO STDOUT of 'command1' -----"
-            assert lines[1] == "----- NO STDERR of 'command1' -----"
+            assert lines[0] == "----- NO STDOUT for command #1: 'command1' -----"
+            assert lines[1] == "----- NO STDERR for command #1: 'command1' -----"
         else:
             assert len(lines) == 1
-            assert lines[0] == "----- NO OUTPUT of 'command1' -----"
+            assert lines[0] == "----- NO OUTPUT for command #1: 'command1' -----"
 
     def test_format_unsplitted(self):
         """It should return the command output (stdout+stderr united) in a formatted way."""
@@ -683,7 +683,7 @@ class TestCommandOutputResult:
             splitted_stderr=False, command=self.command, command_index=0, _stdout=self.stdout[False])
         lines = ret.format().splitlines()
         assert len(lines) == 3
-        assert lines[0] == "----- OUTPUT of 'command1' -----"
+        assert lines[0] == "----- OUTPUT for command #1: 'command1' -----"
         assert lines[1] == 'output'
         assert lines[2] == 'error'
 
@@ -693,9 +693,9 @@ class TestCommandOutputResult:
                                              _stdout=self.stdout[True], _stderr=self.stderr[True])
         lines = ret.format().splitlines()
         assert len(lines) == 4
-        assert lines[0] == "----- STDOUT of 'command1' -----"
+        assert lines[0] == "----- STDOUT for command #1: 'command1' -----"
         assert lines[1] == 'output'
-        assert lines[2] == "----- STDERR of 'command1' -----"
+        assert lines[2] == "----- STDERR for command #1: 'command1' -----"
         assert lines[3] == 'error'
 
 

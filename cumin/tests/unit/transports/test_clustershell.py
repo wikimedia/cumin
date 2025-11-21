@@ -38,11 +38,11 @@ def test_null_reporter_does_nothing(capsys):
 
     reporter.command_completed()
     reporter.command_output(iter(["node1", "node2"]))
-    reporter.command_header(command)
+    reporter.command_header(command, 1)
     reporter.message_element(message)
     reporter.global_timeout_nodes(nodes)
     reporter.failed_nodes(nodes, 2, commands)
-    reporter.success_nodes(command, 2, 1.0, 2, 1.0, nodes)
+    reporter.success_nodes(command, 2, 1.0, 2, 1.0, nodes, 1)
     out, err = capsys.readouterr()
     assert out == ''
     assert err == ''

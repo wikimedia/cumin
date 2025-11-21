@@ -1040,7 +1040,7 @@ class CommandOutputResult:
         negation = 'NO '
         prefix = '' if len(self._stdout) else negation
         name = 'STDOUT' if self.splitted_stderr else 'OUTPUT'
-        output_line = f"----- {prefix}{name} of '{command}' -----"
+        output_line = f"----- {prefix}{name} for command #{self.command_index + 1}: '{command}' -----"
         if colored:
             output_line = Colored.blue(output_line)
 
@@ -1051,7 +1051,7 @@ class CommandOutputResult:
 
         if self.splitted_stderr:
             stderr_prefix = '' if len(self._stderr) else negation
-            error_line = f"----- {stderr_prefix}STDERR of '{command}' -----"
+            error_line = f"----- {stderr_prefix}STDERR for command #{self.command_index + 1}: '{command}' -----"
             if colored:
                 error_line = Colored.blue(error_line)
 

@@ -13,7 +13,7 @@ from cumin.transports.clustershell import NullReporter
 # Expected block output for a single hostname command
 _HOSTNAME_BLOCK_OUTPUT = """\x1b[34m===== NODE GROUP =====\x1b[39m
 \x1b[36m(1) {hostname}\x1b[39m
-\x1b[34m----- OUTPUT of 'hostname' -----\x1b[39m
+\x1b[34m----- OUTPUT for command #1: 'hostname' -----\x1b[39m
 {hostname}
 """
 

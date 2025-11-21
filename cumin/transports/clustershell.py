@@ -443,7 +443,7 @@ class BaseReporter(metaclass=ABCMeta):
     @abstractmethod
     def success_nodes(self, command: Optional[transports.Command],  # pylint: disable=too-many-arguments
                       num_successfull_nodes: int, success_ratio: float, num_hosts: int, success_threshold: float,
-                      nodes: dict[str, HostRun]) -> None:
+                      nodes: dict[str, HostRun], command_index: int) -> None:
         """Print how many nodes successfully executed all commands in a colored and tqdm-friendly way.
 
         Arguments:
@@ -455,6 +455,7 @@ class BaseReporter(metaclass=ABCMeta):
             success_threshold (float): the threshold of successful nodes above which the command execution is deemed
                 successful
             nodes (list): the nodes on which the command was executed
+            command_index (int): the index of the command in the list of commands to execute
 
         """
 
@@ -472,11 +473,12 @@ class BaseReporter(metaclass=ABCMeta):
         """
 
     @abstractmethod
-    def command_header(self, command: transports.Command) -> None:
+    def command_header(self, command: transports.Command, command_index: int) -> None:
         """Reports a single command execution.
 
         Arguments:
             command (cumin.transports.Command): the command the header belongs to.
+            command_index (int): the index of the command in the list of commands to execute.
 
         """
 
@@ -594,8 +596,9 @@ class TqdmQuietReporter(NullReporter):  # pylint: disable=abstract-method some a
                     continue
 
                 short_command = command.shortened() if command is not None else ''
-                message = "of nodes {state} to execute command '{command}'".format(
-                    state=state, command=short_command)
+                inner_message = 'while executing' if state is HostState.TIMEOUT else 'to execute'
+                message = "of nodes {state} {inner_message} command #{num}: '{command}'".format(
+                    state=state, inner_message=inner_message, num=index + 1, command=short_command)
                 log_message, nodes_string = self._get_log_message(len(failed_nodes), num_hosts=num_hosts,
                                                                   message=message, nodes=failed_nodes)
                 self.logger.error('%s%s', log_message, nodes_string)
@@ -603,7 +606,7 @@ class TqdmQuietReporter(NullReporter):  # pylint: disable=abstract-method some a
 
     def success_nodes(self, command: Optional[transports.Command],  # pylint: disable=too-many-arguments,too-many-locals
                       num_successfull_nodes: int, success_ratio: float, num_hosts: int, success_threshold: float,
-                      nodes: dict[str, HostRun]) -> None:
+                      nodes: dict[str, HostRun], command_index: int) -> None:
         """Print how many nodes successfully executed all commands in a colored and tqdm-friendly way.
 
         :Parameters:
@@ -618,7 +621,8 @@ class TqdmQuietReporter(NullReporter):  # pylint: disable=abstract-method some a
             post = '.'
         message_string = ' of nodes successfully executed all commands'
         if command is not None:
-            message_string = " for command: '{command}'".format(command=command.shortened())
+            message_string = " for command #{num}: '{command}'".format(
+                num=command_index + 1, command=command.shortened())
         nodes_to_log = None
         if num_successfull_nodes not in (0, num_hosts):
             nodes_to_log = [node.name for node in nodes.values() if node.state.is_success]
@@ -672,14 +676,15 @@ class TqdmReporter(TqdmQuietReporter):
 
         tqdm.write(Colored.blue(message), file=sys.stdout)
 
-    def command_header(self, command: transports.Command) -> None:
+    def command_header(self, command: transports.Command, command_index: int) -> None:
         """Reports a single command execution.
 
         :Parameters:
             according to parent :py:meth:`BaseReporter.command_header`.
 
         """
-        output_message = "----- OUTPUT of '{command}' -----".format(command=command.shortened())
+        output_message = "----- OUTPUT for command #{num}: '{command}' -----".format(
+            num=command_index + 1, command=command.shortened())
         tqdm.write(Colored.blue(output_message), file=sys.stdout)
 
     def message_element(self, message: MsgTreeElem) -> None:  # pylint: disable=no-self-use
@@ -808,7 +813,7 @@ class BaseEventHandler(Event.EventHandler):
                 self.run_report.last_executed_command_index = host.last_executed_command_index
 
         if not self.deduplicate_output:
-            self.reporter.command_header(command)
+            self.reporter.command_header(command, host.last_executed_command_index)
 
     def ev_read(self, worker, node, sname, msg):
         """Worker has data to read from a specific node. Print it if running on a single host.
@@ -871,7 +876,8 @@ class BaseEventHandler(Event.EventHandler):
 
         tot = self.run_report.total
         success_ratio = num / tot
-        self.reporter.success_nodes(command, num, success_ratio, tot, self.success_threshold, self.run_report.hosts)
+        self.reporter.success_nodes(command, num, success_ratio, tot, self.success_threshold, self.run_report.hosts,
+                                    current_command_index)
 
     @property
     def is_above_threshold(self) -> bool:
