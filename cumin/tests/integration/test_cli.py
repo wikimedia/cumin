@@ -158,10 +158,11 @@ def make_method(name, commands_set):
             else:
                 string = _EXPECTED_LINES[label]
 
+            message = f'{label}: {string}'
             if label.endswith('_re'):
-                assert re.search(string, err) is not None, string
+                assert re.search(string, err) is not None, message
             else:
-                assert string in err, string
+                assert string in err, message
 
         for label in params.get('assert_false', []):
             assert _EXPECTED_LINES[label] not in err, _EXPECTED_LINES[label]

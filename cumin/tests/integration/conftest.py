@@ -1,4 +1,6 @@
 """Pytest customization for integration tests."""
+import json
+
 import pytest
 
 
@@ -9,4 +11,4 @@ def pytest_runtest_makereport(item, call):  # pylint: disable=unused-argument
     marker = item.get_closest_marker('variant_params')
     if marker:
         rep = outcome.get_result()
-        rep.sections.insert(0, ('test_variant parameters', marker.args))
+        rep.sections.insert(0, ('test_variant parameters', json.dumps(marker.args)))
