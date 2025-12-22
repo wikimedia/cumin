@@ -79,15 +79,15 @@ Simple example without fine-tuning the options:
     $ sudo cumin 'A:cp-esams' 'systemctl is-active nginx'
     23 hosts will be targeted:
     cp[3007-3008,3010,3030-3049].esams.wmnet
-    Confirm to continue [y/n]? y
+    OK to proceed on 23 hosts? Enter the number of affected hosts to confirm or "q" to quit: 23
     ===== NODE GROUP =====
     (23) cp[3007-3008,3010,3030-3049].esams.wmnet
-    ----- OUTPUT of 'systemctl is-active nginx' -----
+    ----- OUTPUT for command #1: 'systemctl is-active nginx' -----
     active
     ================
     PASS:  |████████████████████████████████████████████████| 100% (23/23) [00:01<00:00, 12.61hosts/s]
     FAIL:  |                                                             |   0% (0/23) [00:01<?, ?hosts/s]
-    100.0% (23/23) success ratio (>= 100.0% threshold) for command: 'systemctl is-active nginx'.
+    100.0% (23/23) success ratio (>= 100.0% threshold) for command #1: 'systemctl is-active nginx'.
     100.0% (23/23) success ratio (>= 100.0% threshold) of nodes successfully executed all commands.
 
 More complex example fine-tuning many of the parameters using the long form of the options for clarity:
@@ -104,23 +104,24 @@ More complex example fine-tuning many of the parameters using the long form of t
       'date' 'ls -la /tmp/foo'
     4 hosts will be targeted:
     puppetmaster[2001-2002].codfw.wmnet,puppetmaster[1001-1002].eqiad.wmnet
-    Confirm to continue [y/n]? y
+    OK to proceed on 4 hosts? Enter the number of affected hosts to confirm or "q" to quit: 4
     ===== NODE GROUP =====
     (2) puppetmaster[2001-2002].codfw.wmnet
-    ----- OUTPUT -----
+    ----- OUTPUT for command #1: 'date'-----
     Thu Nov  2 18:45:18 UTC 2017
+    ================
     ===== NODE GROUP =====
     (1) puppetmaster2002.codfw.wmnet
-    ----- OUTPUT -----
+    ----- OUTPUT for command #2: 'ls -la /tmp/foo' -----
     ls: cannot access /tmp/foo: No such file or directory
     ===== NODE GROUP =====
     (1) puppetmaster2001.codfw.wmnet
-    ----- OUTPUT -----
+    ----- OUTPUT for command #2: 'ls -la /tmp/foo' -----
     -rw-r--r-- 1 root root 0 Nov  2 18:44 /tmp/foo
     ================
     PASS:  |████████████▌                                      |  25% (1/4) [00:05<00:01,  2.10hosts/s]
     FAIL:  |████████████▌                                      |  25% (1/4) [00:05<00:01,  2.45hosts/s]
-    25.0% (1/4) of nodes failed to execute command 'ls -la /tmp/foo': puppetmaster2002.codfw.wmnet
+    25.0% (1/4) of nodes failed to execute command #2: 'ls -la /tmp/foo': puppetmaster2002.codfw.wmnet
     25.0% (1/4) success ratio (< 95.0% threshold) of nodes successfully executed all commands. Aborting.: puppetmaster2001.codfw.wmnet
 
 Library
@@ -139,16 +140,68 @@ Simple example without fine-tuning of optional parameters::
     hosts = query.Query(config).execute('host[1-5]')
     target = transports.Target(hosts)
     worker = transport.Transport.new(config, target)
-    worker.commands = ['systemctl is-active nginx']
+    worker.commands = ['ls /tmp/out']
     worker.handler = 'sync'
-    exit_code = worker.execute()  # Execute the command on all hosts in parallel
-    for nodes, output in worker.get_results():  # Cycle over the results
-        print(nodes)
-        print(output.message().decode())
-        print('-----')
 
+    results = worker.run()  # Execute the command on all hosts in parallel
 
-More complex example fine-tuning many of the parameters::
+The results object is an instance of :py:class:`cumin.transports.ExecutionResults` and allows to retrieve all
+the information of the execution run::
+
+    >>> results.return_code
+    0
+    >>> results.status
+    <ExecutionStatus.SUCCEEDED: 0>
+    >>> results.last_executed_command_index
+    0
+    >>> results.has_no_outputs
+    False
+    >>> command_results = results.commands_results[0]
+    >>> command_results.command_index
+    0
+    >>> command_results.has_no_outputs
+    False
+    >>> command_results.has_single_output
+    True
+    >>> output = command_results.get_single_output()
+    >>> output.stdout()
+    '/tmp/out'
+    >>> command_results.get_host_output('host1').stdout()
+    '/tmp/out'
+    >>> for group_output in command_results.outputs:
+    ...     print(f'Hosts: {group_output.hosts}, Output: {group_output.output.stdout()}')
+    ...
+    Hosts: host[1-5], Output: /tmp/out
+    >>> command_targets = command_results.targets
+    >>> command_targets.counters.total
+    5
+    >>> dict(command_targets.counters.by_return_code)
+    {0: 5}
+    >>> dict(command_targets.counters.by_state)
+    {<HostState.SUCCESS: 'success'>: 5}
+    >>> str(command_targets.hosts.all)
+    'host[1-5]'
+    >>> {return_code: str(hosts) for return_code, hosts in command_targets.hosts.by_return_code.items()}
+    {0: 'host[1-5]'}
+    >>> {return_code: str(hosts) for return_code, hosts in command_targets.hosts.by_state.items()}
+    {<HostState.SUCCESS: 'success'>: 'host[1-5]'}
+    >>> host1_results = results.hosts_results['host1']
+    >>> host1_results.commands
+    (cumin.transports.Command('ls /tmp/out'),)
+    >>> host1_results.completed
+    True
+    >>> host1_results.last_executed_command_index
+    0
+    >>> host1_results.name
+    'host1'
+    >>> host1_results.outputs[0].stdout()
+    '/tmp/out'
+    >>> host1_results.return_codes
+    (0,)
+    >>> host1_results.state
+    <HostState.SUCCESS: 'success'>
+
+More complex example fine-tuning many of the parameters for the execution::
 
     import cumin
 
@@ -179,6 +232,12 @@ More complex example fine-tuning many of the parameters::
     worker.reporter = NullReporter
     # Suppress the progress bars during execution
     worker.progress_bars = False
+    results = worker.run()
+
+Old API to execute commands and retrieve their output, currently soft-deprecated (without raising warnings), it will
+be officially deprecated raising a ``DeprecationWarning`` in a subsequent release and removed completely in a future
+release::
+
     exit_code = worker.execute()
     for nodes, output in worker.get_results():
         print(nodes)
