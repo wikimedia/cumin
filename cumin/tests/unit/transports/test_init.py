@@ -580,7 +580,7 @@ class TestModuleFunctions:
 class TestProgressBars:
     """A class that tests ProgressBars."""
 
-    def test_init_intialize_progress_bars_with_correct_size(self, tqdm):
+    def test_init_initialize_progress_bars_with_correct_size(self, tqdm):
         """Progress bars are initialized at the correct size."""
         progress = TqdmProgressBars()
         progress.init(10)
