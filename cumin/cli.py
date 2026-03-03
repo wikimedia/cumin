@@ -35,19 +35,13 @@ INTERACTIVE_BANNER = """===== Cumin Interactive REPL =====
 #     args: the parsed command line arguments, an argparse.Namespace instance.
 #     config: the cofiguration dictionary.
 #     exit_code: the return code of the execution, that will be used as exit code.
+#     results: an ExecutionResults instance with all the results, see the documentation introduction for
+#              more details on how to use it.
 
 = Useful functions =
-#     worker.get_results(): generator that yields the tuple (nodes, output) for each grouped result, where:
-#                         -     nodes: is a ClusterShell.NodeSet.NodeSet instance
-#                         -     output: is a ClusterShell.MsgTree.MsgTreeElem instance
 #     h(): print this help message.
 #     help(object_name): Python default interactive help and documentation of the given object.
 
-= Example usage:
-for nodes, output in worker.get_results():
-    print(nodes)
-    print(output.message().decode())
-    print('-----')
 """
 """str: The message to print when entering the intractive REPL mode."""
 
@@ -417,7 +411,7 @@ def run(args, config):
 
     if args.interactive:
         # Define a help function h() that will be available in the interactive shell to print the help message.
-        # The name is to not shadow the Python built-in help() that might be usefult too to inspect objects.
+        # The name is to not shadow the Python built-in help() that might be useful too to inspect objects.
         def h():  # pylint: disable=possibly-unused-variable,invalid-name
             """Print the help message in interactive shell."""
             tqdm.write(INTERACTIVE_BANNER)
