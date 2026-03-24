@@ -44,7 +44,8 @@ def _get_keystone_session(config, project=None):
     """Return a new keystone session based on configuration.
 
     Arguments:
-        config (dict): a dictionary with the session configuration keys: ``auth_url``, ``username``, ``password``.
+        config (dict): a dictionary with the configuration to be used to set the OpenStack backend, see the
+            example configuration for more details.
         project (str, optional): a project to scope the session to.
 
     Returns:
@@ -58,15 +59,22 @@ def _get_keystone_session(config, project=None):
         project_name=project,
         user_domain_id='default',
         project_domain_id='default')
-    return keystone_session.Session(auth=auth)
+
+    session = keystone_session.Session(auth=auth)
+
+    proxy_url = config.get('proxy_url')
+    if proxy_url:
+        session.session.proxies.update({'http': proxy_url, 'https': proxy_url})
+
+    return session
 
 
 def _get_nova_client(config, project):
     """Return a new nova client tailored to the given project.
 
     Arguments:
-        config (dict): a dictionary with the session configuration keys: ``auth_url``, ``username``, ``password``,
-            ``nova_api_version``, ``timeout``.
+        config (dict): a dictionary with the configuration to be used to set the OpenStack backend, see the
+            example configuration for more details.
         project (str): the project to scope the `novaclient` session to.
 
     Returns:
