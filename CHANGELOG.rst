@@ -1,6 +1,126 @@
 Cumin Changelog
 ---------------
 
+`v6.0.0`_ (2026-03-26)
+^^^^^^^^^^^^^^^^^^^^^^
+
+API breaking changes
+""""""""""""""""""""
+
+* transports: refactor State class implementation adding a new ``HostState`` ``StrEnum`` class to describe all the
+  possible host states, independent of the existing ``State`` class. The ``State`` class remains the representation
+  of the FSM (full state machine) of the possible host state transitions and comparison but now uses ``HostState``
+  values instead of strings.
+
+New features
+""""""""""""
+
+* tests: add CLI comparison tests:
+
+  * Add a specific integration test suite to be able to compare the CLI output between two version of Cumin.
+  * Add a paragraph on the development section of the documentation that describe how to use it.
+  * Add a helper bash script to simplify the comparison of the outputs of these tests between two Cumin versions.
+
+* transports: add a ``shortened()`` method to the ``Command`` class to return a shortened representation of a command
+  up to a given length, omitting the central part. Use the new method in the clustershell transport. This moves the
+  existing logic in the clustershell transport up to the ``Command`` class to make it available as a Cumin API.
+
+* transports: add new API for the execution results:
+
+  * Add an ``ExecutionStatus`` ``IntEnum`` class that is used to track the overall status of the execution and whose
+    values can be used as exit code.
+  * Add an abstract ``results`` property to the ``BaseWorker`` class that must return an instance of the new
+    ``ExecutionResults`` class.
+  * Add an abstract ``run()`` method to the ``BaseWorker`` class that must execute the commands like the existing
+    ``execute()`` method but return instead an instance of the new ``ExecutionResults`` class.
+  * Add a concrete ``run_one()`` method to the ``BaseWorker`` class to be used when running a single command, that
+    returns a ``CommandResults`` instance instead of the more generic ``ExecutionResults`` instance.
+  * Add a new abstraction for the whole result set in a series of frozen dataclasses that try to be as much as possible
+    read-only to prevent accidental alteration of the results with the use of ``frozen=True`` for dataclasses,
+    ``MappingProxyType`` for mappings and tuples for iterables.
+    This is the hierarchy of the new classes (only new classes are listed):
+
+    * ``ExecutionResults``
+    * ``ExecutionStatus``
+    * ``CommandResults``
+
+      * ``TargetedHosts``
+
+        * ``TargetedHostsMembers``
+        * ``TargetedHostsCounters``
+
+      * ``ExecutionStatus``
+      * ``HostsOutputResult``
+
+        * ``CommandOutputResult``
+
+          * ``MsgTreeElem`` (from ClusterShell)
+
+    * ``HostResults``
+
+      * ``CommandOutputResult``
+
+        * ``MsgTreeElem`` (from ClusterShell)
+
+  * Add some specific exceptions:
+
+    * ``OutputsMismatchError``
+    * ``SingleOutputMissingHostsError``
+    * ``HostNotFoundError``
+    * ``SingleCommandOnlyError``
+
+* clustershell: implement the new API for execution results:
+
+  * Implement the ``run()`` method and the ``results`` property.
+  * Do not use the default ``MsgTree`` instances from ClusterShell for ``stdout`` and ``stderr`` but instantiate
+    our own instances per command. This indirectly fixes the current limitation that in async mode all the outputs
+    are in the same ``MsgTree`` independently of the command they belong to when running multiple commands.
+    In addition this make it easier to later support the split of ``stdout`` and ``stderr``.
+  * As a result of the new implementation there are some minor differences in the output of cumin commands:
+
+    * When in async mode the prefix line for the output does contain the command to which the output refers to, that
+      was missing before.
+    * With multiple commands, in some scenario the existing cumin would print at the end that some hosts had
+      successfully executed all commands even if due to success percentage settings and partial failures no host got
+      to execute the last command at all. This gets automatically fixed in the new implementation.
+
+
+Minor improvements
+""""""""""""""""""
+
+* openstack backend: add support to set an HTTP/HTTPS proxy for the OpenStack API endpoint. This allows to specify a
+  separate proxy that is different from the eventual one configured in the ``environment`` configuration where a
+  global proxy read by the requests module could be set.
+* clustershell: add command index to output headers. When printing the output headers of the executed commands, add the
+  index of the command to avoid any confusion on which command the output refers to, even in case of the same command
+  repeated multiple times.
+* cli: update the interactive banner that is printed when running cumin in interactive mode for the new API of the
+  results, removing the example and mentioning the related documentation instead to not make the banner too long.
+* cli: with the new API is now possible to use the ``-i/--interactive`` CLI flag also with multiple commands.
+* doc: update for the new API.
+
+Bug fixes
+"""""""""
+
+* Remove usage of deprecated type hints across the code base.
+* tests: fix a bug in the integration tests that in case of a failed test would trigger a pytest exception because
+  the metadata of the test was not stringyfied.
+* tests: add the label to the message printed in case of failed asserts in tests that use parametrized values to test.
+  This simplifies the understanding of which exact message triggered the assert.
+* tests: fix shellcheck issues
+
+Miscellanea
+"""""""""""
+
+* cli: fine-tune CLI logging:
+
+  * Inject the current running user in the logs.
+  * Extend the logs retention to at most 500 files of 10MB each (~5GB max).
+  * Log the completion of the execution with its exit code.
+
+* Removed support for Python 3.9/3.10, added support for Python 3.14.
+* .wmfconfig: add build for Debian bookworm and trixie, remove the one for Debian bullseye.
+
 `v5.1.1`_ (2025-03-14)
 ^^^^^^^^^^^^^^^^^^^^^^
 
@@ -908,3 +1028,4 @@ Bug Fixes
 .. _`v5.0.0`: https://github.com/wikimedia/cumin/releases/tag/v5.0.0
 .. _`v5.1.0`: https://github.com/wikimedia/cumin/releases/tag/v5.1.0
 .. _`v5.1.1`: https://github.com/wikimedia/cumin/releases/tag/v5.1.1
+.. _`v6.0.0`: https://github.com/wikimedia/cumin/releases/tag/v6.0.0
