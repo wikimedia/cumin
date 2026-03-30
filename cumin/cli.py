@@ -192,8 +192,6 @@ def parse_args(argv):
     elif num_commands > 1:
         if parsed_args.mode is None:
             parser.error('-m/--mode is required when there are multiple COMMANDS')
-        if parsed_args.interactive:
-            parser.error('-i/--interactive can be used only with one command')
         if parsed_args.output is not None:
             parser.error('-o/--output can be used only with one command')
 
