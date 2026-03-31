@@ -138,3 +138,19 @@ class TestOpenStackQuery:
         assert keystone_identity.call_count == 1
         assert keystone_session.call_count == 1
         keystone_client.assert_not_called()
+
+    def test_execute_with_proxy_url(self, keystone_identity, keystone_session, keystone_client, nova_client):
+        """When a proxy_url is configured, it should be set in the keystone session."""
+        nova_client.return_value.servers.list.return_value = [Server('host1')]
+        self.config['openstack']['proxy_url'] = 'http://proxy.example.org:8080'
+        query = openstack.OpenStackQuery(self.config)
+
+        query.execute('project:project1')
+
+        keystone_identity.assert_called_once()
+        keystone_session.assert_called_once()
+        keystone_client.assert_not_called()
+        keystone_session.return_value.session.proxies.update.assert_called_once_with({
+            'http': 'http://proxy.example.org:8080',
+            'https': 'http://proxy.example.org:8080',
+        })

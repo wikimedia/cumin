@@ -32,6 +32,7 @@ source "${ENV_FILE}"
 
 # The sourced ENV_FILE must register any docker instance in this variable for cleanup
 DOCKER_INSTANCES=""
+# shellcheck disable=SC2329
 function exit_trap() {
     if [[ "${SKIP_DELETION}" -eq "1" ]]; then
         _log "Skip deletion set: docker instances and temporary directory were not removed"

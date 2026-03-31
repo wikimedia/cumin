@@ -19,22 +19,24 @@ _EXPECTED_LINES = {
     'successfully': 'successfully',
     'dry_run': 'DRY-RUN mode enabled, aborting',
     'subfanout_targeted': '2 hosts will be targeted',
-    'ls_success': "100.0% (5/5) success ratio (>= 100.0% threshold) for command: 'ls -la /tmp'.",
-    'ls_success_threshold': "100.0% (5/5) success ratio (>= 50.0% threshold) for command: 'ls -la /tmp'.",
-    'ls_partial_success': "/5) of nodes failed to execute command 'ls -la /tmp/maybe'",
-    'ls_partial_success_ratio_re':
-        r"[4-6]0\.0% \([2-3]/5\) success ratio \(< 100\.0% threshold\) for command: 'ls -la /tmp/maybe'\. Aborting.",
+    'ls_success': "100.0% (5/5) success ratio (>= 100.0% threshold) for command #1: 'ls -la /tmp'.",
+    'ls_success_threshold': "100.0% (5/5) success ratio (>= 50.0% threshold) for command #1: 'ls -la /tmp'.",
+    'ls_partial_success': "/5) of nodes failed to execute command #1: 'ls -la /tmp/maybe'",
+    'ls_partial_success_ratio_re': (
+        r"[4-6]0\.0% \([2-3]/5\) success ratio \(< 100\.0% threshold\) for command #1: 'ls -la /tmp/maybe'\. "
+        r"Aborting."),
     'ls_partial_success_threshold_ratio':
-        "60.0% (3/5) success ratio (>= 50.0% threshold) for command: 'ls -la /tmp/maybe'.",
-    'ls_failure_batch': "40.0% (2/5) of nodes failed to execute command 'ls -la /tmp/non_existing'",
-    'ls_failure_batch_threshold': "80.0% (4/5) of nodes failed to execute command 'ls -la /tmp/non_existing'",
-    'ls_total_failure': "100.0% (5/5) of nodes failed to execute command 'ls -la /tmp/non_existing'",
+        "60.0% (3/5) success ratio (>= 50.0% threshold) for command #1: 'ls -la /tmp/maybe'.",
+    'ls_failure_batch': "40.0% (2/5) of nodes failed to execute command #1: 'ls -la /tmp/non_existing'",
+    'ls_failure_batch_threshold': "80.0% (4/5) of nodes failed to execute command #1: 'ls -la /tmp/non_existing'",
+    'ls_total_failure': "100.0% (5/5) of nodes failed to execute command #1: 'ls -la /tmp/non_existing'",
     'ls_total_failure_threshold_ratio':
-        "0.0% (0/5) success ratio (< 50.0% threshold) for command: 'ls -la /tmp/non_existing'. Aborting.",
-    'date_success': "100.0% (5/5) success ratio (>= 100.0% threshold) for command: 'date'.",
-    'date_success_subfanout': "100.0% (2/2) success ratio (>= 100.0% threshold) for command: 'date'.",
-    'date_success_threshold': "100.0% (5/5) success ratio (>= 50.0% threshold) for command: 'date'.",
-    'date_success_threshold_partial': "60.0% (3/5) success ratio (>= 50.0% threshold) for command: 'date'.",
+        "0.0% (0/5) success ratio (< 50.0% threshold) for command #1: 'ls -la /tmp/non_existing'. Aborting.",
+    'date_success_n1': "100.0% (5/5) success ratio (>= 100.0% threshold) for command #1: 'date'.",
+    'date_success_n2': "100.0% (5/5) success ratio (>= 100.0% threshold) for command #2: 'date'.",
+    'date_success_subfanout': "100.0% (2/2) success ratio (>= 100.0% threshold) for command #1: 'date'.",
+    'date_success_threshold': "100.0% (5/5) success ratio (>= 50.0% threshold) for command #2: 'date'.",
+    'date_success_threshold_partial': "60.0% (3/5) success ratio (>= 50.0% threshold) for command #2: 'date'.",
     'all_success': '100.0% (5/5) success ratio (>= 100.0% threshold) of nodes successfully executed all commands.',
     'all_success_subfanout':
         '100.0% (2/2) success ratio (>= 100.0% threshold) of nodes successfully executed all commands.',
@@ -53,14 +55,14 @@ _EXPECTED_LINES = {
                                   r'occurred'),
     'global_timeout_pending_threshold_re':
         r'([2-6]|)0\.0% \([0-3]/5\) of nodes were pending execution when the global timeout occurred',
-    'sleep_total_failure': "0.0% (0/5) success ratio (< 100.0% threshold) for command: 'sleep 2'. Aborting.",
-    'sleep_success': "100.0% (5/5) success ratio (>= 100.0% threshold) for command: 'sleep 0.5'.",
-    'sleep_success_threshold': "100.0% (5/5) success ratio (>= 50.0% threshold) for command: 'sleep 0.5'.",
-    'sleep_timeout': "100.0% (5/5) of nodes timeout to execute command 'sleep 2'",
-    'sleep_timeout_threshold_re': r"[4-8]0\.0% \([2-4]/5\) of nodes timeout to execute command 'sleep 2'",
+    'sleep_total_failure': "0.0% (0/5) success ratio (< 100.0% threshold) for command #1: 'sleep 2'. Aborting.",
+    'sleep_success': "100.0% (5/5) success ratio (>= 100.0% threshold) for command #1: 'sleep 0.5'.",
+    'sleep_success_threshold': "100.0% (5/5) success ratio (>= 50.0% threshold) for command #1: 'sleep 0.5'.",
+    'sleep_timeout': "100.0% (5/5) of nodes timeout while executing command #1: 'sleep 2'",
+    'sleep_timeout_threshold_re': r"[4-8]0\.0% \([2-4]/5\) of nodes timeout while executing command #1: 'sleep 2'",
     'sync': {
         'ls_total_failure_ratio':
-            "0.0% (0/5) success ratio (< 100.0% threshold) for command: 'ls -la /tmp/non_existing'. Aborting.",
+            "0.0% (0/5) success ratio (< 100.0% threshold) for command #1: 'ls -la /tmp/non_existing'. Aborting.",
     },
     'async': {
         'ls_total_failure_ratio':
@@ -85,7 +87,7 @@ _VARIANTS_COMMANDS = (
     {'rc': 2, 'additional_params': ['--global-timeout', '1'], 'commands': ['date', 'sleep 2']},
     {'rc': None, 'additional_params': ['--global-timeout', '1'], 'commands': ['sleep 0.99', 'date']},
     {'rc': 2, 'additional_params': ['-t', '1'], 'commands': ['sleep 2', 'date'],
-     'assert_false': ['failed', 'global_timeout', 'date_success']},
+     'assert_false': ['failed', 'global_timeout', 'date_success_n2']},
     {'rc': 0, 'additional_params': ['-t', '2'], 'commands': ['sleep 0.5', 'date'],
      'assert_false': ['failed', 'global_timeout']},
 )
@@ -115,7 +117,8 @@ _TXT_EXPECTED_SINGLE_OUTPUT = """{prefix}{node_id}: First
 _JSON_EXPECTED_SINGLE_OUTPUT = 'First\nSecond\nThird'
 
 # Expected output for the 'uname' command to stdout
-_UNAME_OUTPUT = "\x1b[34m----- OUTPUT of 'uname' -----\x1b[39m\nLinux\n\x1b[34m================\x1b[39m\n"
+_UNAME_OUTPUT = ("\x1b[34m----- OUTPUT for command #1: 'uname' "
+                 "-----\x1b[39m\nLinux\n\x1b[34m================\x1b[39m\n")
 
 
 def make_method(name, commands_set):
@@ -123,8 +126,9 @@ def make_method(name, commands_set):
     params = copy.deepcopy(commands_set)  # Needed to have a different one for each method
 
     @pytest.mark.variant_params(params)
-    def test_variant(self, capsys):
+    def test_variant(self, capsys, caplog, monkeypatch):
         """Test variant generated function."""
+        monkeypatch.setenv('USER', 'test-user')
         argv = self.default_params + params['params'] + [self.all_nodes] + params['commands']
         rc = cli.main(argv=argv)
         out, err = capsys.readouterr()
@@ -135,6 +139,7 @@ def make_method(name, commands_set):
             params['rc'] = get_rc(params)
 
         assert rc == params['rc']
+        assert f'Cumin execution completed (exit_code={params["rc"]})' in caplog.text
         assert _EXPECTED_LINES['all_targeted'] in err, _EXPECTED_LINES['all_targeted']
 
         labels = params.get('assert_true', [])
@@ -156,10 +161,11 @@ def make_method(name, commands_set):
             else:
                 string = _EXPECTED_LINES[label]
 
+            message = f'{label}: {string}'
             if label.endswith('_re'):
-                assert re.search(string, err) is not None, string
+                assert re.search(string, err) is not None, message
             else:
-                assert string in err, string
+                assert string in err, message
 
         for label in params.get('assert_false', []):
             assert _EXPECTED_LINES[label] not in err, _EXPECTED_LINES[label]
@@ -236,7 +242,10 @@ def get_timeout_expected_lines(params):
         if '-p' in params['params']:
             expected = ['sleep_success_threshold', 'date_success_threshold']
         else:
-            expected = ['date_success', 'sleep_success']
+            if len(params['commands']) > 1:
+                expected = ['date_success_n2', 'sleep_success']
+            else:
+                expected = ['date_success_n1', 'sleep_success']
     else:
         # Test timeout cases
         if '--batch-size' in params['params']:
@@ -264,7 +273,7 @@ def get_date_expected_lines(params):
         elif 'ls -la /tmp' in params['commands']:
             expected = ['date_success_threshold']
     elif 'ls -la /tmp' in params['commands']:
-        expected = ['date_success']
+        expected = ['date_success_n2']
 
     return expected
 
@@ -352,7 +361,7 @@ class TestCLI:
         sys.stdout.write(out)
         sys.stderr.write(err)
         assert _EXPECTED_LINES['all_targeted'] in err, _EXPECTED_LINES['all_targeted']
-        assert _EXPECTED_LINES['date_success'] in err, _EXPECTED_LINES['date_success']
+        assert _EXPECTED_LINES['date_success_n1'] in err, _EXPECTED_LINES['date_success_n1']
         assert _EXPECTED_LINES['all_success'] in err, _EXPECTED_LINES['all_success']
         assert _EXPECTED_LINES['failed'] not in err, _EXPECTED_LINES['failed']
         assert _EXPECTED_LINES['global_timeout'] not in err, _EXPECTED_LINES['global_timeout']

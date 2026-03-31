@@ -43,6 +43,7 @@ openstack:
     password: observer_password  # Keystone API user's password
     domain_suffix: openstack.local  # OpenStack managed domain, to be added to all hostnames
     nova_api_version: 2.12
+    proxy_url: http://proxy.example.org:8080  # [optional] Set the HTTP/HTTPS proxy to use for the OpenStack backend
     timeout: 2  # Used for both Keystone and Nova API calls
     # Additional parameters to set when instantiating the novaclient Client
     client_params:

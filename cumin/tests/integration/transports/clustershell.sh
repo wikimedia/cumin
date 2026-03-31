@@ -22,7 +22,7 @@ EOF
     for index in {1..5}; do
         HOST_NAME="${CUMIN_IDENTIFIER}-${index}"
         # TODO: use a custom-generated image
-        docker run -d -p "222${index}:2222" -e PUBLIC_KEY="$(cat ${CUMIN_TMPDIR}/id_${SSH_KEY_ALGO}.pub)" \
+        docker run -d -p "222${index}:2222" -e PUBLIC_KEY="$(cat "${CUMIN_TMPDIR}/id_${SSH_KEY_ALGO}.pub")" \
             -e USER_NAME=cumin -e SUDO_ACCESS=true --hostname "${HOST_NAME}" --name "${HOST_NAME}" \
             "linuxserver/openssh-server:latest" > /dev/null
         DOCKER_INSTANCES="${DOCKER_INSTANCES} ${HOST_NAME}"

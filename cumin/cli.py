@@ -35,19 +35,13 @@ INTERACTIVE_BANNER = """===== Cumin Interactive REPL =====
 #     args: the parsed command line arguments, an argparse.Namespace instance.
 #     config: the cofiguration dictionary.
 #     exit_code: the return code of the execution, that will be used as exit code.
+#     results: an ExecutionResults instance with all the results, see the documentation introduction for
+#              more details on how to use it.
 
 = Useful functions =
-#     worker.get_results(): generator that yields the tuple (nodes, output) for each grouped result, where:
-#                         -     nodes: is a ClusterShell.NodeSet.NodeSet instance
-#                         -     output: is a ClusterShell.MsgTree.MsgTreeElem instance
 #     h(): print this help message.
 #     help(object_name): Python default interactive help and documentation of the given object.
 
-= Example usage:
-for nodes, output in worker.get_results():
-    print(nodes)
-    print(output.message().decode())
-    print('-----')
 """
 """str: The message to print when entering the intractive REPL mode."""
 
@@ -198,8 +192,6 @@ def parse_args(argv):
     elif num_commands > 1:
         if parsed_args.mode is None:
             parser.error('-m/--mode is required when there are multiple COMMANDS')
-        if parsed_args.interactive:
-            parser.error('-i/--interactive can be used only with one command')
         if parsed_args.output is not None:
             parser.error('-o/--output can be used only with one command')
 
@@ -218,11 +210,12 @@ def get_running_user():
     return os.getenv('USER')
 
 
-def setup_logging(filename, debug=False, trace=False):
+def setup_logging(filename, user, *, debug=False, trace=False):
     """Setup the logger instance.
 
     Arguments:
         filename: the filename of the log file
+        user: the current user running cumin
         debug: whether to set logging level to DEBUG [optional, default: False]
         trace: whether to set logging level to TRACE [optional, default: False]
 
@@ -231,8 +224,11 @@ def setup_logging(filename, debug=False, trace=False):
     if file_path and not os.path.exists(file_path):
         os.makedirs(file_path, 0o770)
 
-    log_formatter = logging.Formatter(fmt='%(asctime)s [%(levelname)s %(process)s %(name)s.%(funcName)s] %(message)s')
-    log_handler = RotatingFileHandler(filename, maxBytes=(5 * (1024**2)), backupCount=30)
+    log_formatter = logging.Formatter(
+        fmt=f'%(asctime)s [%(levelname)s {user} %(process)d %(name)s.%(funcName)s:%(lineno)d] %(message)s')
+    # Tentatively keep logs forever for auditing purposes. Limit them to 10MB each file and keep 500 files.
+    # Max space used is ~5GB
+    log_handler = RotatingFileHandler(filename, maxBytes=(10 * (1024**2)), backupCount=500)
     log_handler.setFormatter(log_formatter)
 
     root_logger = logging.getLogger()
@@ -408,11 +404,12 @@ def run(args, config):
     if args.output is not None:  # TODO: set the reporter to tqdm when releasing v5.0.0
         worker.reporter = TqdmQuietReporter
     worker.success_threshold = args.success_percentage / 100
-    exit_code = worker.execute()
+    results = worker.run()
+    exit_code = results.return_code
 
     if args.interactive:
         # Define a help function h() that will be available in the interactive shell to print the help message.
-        # The name is to not shadow the Python built-in help() that might be usefult too to inspect objects.
+        # The name is to not shadow the Python built-in help() that might be useful too to inspect objects.
         def h():  # pylint: disable=possibly-unused-variable,invalid-name
             """Print the help message in interactive shell."""
             tqdm.write(INTERACTIVE_BANNER)
@@ -458,7 +455,7 @@ def main(argv=None):  # noqa: MC0001
         user = get_running_user()
         config = cumin.Config(args.config)
         validate_config(config)
-        setup_logging(os.path.expanduser(config['log_file']), debug=args.debug, trace=args.trace)
+        setup_logging(os.path.expanduser(config['log_file']), user, debug=args.debug, trace=args.trace)
     except cumin.CuminError as e:
         stderr(e)
         return 2
@@ -487,6 +484,7 @@ def main(argv=None):  # noqa: MC0001
         logger.exception('Failed to execute')
         exit_code = 99
 
+    logger.info('Cumin execution completed (exit_code=%d)', exit_code)
     return exit_code
 
 
